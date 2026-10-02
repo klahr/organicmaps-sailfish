@@ -203,6 +203,7 @@ void MapItem::OnLocationUpdated(location::GpsInfo const & info)
   m_lastLocation = info;
   m_framework.OnLocationUpdate(info);
   m_placePage->UpdateDistance();
+  m_routing->UpdateNavigation(info.m_speed);
 }
 
 bool MapItem::trackRecording() const
@@ -327,8 +328,8 @@ void MapItem::OnApplicationStateChanged(Qt::ApplicationState state)
   if (inBackground)
   {
     m_updateTimer.stop();
-    // A track keeps recording in the background, like the Android foreground service.
-    if (!m_framework.IsTrackRecordingEnabled())
+    // Track recording and navigation keep going in the background, like the Android foreground service.
+    if (!m_framework.IsTrackRecordingEnabled() && !m_routing->navigating())
       m_locationService->Stop();
     m_compass->stop();
     SaveLastLocation();

@@ -4,6 +4,7 @@
 #include <QString>
 #include <QStringList>
 #include <QVariantList>
+#include <QVariantMap>
 
 class Framework;
 
@@ -36,6 +37,12 @@ class Routing : public QObject
   // Routing options: a RoutingOptions::Road mask of avoided roads, and stop reordering.
   Q_PROPERTY(int avoidRoads READ avoidRoads WRITE setAvoidRoads NOTIFY optionsChanged)
   Q_PROPERTY(bool routeOptimization READ routeOptimization WRITE setRouteOptimization NOTIFY optionsChanged)
+  // START is offered for built car, walking and bicycle routes, as on Android.
+  Q_PROPERTY(bool canStart READ canStart NOTIFY stateChanged)
+  Q_PROPERTY(bool navigating READ navigating NOTIFY navigationChanged)
+  // The Android navigation panels: turnIcon, distanceToTurn, street, nextTurnIcon, timeLeft, distanceLeft,
+  // arrival, speed, speedUnits, speedLimit and progress (0..1).
+  Q_PROPERTY(QVariantMap navigation READ navigation NOTIFY navigationChanged)
 
 public:
   enum RouterType
@@ -86,6 +93,12 @@ public:
   void setAvoidRoads(int roads);
   bool routeOptimization() const;
   void setRouteOptimization(bool enabled);
+  bool canStart() const;
+  bool navigating() const { return m_navigating; }
+  QVariantMap navigation() const { return m_navigation; }
+
+  // Called on every location update to refresh the navigation panels.
+  void UpdateNavigation(double speedMps);
 
   // Uses the place shown in the place page, like its Route from / Route to / Add stop buttons.
   Q_INVOKABLE void routeFromPlace();
@@ -96,12 +109,17 @@ public:
   Q_INVOKABLE void movePoint(int from, int to);
   Q_INVOKABLE void downloadMissingMaps();
   Q_INVOKABLE void close();
+  // Follows the route, like START on Android; the start is moved to the position first if needed.
+  Q_INVOKABLE void start();
+  // Ends navigation and the route, like the Android Stop button.
+  Q_INVOKABLE void stopNavigation();
 
 signals:
   void pointsChanged();
   void routerTypeChanged();
   void stateChanged();
   void optionsChanged();
+  void navigationChanged();
   // Route building results may come from routing threads; this is delivered queued to the GUI thread.
   void routeBuildingFinished(int code, QStringList absentCountries);
 
@@ -111,6 +129,7 @@ private:
   void Build();
   void OnRouteBuilt(int code, QStringList const & absentCountries);
   void SetError(QString const & title, QString const & message);
+  void SetNavigationStyle(bool enabled);
 
   Framework & m_framework;
   bool m_building = false;
@@ -122,5 +141,9 @@ private:
   QString m_errorMessage;
   QStringList m_missingMaps;
   int m_storageSlot = 0;
+  bool m_navigating = false;
+  // START moved the start to the position; navigate once the route is rebuilt.
+  bool m_startWhenBuilt = false;
+  QVariantMap m_navigation;
 };
 }  // namespace sailfish

@@ -35,11 +35,14 @@ MENU = ['ic_download', 'ic_donate', 'ic_settings', 'ic_track_recording_off', 'ic
 # Routing: the ruler router button and the numbered stops of the route panel.
 ROUTING = ['ic_ruler_route', 'ic_location_arrow_blue', 'ic_20px_route_planning_tram', 'ic_20px_route_planning_bus'] + [
     'route_point_%02d' % i for i in range(1, 10)]
+# Navigation: roundabout turn arrows; the other turn arrows are bitmaps on Android too.
+NAVIGATION = ['ic_turn_round'] + ['ic_roundabout_exit_%d' % i for i in range(1, 13)]
 WHITE = {'ic_ruler_route', 'ic_download', 'ic_donate', 'ic_settings', 'ic_track_recording_off', 'ic_share', 'ic_track_recording_status'}
 OUTPUTS = [('sailfish/icons/layers', LAYERS), ('sailfish/icons/categories', CATEGORIES),
            ('sailfish/icons/placepage', PLACE_PAGE), ('sailfish/icons/bookmarks', BOOKMARKS),
            ('sailfish/icons/myposition', MY_POSITION), ('sailfish/icons/help', HELP),
-           ('sailfish/icons/menu', MENU), ('sailfish/icons/routing', ROUTING)]
+           ('sailfish/icons/menu', MENU), ('sailfish/icons/routing', ROUTING),
+           ('sailfish/icons/navigation', NAVIGATION)]
 
 # Android path attribute -> SVG attribute.
 PATH_ATTRS = {

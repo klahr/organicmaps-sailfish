@@ -30,6 +30,9 @@ class AppSettings : public QObject
   Q_PROPERTY(QString donateUrl READ donateUrl CONSTANT)
   Q_PROPERTY(bool buildings3d READ buildings3d WRITE setBuildings3d NOTIFY changed)
   Q_PROPERTY(bool autoDownload READ autoDownload WRITE setAutoDownload NOTIFY changed)
+  // Navigation group: the tilted map and zooming by speed while navigating.
+  Q_PROPERTY(bool perspectiveView READ perspectiveView WRITE setPerspectiveView NOTIFY changed)
+  Q_PROPERTY(bool autoZoom READ autoZoom WRITE setAutoZoom NOTIFY changed)
   // power_management::Scheme: Normal (never), EconomyMaximum (always) or Auto (low battery).
   Q_PROPERTY(int powerScheme READ powerScheme WRITE setPowerScheme NOTIFY changed)
   // settings::Placement: None, Right or Bottom.
@@ -75,6 +78,10 @@ public:
   bool buildings3d() const;
   void setBuildings3d(bool enabled);
   bool autoDownload() const { return IsAutoDownloadEnabled(); }
+  bool perspectiveView() const;
+  void setPerspectiveView(bool enabled);
+  bool autoZoom() const;
+  void setAutoZoom(bool enabled);
   void setAutoDownload(bool enabled);
   int powerScheme() const;
   void setPowerScheme(int scheme);

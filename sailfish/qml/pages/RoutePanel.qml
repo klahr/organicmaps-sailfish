@@ -16,7 +16,7 @@ MapPanel {
     property QtObject placePage
 
     // Shown while a route is planned, giving way to the place page of a tapped place.
-    readonly property bool shouldShow: routing.active && !placePage.open
+    readonly property bool shouldShow: routing.active && !routing.navigating && !placePage.open
     onShouldShowChanged: open = shouldShow
     Component.onCompleted: open = shouldShow
     // Swiping the panel away ends the route, like its close button.
@@ -362,12 +362,13 @@ MapPanel {
                                           modelData.page === "SearchPage.qml" ? { search: searchModel } : {})
             }
         }
-        // Navigation is the next step; the button is there as on Android, inactive until then.
+        // Car, walking and bicycle routes can be navigated, as on Android.
         Button {
             anchors.verticalCenter: parent.verticalCenter
             width: bottomBar.width - x
-            enabled: false
+            enabled: routing.canStart
             text: appInfo.localized("p2p_start").toUpperCase()
+            onClicked: routing.start()
         }
     }
 

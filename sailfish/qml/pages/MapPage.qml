@@ -19,10 +19,11 @@ Page {
 
     // A recording keeps the device awake like the Android foreground service; keep screen on is a setting.
     KeepAlive {
-        enabled: map.trackRecording
+        enabled: map.trackRecording || map.routing.navigating
     }
+    // The screen stays on while navigating, as on Android.
     DisplayBlanking {
-        preventBlanking: appSettings.keepScreenOn && Qt.application.active
+        preventBlanking: (appSettings.keepScreenOn || map.routing.navigating) && Qt.application.active
     }
 
     ShareAction {
@@ -36,11 +37,28 @@ Page {
         // Keeps the scale line and attribution above the bottom row, like on Android.
         bottomWidgetsOffset: bottomButtons.height + bottomButtons.anchors.bottomMargin
         // Routes are fitted into the map above the open sheets.
-        viewportBottomInset: Math.max(placePagePanel.visibleSize, routePanel.visibleSize)
+        viewportBottomInset: page.navigating ? navigationBottomPanel.height
+                                             : Math.max(placePagePanel.visibleSize, routePanel.visibleSize)
+    }
+
+    readonly property bool navigating: map.routing.navigating
+
+    NavigationTopPanel {
+        anchors {
+            top: parent.top
+            left: parent.left
+            right: parent.right
+            margins: Theme.dp(8)
+            // Clear the camera notch in portrait, like the Silica PageHeader does.
+            topMargin: Theme.dp(8) + (page.orientation === Orientation.Portrait ? Screen.topCutout.height : 0)
+        }
+        visible: page.navigating
+        navigation: map.routing.navigation
     }
 
     MapButton {
         id: layersButton
+        visible: !page.navigating
         anchors {
             top: parent.top
             left: parent.left
@@ -60,8 +78,10 @@ Page {
             rightMargin: Theme.dp(8)
             // Portrait: ~104dp above the bottom row, measured on Android. Landscape: my position is level
             // with the row in the bottom right corner.
-            bottom: page.isPortrait ? bottomButtons.top : parent.bottom
-            bottomMargin: page.isPortrait ? Theme.dp(104) : bottomButtons.anchors.bottomMargin
+            bottom: page.navigating ? (page.isPortrait ? navigationBottomPanel.top : parent.bottom)
+                  : page.isPortrait ? bottomButtons.top : parent.bottom
+            bottomMargin: page.navigating ? Theme.dp(8)
+                        : page.isPortrait ? Theme.dp(104) : bottomButtons.anchors.bottomMargin
         }
         spacing: Theme.dp(8)
         // Stay above the place page, as on Android.
@@ -107,6 +127,7 @@ Page {
     // landscape; the gaps are about 0.6 of a button, as measured on the Android app.
     Row {
         id: bottomButtons
+        visible: !page.navigating
         // Positioned by x: switching between left and horizontalCenter anchors on rotation can leave both set.
         x: page.isPortrait ? (parent.width - width) / 2 : Theme.dp(8)
         anchors {
@@ -147,7 +168,8 @@ Page {
             right: parent.right
             margins: Theme.dp(8)
         }
-        visible: map.trackRecording
+        // The navigation panel takes the top while navigating.
+        visible: map.trackRecording && !page.navigating
         highlighted: true
         source: Qt.resolvedUrl("../../icons/menu/ic_track_recording_status.svg")
         onClicked: page.stopTrackRecording()
@@ -165,6 +187,58 @@ Page {
             map.stopTrackRecording("")
         else
             pageStack.push(Qt.resolvedUrl("SaveTrackDialog.qml"), { map: map })
+    }
+
+    // Full width in portrait; a card in the bottom left corner in landscape, as on Android.
+    NavigationBottomPanel {
+        id: navigationBottomPanel
+        anchors {
+            left: parent.left
+            bottom: parent.bottom
+        }
+        width: page.isPortrait ? parent.width : Math.round(parent.width * 0.4)
+        radius: page.isPortrait ? 0 : Theme.paddingLarge
+        visible: page.navigating
+        navigation: map.routing.navigation
+        onStopClicked: map.routing.stopNavigation()
+        onSettingsClicked: pageStack.push(Qt.resolvedUrl("SettingsPage.qml"), { mapPageRouting: map.routing })
+    }
+
+    // Search and bookmarks stay at hand on the left while navigating, as on Android, with the
+    // current speed under them as a road sign.
+    Column {
+        anchors {
+            left: parent.left
+            bottom: navigationBottomPanel.top
+            margins: Theme.dp(8)
+        }
+        visible: page.navigating
+        spacing: Theme.dp(8)
+
+        MapButton {
+            source: "image://theme/icon-m-search"
+            onClicked: pageStack.push(Qt.resolvedUrl("SearchPage.qml"), { search: search })
+        }
+        MapButton {
+            source: Qt.resolvedUrl("../../icons/bookmarks/ic_bookmarks_and_tracks.svg")
+            onClicked: pageStack.push(Qt.resolvedUrl("BookmarksPage.qml"))
+        }
+        Rectangle {
+            width: Theme.itemSizeMedium * 1.2
+            height: width
+            radius: width / 2
+            color: "white"
+            border.color: "#e53935"
+            border.width: width * 0.1
+
+            Label {
+                anchors.centerIn: parent
+                text: map.routing.navigation.speed || "0"
+                color: "black"
+                font.pixelSize: Theme.fontSizeExtraLarge
+                font.bold: true
+            }
+        }
     }
 
     // Lives with the map so the last query and its results come back when search is reopened.
@@ -275,7 +349,7 @@ Page {
             text: appInfo.localized("settings")
             onClicked: {
                 menuPanel.open = false
-                pageStack.push(Qt.resolvedUrl("SettingsPage.qml"))
+                pageStack.push(Qt.resolvedUrl("SettingsPage.qml"), { mapPageRouting: map.routing })
             }
         }
         MenuRow {

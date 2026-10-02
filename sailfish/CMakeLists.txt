@@ -72,7 +72,7 @@ install(FILES "${OMIM_ROOT}/data/strings/types_strings.txt" "${OMIM_ROOT}/data/s
 install(TARGETS ${PROJECT_NAME} DESTINATION bin)
 install(TARGETS ${PROJECT_NAME}_lib LIBRARY DESTINATION share/organicmaps/lib)
 install(DIRECTORY qml DESTINATION share/organicmaps)
-install(DIRECTORY icons/layers icons/categories icons/placepage icons/bookmarks icons/myposition icons/help icons/menu icons/routing DESTINATION share/organicmaps/icons)
+install(DIRECTORY icons/layers icons/categories icons/placepage icons/bookmarks icons/myposition icons/help icons/menu icons/routing icons/navigation DESTINATION share/organicmaps/icons)
 # Bitmaps on Android too, installed from its resources: router and route point buttons.
 set(ANDROID_RES "${OMIM_ROOT}/android/app/src/main/res")
 install(FILES
@@ -90,6 +90,13 @@ install(FILES
   "${ANDROID_SDK_RES}/drawable-xxxhdpi/ic_20px_route_planning_lightrail.webp"
   "${ANDROID_SDK_RES}/drawable-xxxhdpi/ic_20px_route_planning_monorail.webp"
   DESTINATION share/organicmaps/icons/routing)
+set(TURNS straight right right_sharp right_slight left left_sharp left_slight uleft uright finish)
+list(TRANSFORM TURNS PREPEND "${ANDROID_SDK_RES}/drawable-xxxhdpi/ic_turn_")
+list(TRANSFORM TURNS APPEND ".webp")
+install(FILES ${TURNS}
+  "${ANDROID_SDK_RES}/drawable-xxxhdpi/ic_exit_highway_to_left.webp"
+  "${ANDROID_SDK_RES}/drawable-xxxhdpi/ic_exit_highway_to_right.webp"
+  DESTINATION share/organicmaps/icons/navigation)
 # The Wikipedia logo and the direction arrow are bitmaps on Android too.
 install(FILES "${OMIM_ROOT}/android/app/src/main/res/drawable-xxhdpi/ic_wiki.webp"
               "${OMIM_ROOT}/android/app/src/main/res/drawable-xxhdpi/ic_direction_pagepreview.webp"

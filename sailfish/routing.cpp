@@ -11,11 +11,21 @@
 #include "routing/following_info.hpp"
 #include "routing/routing_callbacks.hpp"
 #include "routing/routing_options.hpp"
+#include "routing/turns.hpp"
+
+#include "indexer/map_style.hpp"
+
+#include "platform/measurement_utils.hpp"
+#include "platform/settings.hpp"
 
 #include "storage/storage.hpp"
 
 #include <QColor>
+#include <QDateTime>
+#include <QLocale>
 #include <QVariantMap>
+
+#include <utility>
 
 namespace sailfish
 {
@@ -39,6 +49,44 @@ QString TransitIcon(TransitType type)
   case TransitType::AerialLift:
   case TransitType::Funicular: return QStringLiteral("ic_20px_route_planning_lightrail.webp");
   default: return QStringLiteral("ic_20px_route_planning_bus.svg");
+  }
+}
+
+// The turn arrows of CarDirection and PedestrianTurnDirection on Android.
+QString TurnIcon(routing::turns::CarDirection turn, uint32_t exitNum)
+{
+  using routing::turns::CarDirection;
+  switch (turn)
+  {
+  case CarDirection::TurnRight: return QStringLiteral("ic_turn_right.webp");
+  case CarDirection::TurnSharpRight: return QStringLiteral("ic_turn_right_sharp.webp");
+  case CarDirection::TurnSlightRight: return QStringLiteral("ic_turn_right_slight.webp");
+  case CarDirection::TurnLeft: return QStringLiteral("ic_turn_left.webp");
+  case CarDirection::TurnSharpLeft: return QStringLiteral("ic_turn_left_sharp.webp");
+  case CarDirection::TurnSlightLeft: return QStringLiteral("ic_turn_left_slight.webp");
+  case CarDirection::UTurnLeft: return QStringLiteral("ic_turn_uleft.webp");
+  case CarDirection::UTurnRight: return QStringLiteral("ic_turn_uright.webp");
+  case CarDirection::EnterRoundAbout:
+  case CarDirection::LeaveRoundAbout:
+  case CarDirection::StayOnRoundAbout:
+    return exitNum >= 1 && exitNum <= 12 ? QStringLiteral("ic_roundabout_exit_%1.svg").arg(exitNum)
+                                         : QStringLiteral("ic_turn_round.svg");
+  case CarDirection::ReachedYourDestination: return QStringLiteral("ic_turn_finish.webp");
+  case CarDirection::ExitHighwayToLeft: return QStringLiteral("ic_exit_highway_to_left.webp");
+  case CarDirection::ExitHighwayToRight: return QStringLiteral("ic_exit_highway_to_right.webp");
+  default: return QStringLiteral("ic_turn_straight.webp");
+  }
+}
+
+QString TurnIcon(routing::turns::PedestrianDirection turn)
+{
+  using routing::turns::PedestrianDirection;
+  switch (turn)
+  {
+  case PedestrianDirection::TurnRight: return QStringLiteral("ic_turn_right.webp");
+  case PedestrianDirection::TurnLeft: return QStringLiteral("ic_turn_left.webp");
+  case PedestrianDirection::ReachedYourDestination: return QStringLiteral("ic_turn_finish.webp");
+  default: return QStringLiteral("ic_turn_straight.webp");
   }
 }
 
@@ -166,6 +214,104 @@ void Routing::setRouteOptimization(bool enabled)
   emit optionsChanged();
 }
 
+bool Routing::canStart() const
+{
+  auto const type = routerType();
+  return m_built && type != Ruler && type != Transit;
+}
+
+void Routing::start()
+{
+  if (!canStart())
+    return;
+  auto & manager = m_framework.GetRoutingManager();
+  // Navigation follows the position; Android asks to move the start there first.
+  auto const points = manager.GetRoutePoints();
+  if (!points.empty() && !points.front().m_isMyPosition)
+  {
+    m_startWhenBuilt = true;
+    setStartToMyPosition();
+    return;
+  }
+  manager.FollowRoute();
+  m_navigating = true;
+  SetNavigationStyle(true);
+  UpdateNavigation(-1.0);
+}
+
+void Routing::stopNavigation()
+{
+  m_navigating = false;
+  m_navigation.clear();
+  SetNavigationStyle(false);
+  close();
+  emit navigationChanged();
+}
+
+void Routing::SetNavigationStyle(bool enabled)
+{
+  // Car navigation uses the vehicle map style, like ThemeSwitcher on Android.
+  MapStyle const style = m_framework.GetMapStyle();
+  bool const dark = MapStyleIsDark(style);
+  if (enabled && routerType() == Vehicle)
+    m_framework.SetMapStyle(dark ? MapStyleVehicleDark : MapStyleVehicleLight);
+  else if (!enabled && (style == MapStyleVehicleDark || style == MapStyleVehicleLight))
+  {
+    bool const outdoors = Framework::LoadOutdoorsEnabled();
+    m_framework.SetMapStyle(dark ? (outdoors ? MapStyleOutdoorsDark : MapStyleDefaultDark)
+                                 : (outdoors ? MapStyleOutdoorsLight : MapStyleDefaultLight));
+  }
+}
+
+void Routing::UpdateNavigation(double speedMps)
+{
+  if (!m_navigating)
+    return;
+  auto & manager = m_framework.GetRoutingManager();
+  if (manager.IsRouteFinished())
+  {
+    stopNavigation();
+    return;
+  }
+
+  routing::FollowingInfo info;
+  manager.GetRouteFollowingInfo(info);
+  if (!info.IsValid())
+    return;
+
+  measurement_utils::Units units = measurement_utils::Units::Metric;
+  settings::TryGet(settings::kMeasurementUnits, units);
+  bool const pedestrian = routerType() == Pedestrian;
+
+  QVariantMap nav;
+  nav["turnIcon"] = pedestrian ? TurnIcon(info.m_pedestrianTurn) : TurnIcon(info.m_turn, info.m_exitNum);
+  nav["distanceToTurn"] = QString::fromStdString(info.m_distToTurn.ToString());
+  nav["street"] = QString::fromStdString(info.m_nextStreetName);
+  nav["nextTurnIcon"] =
+      !pedestrian && info.m_nextTurn != routing::turns::CarDirection::None ? TurnIcon(info.m_nextTurn, 0) : QString();
+  nav["timeLeft"] = FormatTime(info.m_time);
+  nav["distanceLeft"] = QString::fromStdString(info.m_distToTarget.ToString());
+  // Number and units apart, as the Android bottom sheet shows them.
+  nav["distanceLeftValue"] = QString::fromStdString(info.m_distToTarget.GetDistanceString());
+  nav["distanceLeftUnits"] = QString::fromStdString(info.m_distToTarget.GetUnitsString());
+  int const minutes = (info.m_time + 59) / 60;
+  nav["hoursLeft"] = minutes / 60;
+  nav["minutesLeft"] = minutes % 60;
+  nav["hourUnits"] = Localized(QStringLiteral("hour"));
+  nav["minuteUnits"] = Localized(QStringLiteral("minute"));
+  nav["arrival"] = QLocale::system().toString(QTime::currentTime().addSecs(info.m_time), QLocale::ShortFormat);
+  nav["speed"] = speedMps >= 0 ? QString::fromStdString(measurement_utils::FormatSpeedNumeric(speedMps, units))
+                               : QStringLiteral("0");
+  nav["speedUnits"] = Localized(units == measurement_utils::Units::Imperial ? QStringLiteral("miles_per_hour")
+                                                                            : QStringLiteral("kilometers_per_hour"));
+  nav["speedLimit"] = info.m_speedLimitMps > 0
+                        ? QString::fromStdString(measurement_utils::FormatSpeedNumeric(info.m_speedLimitMps, units))
+                        : QString();
+  nav["progress"] = info.m_completionPercent / 100.0;
+  m_navigation = nav;
+  emit navigationChanged();
+}
+
 void Routing::routeFromPlace()
 {
   AddPlacePoint(Start);
@@ -250,6 +396,7 @@ void Routing::downloadMissingMaps()
 
 void Routing::close()
 {
+  m_startWhenBuilt = false;
   m_framework.GetRoutingManager().CloseRouting(true /* removeRoutePoints */);
   m_building = m_built = false;
   m_summary.clear();
@@ -377,5 +524,7 @@ void Routing::OnRouteBuilt(int code, QStringList const & absentCountries)
   default: SetError(L("dialog_routing_system_error"), L("dialog_routing_application_error")); break;
   }
   emit stateChanged();
+  if (std::exchange(m_startWhenBuilt, false) && m_built)
+    start();
 }
 }  // namespace sailfish

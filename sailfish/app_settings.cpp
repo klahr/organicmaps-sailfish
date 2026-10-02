@@ -188,6 +188,34 @@ void AppSettings::setBuildings3d(bool enabled)
   emit changed();
 }
 
+bool AppSettings::perspectiveView() const
+{
+  bool allow3d, buildings;
+  Framework::Load3dMode(allow3d, buildings);
+  return allow3d;
+}
+
+void AppSettings::setPerspectiveView(bool enabled)
+{
+  bool allow3d, buildings;
+  Framework::Load3dMode(allow3d, buildings);
+  Framework::Save3dMode(enabled, buildings);
+  m_framework.Allow3dMode(enabled, buildings);
+  emit changed();
+}
+
+bool AppSettings::autoZoom() const
+{
+  return m_framework.LoadAutoZoom();
+}
+
+void AppSettings::setAutoZoom(bool enabled)
+{
+  m_framework.AllowAutoZoom(enabled);
+  m_framework.SaveAutoZoom(enabled);
+  emit changed();
+}
+
 bool AppSettings::IsAutoDownloadEnabled()
 {
   return Load(kAutoDownload, true);

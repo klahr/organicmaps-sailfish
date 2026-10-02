@@ -4,6 +4,9 @@ import app.organicmaps 1.0
 
 // The Android settings that apply to this port, in their Android groups.
 Page {
+    // MapItem.routing, for the routing options.
+    property QtObject mapPageRouting
+
     allowedOrientations: Orientation.All
 
     SilicaFlickable {
@@ -111,6 +114,24 @@ Page {
                 label: appInfo.localized("pref_bg_tiles_title")
                 value: appSettings.bgTilesEnabled ? appInfo.localized("on") : appInfo.localized("off")
                 onClicked: pageStack.push(Qt.resolvedUrl("SatelliteSettingsPage.qml"))
+            }
+
+            SectionHeader {
+                text: appInfo.localized("prefs_group_route")
+            }
+            TextSwitch {
+                text: appInfo.localized("pref_map_3d_title")
+                checked: appSettings.perspectiveView
+                onCheckedChanged: appSettings.perspectiveView = checked
+            }
+            TextSwitch {
+                text: appInfo.localized("pref_map_auto_zoom")
+                checked: appSettings.autoZoom
+                onCheckedChanged: appSettings.autoZoom = checked
+            }
+            ValueButton {
+                label: appInfo.localized("driving_options_title")
+                onClicked: pageStack.push(Qt.resolvedUrl("RoutingOptionsPage.qml"), { routing: mapPageRouting })
             }
 
             SectionHeader {
