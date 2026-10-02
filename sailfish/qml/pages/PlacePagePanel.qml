@@ -9,6 +9,8 @@ MapPanel {
 
     // The MapItem.placePage object; the uncreatable C++ type cannot be named as a property type in Qt 5.6.
     property QtObject placePage
+    // MapItem.routing, for the route buttons.
+    property QtObject routing
 
     modal: false
     spacing: 0
@@ -282,32 +284,38 @@ MapPanel {
         VerticalScrollDecorator {}
     }
 
-    // Fixed actions below the scrolling content, like the Android place page bar.
+    // Fixed actions below the scrolling content, like the Android place page bar:
+    // Route from, Add stop while a route is planned, Save, Route to.
     Row {
         id: actions
         width: parent.width
 
-        BackgroundItem {
-            width: parent.width
-            height: Theme.itemSizeMedium
+        readonly property int count: routing.active ? 4 : 3
+
+        PlaceAction {
+            width: actions.width / actions.count
+            icon: "../../icons/routing/ic_route_from.webp"
+            text: appInfo.localized("p2p_from_here")
+            onClicked: routing.routeFromPlace()
+        }
+        PlaceAction {
+            visible: routing.active
+            width: actions.width / actions.count
+            icon: "../../icons/routing/ic_route_via.webp"
+            text: appInfo.localized("placepage_add_stop")
+            onClicked: routing.addStopFromPlace()
+        }
+        PlaceAction {
+            width: actions.width / actions.count
+            icon: placePage.isBookmark ? "image://theme/icon-m-favorite-selected" : "image://theme/icon-m-favorite"
+            text: placePage.isBookmark ? appInfo.localized("delete") : appInfo.localized("save")
             onClicked: placePage.toggleBookmark()
-
-            Row {
-                anchors.centerIn: parent
-                spacing: Theme.paddingMedium
-
-                Icon {
-                    anchors.verticalCenter: parent.verticalCenter
-                    source: placePage.isBookmark ? "image://theme/icon-m-favorite-selected"
-                                                 : "image://theme/icon-m-favorite"
-                    highlighted: parent.parent.highlighted
-                }
-                Label {
-                    anchors.verticalCenter: parent.verticalCenter
-                    text: placePage.isBookmark ? qsTr("Delete") : qsTr("Save")
-                    highlighted: parent.parent.highlighted
-                }
-            }
+        }
+        PlaceAction {
+            width: actions.width / actions.count
+            icon: "../../icons/routing/ic_route_to.webp"
+            text: appInfo.localized("p2p_to_here")
+            onClicked: routing.routeToPlace()
         }
     }
 

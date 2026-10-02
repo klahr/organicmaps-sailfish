@@ -19,6 +19,7 @@ class Framework;
 namespace sailfish
 {
 class PlacePage;
+class Routing;
 }  // namespace sailfish
 
 namespace sailfish
@@ -37,6 +38,10 @@ class MapItem
   Q_PROPERTY(int enabledLayers READ enabledLayers NOTIFY layersChanged)
   Q_PROPERTY(bool darkStyle READ darkStyle NOTIFY layersChanged)
   Q_PROPERTY(sailfish::PlacePage * placePage READ placePage CONSTANT)
+  Q_PROPERTY(sailfish::Routing * routing READ routing CONSTANT)
+  // Height covered by panels at the bottom; routes and searches are fitted into the map above it.
+  Q_PROPERTY(
+      qreal viewportBottomInset READ viewportBottomInset WRITE setViewportBottomInset NOTIFY viewportBottomInsetChanged)
   Q_PROPERTY(bool trackRecording READ trackRecording NOTIFY trackRecordingChanged)
   // Height of the map buttons along the bottom edge; the scale line and attribution stay above them.
   Q_PROPERTY(
@@ -74,6 +79,9 @@ public:
 
   int myPositionMode() const { return m_myPositionMode; }
   PlacePage * placePage() const { return m_placePage.get(); }
+  Routing * routing() const { return m_routing.get(); }
+  qreal viewportBottomInset() const { return m_viewportBottomInset; }
+  void setViewportBottomInset(qreal inset);
   bool trackRecording() const;
   qreal bottomWidgetsOffset() const { return m_bottomWidgetsOffset; }
   void setBottomWidgetsOffset(qreal offset);
@@ -85,6 +93,7 @@ signals:
   void layersChanged();
   void bottomWidgetsOffsetChanged();
   void trackRecordingChanged();
+  void viewportBottomInsetChanged();
 
 protected:
   QSGNode * updatePaintNode(QSGNode * oldNode, UpdatePaintNodeData *) override;
@@ -100,6 +109,7 @@ private:
   void CreateEngine();
   void Resize(int width, int height);
   void UpdateWidgetLayout();
+  void UpdateVisibleViewport();
   void SendMouseTouch(QMouseEvent * event, int touchType);
   void OnMyPositionModeChanged(location::EMyPositionMode mode);
   void OnCompassReading();
@@ -118,6 +128,7 @@ private:
   std::unique_ptr<gui::Skin> m_skin;
   std::unique_ptr<location::LocationService> m_locationService;
   std::unique_ptr<PlacePage> m_placePage;
+  std::unique_ptr<Routing> m_routing;
   // Points the my position arrow, like the rotation vector sensor on Android.
   QCompass * m_compass;
   location::EMyPositionMode m_myPositionMode = location::PendingPosition;
@@ -128,6 +139,7 @@ private:
   QTimer m_updateTimer;
   double m_visualScale = 1.0;
   qreal m_bottomWidgetsOffset = 0;
+  qreal m_viewportBottomInset = 0;
   bool m_inBackground = false;
 };
 }  // namespace sailfish

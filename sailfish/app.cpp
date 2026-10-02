@@ -5,6 +5,7 @@
 #include "sailfish/framework_access.hpp"
 #include "sailfish/map_item.hpp"
 #include "sailfish/place_page.hpp"
+#include "sailfish/routing.hpp"
 #include "sailfish/search_model.hpp"
 
 #include "map/framework.hpp"
@@ -86,6 +87,7 @@ __attribute__((visibility("default"))) int OrganicMapsMain(int argc, char * argv
   qmlRegisterType<sailfish::BookmarkCategoriesModel>("app.organicmaps", 1, 0, "BookmarkCategoriesModel");
   qmlRegisterType<sailfish::BookmarksModel>("app.organicmaps", 1, 0, "BookmarksModel");
   qmlRegisterUncreatableType<sailfish::PlacePage>("app.organicmaps", 1, 0, "PlacePage", "Owned by MapItem");
+  qmlRegisterUncreatableType<sailfish::Routing>("app.organicmaps", 1, 0, "Routing", "Owned by MapItem");
 
   // Declared before the view, which uses it until it is destroyed.
   sailfish::AppInfo appInfo;

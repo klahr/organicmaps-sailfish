@@ -19,6 +19,8 @@ set(SRC
   map_item.hpp
   place_page.cpp
   place_page.hpp
+  routing.cpp
+  routing.hpp
   search_model.cpp
   search_model.hpp
   ${OMIM_ROOT}/qt/qt_common/qtoglcontext.cpp
@@ -70,7 +72,24 @@ install(FILES "${OMIM_ROOT}/data/strings/types_strings.txt" "${OMIM_ROOT}/data/s
 install(TARGETS ${PROJECT_NAME} DESTINATION bin)
 install(TARGETS ${PROJECT_NAME}_lib LIBRARY DESTINATION share/organicmaps/lib)
 install(DIRECTORY qml DESTINATION share/organicmaps)
-install(DIRECTORY icons/layers icons/categories icons/placepage icons/bookmarks icons/myposition icons/help icons/menu DESTINATION share/organicmaps/icons)
+install(DIRECTORY icons/layers icons/categories icons/placepage icons/bookmarks icons/myposition icons/help icons/menu icons/routing DESTINATION share/organicmaps/icons)
+# Bitmaps on Android too, installed from its resources: router and route point buttons.
+set(ANDROID_RES "${OMIM_ROOT}/android/app/src/main/res")
+install(FILES
+  "${ANDROID_RES}/drawable-xxhdpi/ic_car.webp" "${ANDROID_RES}/drawable-xxhdpi/ic_pedestrian.webp"
+  "${ANDROID_RES}/drawable-xxhdpi/ic_transit.webp" "${ANDROID_RES}/drawable-xxhdpi/ic_bike.webp"
+  "${ANDROID_RES}/drawable-xxhdpi/ic_route_from.webp" "${ANDROID_RES}/drawable-xxhdpi/ic_route_to.webp"
+  "${ANDROID_RES}/drawable-xxhdpi/ic_route_via.webp"
+  "${ANDROID_RES}/drawable/route_point_start.png" "${ANDROID_RES}/drawable/route_point_finish.png"
+  DESTINATION share/organicmaps/icons/routing)
+set(ANDROID_SDK_RES "${OMIM_ROOT}/android/sdk/src/main/res")
+install(FILES
+  "${ANDROID_SDK_RES}/drawable-xxxhdpi/ic_20px_route_planning_walk.webp"
+  "${ANDROID_SDK_RES}/drawable-xxxhdpi/ic_20px_route_planning_metro.webp"
+  "${ANDROID_SDK_RES}/drawable-xxxhdpi/ic_20px_route_planning_train.webp"
+  "${ANDROID_SDK_RES}/drawable-xxxhdpi/ic_20px_route_planning_lightrail.webp"
+  "${ANDROID_SDK_RES}/drawable-xxxhdpi/ic_20px_route_planning_monorail.webp"
+  DESTINATION share/organicmaps/icons/routing)
 # The Wikipedia logo and the direction arrow are bitmaps on Android too.
 install(FILES "${OMIM_ROOT}/android/app/src/main/res/drawable-xxhdpi/ic_wiki.webp"
               "${OMIM_ROOT}/android/app/src/main/res/drawable-xxhdpi/ic_direction_pagepreview.webp"

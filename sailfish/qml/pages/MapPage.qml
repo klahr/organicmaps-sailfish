@@ -35,6 +35,8 @@ Page {
         anchors.fill: parent
         // Keeps the scale line and attribution above the bottom row, like on Android.
         bottomWidgetsOffset: bottomButtons.height + bottomButtons.anchors.bottomMargin
+        // Routes are fitted into the map above the open sheets.
+        viewportBottomInset: Math.max(placePagePanel.visibleSize, routePanel.visibleSize)
     }
 
     MapButton {
@@ -64,8 +66,8 @@ Page {
         spacing: Theme.dp(8)
         // Stay above the place page, as on Android.
         transform: Translate {
-            y: -Math.max(0, placePagePanel.visibleSize - (page.height - rightButtons.y - rightButtons.height)
-                            + Theme.dp(8))
+            y: -Math.max(0, Math.max(placePagePanel.visibleSize, routePanel.visibleSize)
+                               - (page.height - rightButtons.y - rightButtons.height) + Theme.dp(8))
         }
 
         MapButton {
@@ -165,60 +167,6 @@ Page {
             pageStack.push(Qt.resolvedUrl("SaveTrackDialog.qml"), { map: map })
     }
 
-    // Active search query, kept running on the map like on Android; the cross ends it.
-    Rectangle {
-        anchors {
-            left: layersButton.right
-            right: recordingButton.visible ? recordingButton.left : parent.right
-            verticalCenter: layersButton.verticalCenter
-            leftMargin: Theme.dp(8)
-            rightMargin: Theme.dp(8)
-        }
-        height: layersButton.height
-        radius: height / 2
-        color: Theme.rgba(Theme.overlayBackgroundColor, Theme.opacityOverlay)
-        visible: search.query !== ""
-
-        BackgroundItem {
-            anchors {
-                left: parent.left
-                right: clearSearchButton.left
-                top: parent.top
-                bottom: parent.bottom
-            }
-            onClicked: pageStack.push(Qt.resolvedUrl("SearchPage.qml"), { search: search })
-
-            Icon {
-                id: searchIcon
-                anchors {
-                    left: parent.left
-                    leftMargin: Theme.paddingMedium
-                    verticalCenter: parent.verticalCenter
-                }
-                source: "image://theme/icon-m-search"
-            }
-            Label {
-                anchors {
-                    left: searchIcon.right
-                    leftMargin: Theme.paddingSmall
-                    right: parent.right
-                    verticalCenter: parent.verticalCenter
-                }
-                text: search.query
-                truncationMode: TruncationMode.Fade
-            }
-        }
-        IconButton {
-            id: clearSearchButton
-            anchors {
-                right: parent.right
-                verticalCenter: parent.verticalCenter
-            }
-            icon.source: "image://theme/icon-m-cancel"
-            onClicked: search.query = ""
-        }
-    }
-
     // Lives with the map so the last query and its results come back when search is reopened.
     SearchModel {
         id: search
@@ -228,6 +176,14 @@ Page {
     PlacePagePanel {
         id: placePagePanel
         placePage: map.placePage
+        routing: map.routing
+    }
+
+    RoutePanel {
+        id: routePanel
+        routing: map.routing
+        placePage: map.placePage
+        searchModel: search
     }
 
     MapPanel {

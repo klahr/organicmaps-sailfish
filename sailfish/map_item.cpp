@@ -3,6 +3,7 @@
 #include "sailfish/app_settings.hpp"
 #include "sailfish/framework_access.hpp"
 #include "sailfish/place_page.hpp"
+#include "sailfish/routing.hpp"
 
 #include "map/framework.hpp"
 
@@ -75,6 +76,7 @@ MapItem::MapItem(QQuickItem * parent)
   , m_framework(GetFramework())
   , m_locationService(CreateDesktopLocationService(*this))
   , m_placePage(std::make_unique<PlacePage>(m_framework))
+  , m_routing(std::make_unique<Routing>(m_framework))
   , m_compass(new QCompass(this))
 {
   m_compass->setSkipDuplicates(true);
@@ -378,6 +380,7 @@ void MapItem::CreateEngine()
   m_contextFactory->WaitForInitialization(nullptr);
   m_engineCreated = true;
   UpdateWidgetLayout();
+  UpdateVisibleViewport();
   if (m_myPositionMode == location::PendingPosition)
     ShowLastLocation();
 
@@ -393,6 +396,24 @@ void MapItem::Resize(int width, int height)
 
   m_skin->Resize(width, height);
   UpdateWidgetLayout();
+  UpdateVisibleViewport();
+}
+
+void MapItem::setViewportBottomInset(qreal inset)
+{
+  if (inset == m_viewportBottomInset)
+    return;
+  m_viewportBottomInset = inset;
+  emit viewportBottomInsetChanged();
+  UpdateVisibleViewport();
+}
+
+void MapItem::UpdateVisibleViewport()
+{
+  if (!m_engineCreated)
+    return;
+  double const bottom = std::max(1.0, height() - m_viewportBottomInset);
+  m_framework.SetVisibleViewport(m2::RectD(0, 0, width(), bottom));
 }
 
 void MapItem::setBottomWidgetsOffset(qreal offset)

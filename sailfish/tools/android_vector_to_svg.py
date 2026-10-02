@@ -10,7 +10,8 @@ import os
 import xml.etree.ElementTree as ET
 
 A = '{http://schemas.android.com/apk/res/android}'
-RES = 'android/app/src/main/res'
+# The app resources, then the SDK ones.
+RES_DIRS = ['android/app/src/main/res', 'android/sdk/src/main/res']
 # ic_layers is the monochrome map button icon, the others are the light/night layer previews.
 LAYERS = ['ic_layers', 'ic_layers_outdoors', 'ic_layers_isoline', 'ic_layers_hiking', 'ic_layers_cycling',
           'ic_layers_subway', 'ic_layers_satellite']
@@ -31,11 +32,14 @@ HELP = ['ic_question_mark']
 # they are made white (WHITE) for Silica to colorize; ic_track_recording_on keeps its two colors.
 MENU = ['ic_download', 'ic_donate', 'ic_settings', 'ic_track_recording_off', 'ic_track_recording_on', 'ic_share',
         'ic_track_recording_status']
-WHITE = {'ic_download', 'ic_donate', 'ic_settings', 'ic_track_recording_off', 'ic_share', 'ic_track_recording_status'}
+# Routing: the ruler router button and the numbered stops of the route panel.
+ROUTING = ['ic_ruler_route', 'ic_location_arrow_blue', 'ic_20px_route_planning_tram', 'ic_20px_route_planning_bus'] + [
+    'route_point_%02d' % i for i in range(1, 10)]
+WHITE = {'ic_ruler_route', 'ic_download', 'ic_donate', 'ic_settings', 'ic_track_recording_off', 'ic_share', 'ic_track_recording_status'}
 OUTPUTS = [('sailfish/icons/layers', LAYERS), ('sailfish/icons/categories', CATEGORIES),
            ('sailfish/icons/placepage', PLACE_PAGE), ('sailfish/icons/bookmarks', BOOKMARKS),
            ('sailfish/icons/myposition', MY_POSITION), ('sailfish/icons/help', HELP),
-           ('sailfish/icons/menu', MENU)]
+           ('sailfish/icons/menu', MENU), ('sailfish/icons/routing', ROUTING)]
 
 # Android path attribute -> SVG attribute.
 PATH_ATTRS = {
@@ -50,7 +54,7 @@ PATH_ATTRS = {
 def color(value):
     # Android colors are #RGB, #RRGGBB or #AARRGGBB; SVG takes the alpha separately.
     if value.startswith('@android:color/'):
-        return {'white': '#ffffff', 'black': '#000000'}[value.split('/')[1]], None
+        return {'white': '#ffffff', 'black': '#000000', 'holo_blue_light': '#33b5e5'}[value.split('/')[1]], None
     if len(value) == 9:
         return '#' + value[3:], int(value[1:3], 16) / 255
     return value, None
@@ -136,8 +140,9 @@ def main():
         os.makedirs(out_dir, exist_ok=True)
         for variant, suffix in (('drawable', ''), ('drawable-night', '_night')):
             for name in names:
-                path = os.path.join(RES, variant, name + '.xml')
-                if os.path.exists(path):
+                paths = [os.path.join(res, variant, name + '.xml') for res in RES_DIRS]
+                path = next((p for p in paths if os.path.exists(p)), None)
+                if path:
                     tree = to_svg(ET.parse(path).getroot())
                     if name in WHITE:
                         make_white(tree.getroot())
