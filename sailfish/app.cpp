@@ -1,3 +1,5 @@
+#include "sailfish/app_info.hpp"
+#include "sailfish/bookmarks_model.hpp"
 #include "sailfish/countries_model.hpp"
 #include "sailfish/framework_access.hpp"
 #include "sailfish/map_item.hpp"
@@ -14,6 +16,7 @@
 #include <qqml.h>
 #include <QDir>
 #include <QGuiApplication>
+#include <QQmlContext>
 #include <QQuickView>
 #include <QStandardPaths>
 #include <QSurfaceFormat>
@@ -74,13 +77,19 @@ __attribute__((visibility("default"))) int OrganicMapsMain(int argc, char * argv
   framework.SetupMeasurementSystem();
   framework.GetStorage().SetLocale(languages::GetCurrentTwine());
   g_framework = &framework;
+  sailfish::BookmarksNotifier::LoadBookmarks(framework);
 
   qmlRegisterType<sailfish::MapItem>("app.organicmaps", 1, 0, "MapItem");
   qmlRegisterType<sailfish::CountriesModel>("app.organicmaps", 1, 0, "CountriesModel");
   qmlRegisterType<sailfish::SearchModel>("app.organicmaps", 1, 0, "SearchModel");
+  qmlRegisterType<sailfish::BookmarkCategoriesModel>("app.organicmaps", 1, 0, "BookmarkCategoriesModel");
+  qmlRegisterType<sailfish::BookmarksModel>("app.organicmaps", 1, 0, "BookmarksModel");
   qmlRegisterUncreatableType<sailfish::PlacePage>("app.organicmaps", 1, 0, "PlacePage", "Owned by MapItem");
 
+  // Declared before the view, which uses it until it is destroyed.
+  sailfish::AppInfo appInfo;
   std::unique_ptr<QQuickView> view(SailfishApp::createView());
+  view->rootContext()->setContextProperty(QStringLiteral("appInfo"), &appInfo);
   view->setSource(SailfishApp::pathToMainQml());
   view->show();
 

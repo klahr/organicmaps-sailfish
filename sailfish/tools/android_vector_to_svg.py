@@ -20,9 +20,16 @@ CATEGORIES = ['ic_category_' + key for key in (
     'nightlife', 'children', 'bank', 'entertainment', 'water', 'hospital', 'pharmacy', 'recycling', 'rv', 'police',
     'toilet', 'post')]
 # Place page row icons missing from the Silica theme.
-PLACE_PAGE = ['ic_wikimedia_commons_white', 'ic_wheelchair_white']
+PLACE_PAGE = ['ic_wikimedia_commons_white', 'ic_wheelchair_white', 'ic_capacity_white', 'ic_open_in']
+# Bookmarks button and list visibility toggles.
+BOOKMARKS = ['ic_bookmarks_and_tracks', 'ic_show', 'ic_hide']
+# My position button states.
+MY_POSITION = ['ic_location_off', 'ic_not_follow', 'ic_follow', 'ic_follow_and_rotate']
+# Help button.
+HELP = ['ic_question_mark']
 OUTPUTS = [('sailfish/icons/layers', LAYERS), ('sailfish/icons/categories', CATEGORIES),
-           ('sailfish/icons/placepage', PLACE_PAGE)]
+           ('sailfish/icons/placepage', PLACE_PAGE), ('sailfish/icons/bookmarks', BOOKMARKS),
+           ('sailfish/icons/myposition', MY_POSITION), ('sailfish/icons/help', HELP)]
 
 # Android path attribute -> SVG attribute.
 PATH_ATTRS = {

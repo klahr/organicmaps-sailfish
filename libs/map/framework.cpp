@@ -233,6 +233,13 @@ void Framework::OnLocationUpdate(GpsInfo const & info)
   m_routingManager.OnLocationUpdate(rInfo);
 }
 
+void Framework::OnLastKnownLocation(GpsInfo info)
+{
+  info.m_isObsolete = true;
+  if (m_drapeEngine != nullptr)
+    m_drapeEngine->SetGpsInfo(info, false /* isNavigable */, {} /* routeInfo */);
+}
+
 void Framework::OnCompassUpdate(CompassInfo const & info)
 {
 #ifdef FIXED_LOCATION

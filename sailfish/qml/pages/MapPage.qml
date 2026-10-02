@@ -11,6 +11,8 @@ Page {
     MapItem {
         id: map
         anchors.fill: parent
+        // Keeps the scale line and attribution above the bottom row, like on Android.
+        bottomWidgetsOffset: bottomButtons.height + bottomButtons.anchors.bottomMargin
     }
 
     MapButton {
@@ -21,19 +23,21 @@ Page {
             margins: Theme.dp(8)
         }
         source: Qt.resolvedUrl("../../icons/layers/ic_layers.svg")
-        highlighted: layersPanel.open
+        // Blue while a layer is applied, like on Android, and while choosing layers.
+        highlighted: map.enabledLayers !== 0 || layersPanel.open
         onClicked: layersPanel.open = true
     }
 
-    // Positions follow the Android map_buttons_layout_regular.xml; the look stays Silica.
+    // Positions follow the Android map_buttons_layout_regular.xml (and layout-land); the look stays Silica.
     Column {
         id: rightButtons
         anchors {
             right: parent.right
-            bottom: bottomButtons.top
             rightMargin: Theme.dp(8)
-            // Gaps measured on the Android app: ~104dp above the bottom row, ~80dp above my position.
-            bottomMargin: Theme.dp(104)
+            // Portrait: ~104dp above the bottom row, measured on Android. Landscape: my position is level
+            // with the row in the bottom right corner.
+            bottom: page.isPortrait ? bottomButtons.top : parent.bottom
+            bottomMargin: page.isPortrait ? Theme.dp(104) : bottomButtons.anchors.bottomMargin
         }
         spacing: Theme.dp(8)
         // Stay above the place page, as on Android.
@@ -54,50 +58,51 @@ Page {
             width: 1
             height: Theme.dp(64)
         }
-        // Mirrors location::EMyPositionMode.
+        // Mirrors location::EMyPositionMode, with the Android icons. The core cycles the modes: a tap centers
+        // north up, further taps toggle rotating with the heading, panning the map stops following.
         MapButton {
             readonly property int pendingPosition: 0
             readonly property int notFollowNoPosition: 1
+            readonly property int notFollow: 2
             readonly property int follow: 3
             readonly property int followAndRotate: 4
+            readonly property var icons: ["", "ic_location_off", "ic_not_follow", "ic_follow", "ic_follow_and_rotate"]
 
-            source: map.myPositionMode === pendingPosition || map.myPositionMode === notFollowNoPosition
-                    ? "image://theme/icon-m-gps"
-                    : map.myPositionMode === followAndRotate ? "image://theme/icon-m-location"
-                                                             : "image://theme/icon-m-whereami"
+            // While searching only the spinner shows, like the rotating ring on Android.
+            source: map.myPositionMode === pendingPosition
+                    ? "" : Qt.resolvedUrl("../../icons/myposition/" + icons[map.myPositionMode] + ".svg")
             highlighted: map.myPositionMode === follow || map.myPositionMode === followAndRotate
             busy: map.myPositionMode === pendingPosition
-            opacity: map.myPositionMode === notFollowNoPosition ? Theme.opacityHigh : 1.0
             onClicked: map.switchMyPositionMode()
         }
     }
 
-    // Centered bottom row capped at 300dp like on Android, with its four buttons spread evenly:
-    // help, search, bookmarks, menu. Empty slots keep the others in their Android positions.
+    // Bottom row like on Android: help, search, bookmarks, menu. Centered in portrait, left aligned in
+    // landscape; the gaps are about 0.6 of a button, as measured on the Android app.
     Row {
         id: bottomButtons
+        // Positioned by x: switching between left and horizontalCenter anchors on rotation can leave both set.
+        x: page.isPortrait ? (parent.width - width) / 2 : Theme.dp(8)
         anchors {
-            horizontalCenter: parent.horizontalCenter
             bottom: parent.bottom
             bottomMargin: Theme.dp(8)
         }
-        width: Math.min(parent.width, Theme.dp(300)) - 2 * Theme.dp(8)
-        spacing: (width - 4 * menuButton.width) / 3
+        spacing: Math.round(menuButton.width * 0.6)
 
-        Item {
-            // Help.
-            width: menuButton.width
-            height: 1
+        MapButton {
+            radius: Theme.dp(14)
+            source: Qt.resolvedUrl("../../icons/help/ic_question_mark.svg")
+            onClicked: pageStack.push(Qt.resolvedUrl("HelpPage.qml"))
         }
         MapButton {
             radius: Theme.dp(14)
             source: "image://theme/icon-m-search"
             onClicked: pageStack.push(Qt.resolvedUrl("SearchPage.qml"), { search: search })
         }
-        Item {
-            // Bookmarks.
-            width: menuButton.width
-            height: 1
+        MapButton {
+            radius: Theme.dp(14)
+            source: Qt.resolvedUrl("../../icons/bookmarks/ic_bookmarks_and_tracks.svg")
+            onClicked: pageStack.push(Qt.resolvedUrl("BookmarksPage.qml"))
         }
         MapButton {
             id: menuButton

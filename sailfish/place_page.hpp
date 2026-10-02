@@ -2,6 +2,7 @@
 
 #include <QObject>
 #include <QString>
+#include <QStringList>
 #include <QVariantList>
 
 #include <string_view>
@@ -20,7 +21,15 @@ class PlacePage : public QObject
   Q_PROPERTY(QString subtitle READ subtitle NOTIFY changed)
   Q_PROPERTY(QString address READ address NOTIFY changed)
   Q_PROPERTY(QString distance READ distance NOTIFY distanceChanged)
+  // Direction to the place relative to the device heading in degrees, negative without a position.
+  Q_PROPERTY(double azimuth READ azimuth NOTIFY distanceChanged)
+  // Same text as the Android share button, and the geo: link of "Open in Another App".
+  Q_PROPERTY(QString shareText READ shareText NOTIFY changed)
+  Q_PROPERTY(QString geoUri READ geoUri NOTIFY changed)
+  Q_PROPERTY(bool isBookmark READ isBookmark NOTIFY changed)
   Q_PROPERTY(QString coordinates READ coordinates NOTIFY changed)
+  // Bare values of all coordinate formats available at the place, offered for copying like on Android.
+  Q_PROPERTY(QStringList coordinateValues READ coordinateValues NOTIFY changed)
   // Opening hours like the Android preview: state line (OpenState) with a description, and the raw
   // schedule shown when expanded.
   Q_PROPERTY(int openState READ openState NOTIFY changed)
@@ -49,7 +58,12 @@ public:
   QString subtitle() const { return m_subtitle; }
   QString address() const { return m_address; }
   QString distance() const { return m_distance; }
+  double azimuth() const { return m_azimuth; }
+  QString shareText() const { return m_shareText; }
+  QString geoUri() const { return m_geoUri; }
+  bool isBookmark() const { return m_isBookmark; }
   QString coordinates() const { return m_coordinates; }
+  QStringList coordinateValues() const { return m_coordinateValues; }
   QVariantList details() const { return m_details; }
   int openState() const { return m_openState; }
   QString openTitle() const { return m_openTitle; }
@@ -61,10 +75,13 @@ public:
   Q_INVOKABLE void close();
   // Cycles the coordinates format and remembers it, like a tap on the mobile place pages.
   Q_INVOKABLE void nextCoordinatesFormat();
-  Q_INVOKABLE void copyCoordinates();
+  // Saves the place to the last edited list, or deletes its bookmark, like the Android Save button.
+  Q_INVOKABLE void toggleBookmark();
 
   // Called on location updates while the page is open.
   void UpdateDistance();
+  // Compass heading in radians from true north.
+  void SetNorth(double north);
 
 signals:
   void changed();
@@ -80,8 +97,13 @@ private:
   QString m_subtitle;
   QString m_address;
   QString m_distance;
+  double m_azimuth = -1.0;
+  double m_north = 0.0;
+  QString m_shareText;
+  QString m_geoUri;
+  bool m_isBookmark = false;
   QString m_coordinates;
-  QString m_coordinatesValue;
+  QStringList m_coordinateValues;
   QVariantList m_details;
   int m_openState = OpenUnknown;
   QString m_openTitle;

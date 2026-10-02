@@ -1,6 +1,12 @@
 #include "sailfish/place_page.hpp"
 
+#include "sailfish/app_info.hpp"
+
+#include "map/bookmark_helpers.hpp"
+#include "map/bookmark_manager.hpp"
 #include "map/framework.hpp"
+
+#include "ge0/url_generator.hpp"
 #include "map/place_page_info.hpp"
 
 #include "opening_hours/opening_hours.hpp"
@@ -11,9 +17,9 @@
 
 #include "geometry/mercator.hpp"
 
-#include <QClipboard>
+#include "base/math.hpp"
+
 #include <QDateTime>
-#include <QGuiApplication>
 #include <QLocale>
 #include <QVariantMap>
 
@@ -34,17 +40,6 @@ int32_t SavedCoordinatesFormat()
 QString ToQString(std::string_view s)
 {
   return QString::fromUtf8(s.data(), static_cast<int>(s.size()));
-}
-
-// Strings from data/strings use iOS placeholders: %@ or numbered %1$@.
-QString Localized(char const * key, QStringList const & args = {})
-{
-  QString s = QString::fromStdString(platform::GetLocalizedString(key));
-  for (int i = 0; i < args.size(); ++i)
-    s.replace(QStringLiteral("%%1$@").arg(i + 1), args[i]);
-  if (!args.isEmpty())
-    s.replace(QStringLiteral("%@"), args[0]);
-  return s;
 }
 
 // Same wording as PlacePageOpeningHoursFragment.getTimeIntervalString on Android.
@@ -88,9 +83,36 @@ void PlacePage::nextCoordinatesFormat()
   Update();
 }
 
-void PlacePage::copyCoordinates()
+void PlacePage::toggleBookmark()
 {
-  QGuiApplication::clipboard()->setText(m_coordinatesValue);
+  if (!m_framework.HasPlacePageInfo())
+    return;
+
+  // Same steps as the Android BookmarkManager and Framework JNI. Reselecting the place updates the page.
+  auto const & info = m_framework.GetCurrentPlacePageInfo();
+  auto & manager = m_framework.GetBookmarkManager();
+  auto buildInfo = info.GetBuildInfo();
+  if (info.IsBookmark())
+  {
+    manager.GetEditSession().DeleteBookmark(info.GetBookmarkId());
+    buildInfo.m_match = place_page::BuildInfo::Match::FeatureOnly;
+    buildInfo.m_userMarkId = kml::kInvalidMarkId;
+    buildInfo.m_source = place_page::BuildInfo::Source::Other;
+  }
+  else
+  {
+    kml::BookmarkData data;
+    data.m_name = info.FormatNewBookmarkName();
+    data.m_point = info.GetMercator();
+    data.m_color = m_framework.LastEditedBMColor();
+    if (info.IsFeature())
+      SaveFeatureTypes(info.GetTypes(), data);
+    auto const * bookmark =
+        manager.GetEditSession().CreateBookmark(std::move(data), m_framework.LastEditedBMCategory());
+    buildInfo.m_match = place_page::BuildInfo::Match::Everything;
+    buildInfo.m_userMarkId = bookmark->GetId();
+  }
+  m_framework.UpdatePlacePageInfoForCurrentSelection(buildInfo);
 }
 
 void PlacePage::Update()
@@ -106,15 +128,18 @@ void PlacePage::Update()
 
   auto const entries = place_page::GetAvailableCoordinateFormats(info.GetLatLon(), info.GetCountryId());
   auto const format = place_page::EffectiveCoordinateFormat(entries, SavedCoordinatesFormat());
+  m_coordinateValues.clear();
   for (auto const & entry : entries)
   {
     if (entry.m_format == format)
-    {
       m_coordinates = QString::fromStdString(entry.m_display);
-      m_coordinatesValue = QString::fromStdString(entry.m_value);
-    }
+    m_coordinateValues.append(QString::fromStdString(entry.m_value));
   }
 
+  m_isBookmark = info.IsBookmark();
+  m_shareText = QString::fromStdString(m_framework.GetShareData(info).m_text);
+  m_geoUri = QString::fromStdString(
+      ge0::GenerateGeoUri(info.GetLatLon().m_lat, info.GetLatLon().m_lon, m_framework.GetDrawScale(), info.GetTitle()));
   UpdateOpeningHours(info.GetOpeningHours());
   m_wikiDescription = QString::fromStdString(info.GetWikiDescription());
   m_wikiUrl = QString::fromStdString(
@@ -140,6 +165,8 @@ void PlacePage::Update()
     add("image://theme/icon-m-wlan", QStringLiteral("Wi-Fi"));
   add("image://theme/icon-m-levels", ToQString(info.GetMetadata(Metadata::FMD_LEVEL)));
   add("image://theme/icon-m-person", ToQString(info.GetMetadata(Metadata::FMD_OPERATOR)));
+  if (auto const capacity = info.GetMetadata(Metadata::FMD_CAPACITY); !capacity.empty())
+    add("../../icons/placepage/ic_capacity_white.svg", Localized("capacity", {ToQString(capacity)}));
   if (auto const commons = info.GetMetadata(Metadata::FMD_WIKIMEDIA_COMMONS); !commons.empty())
   {
     add("../../icons/placepage/ic_wikimedia_commons_white.svg", Localized("wikimedia_commons"),
@@ -214,9 +241,17 @@ void PlacePage::UpdateOpeningHours(std::string_view openingHours)
         Localized("opens_dayoftheweek_at", {locale.dayName(opens.date().dayOfWeek()), time(info.nextTimeOpen)});
 }
 
+void PlacePage::SetNorth(double north)
+{
+  m_north = north;
+  if (m_open)
+    UpdateDistance();
+}
+
 void PlacePage::UpdateDistance()
 {
   QString distance;
+  double azimuth = -1.0;
   if (m_framework.HasPlacePageInfo())
   {
     if (auto const position = m_framework.GetCurrentPosition())
@@ -227,14 +262,16 @@ void PlacePage::UpdateDistance()
         auto const ll = mercator::ToLatLon(*position);
         platform::Distance d;
         double azimut;
-        m_framework.GetDistanceAndAzimut(info.GetMercator(), ll.m_lat, ll.m_lon, -1.0, d, azimut);
+        m_framework.GetDistanceAndAzimut(info.GetMercator(), ll.m_lat, ll.m_lon, m_north, d, azimut);
         distance = QString::fromStdString(d.ToString());
+        azimuth = math::RadToDeg(azimut);
       }
     }
   }
-  if (distance != m_distance)
+  if (distance != m_distance || azimuth != m_azimuth)
   {
     m_distance = distance;
+    m_azimuth = azimuth;
     emit distanceChanged();
   }
 }

@@ -9,7 +9,10 @@
 #include <QQuickItem>
 #include <QTimer>
 
+class QCompass;
+
 #include <memory>
+#include <optional>
 
 class Framework;
 
@@ -34,6 +37,9 @@ class MapItem
   Q_PROPERTY(int enabledLayers READ enabledLayers NOTIFY layersChanged)
   Q_PROPERTY(bool darkStyle READ darkStyle NOTIFY layersChanged)
   Q_PROPERTY(sailfish::PlacePage * placePage READ placePage CONSTANT)
+  // Height of the map buttons along the bottom edge; the scale line and attribution stay above them.
+  Q_PROPERTY(
+      qreal bottomWidgetsOffset READ bottomWidgetsOffset WRITE setBottomWidgetsOffset NOTIFY bottomWidgetsOffsetChanged)
 
 public:
   // Same set as the Android layers sheet.
@@ -58,12 +64,15 @@ public:
 
   int myPositionMode() const { return m_myPositionMode; }
   PlacePage * placePage() const { return m_placePage.get(); }
+  qreal bottomWidgetsOffset() const { return m_bottomWidgetsOffset; }
+  void setBottomWidgetsOffset(qreal offset);
   int enabledLayers() const;
   bool darkStyle() const;
 
 signals:
   void myPositionModeChanged();
   void layersChanged();
+  void bottomWidgetsOffsetChanged();
 
 protected:
   QSGNode * updatePaintNode(QSGNode * oldNode, UpdatePaintNodeData *) override;
@@ -78,8 +87,13 @@ private:
   void OnApplicationStateChanged(Qt::ApplicationState state);
   void CreateEngine();
   void Resize(int width, int height);
+  void UpdateWidgetLayout();
   void SendMouseTouch(QMouseEvent * event, int touchType);
   void OnMyPositionModeChanged(location::EMyPositionMode mode);
+  void OnCompassReading();
+  // The last fix is kept across runs and shown as obsolete until a fresh one arrives.
+  void SaveLastLocation() const;
+  void ShowLastLocation();
 
   // location::LocationObserver
   void OnLocationError(location::TLocationError errorCode) override;
@@ -90,9 +104,16 @@ private:
   std::unique_ptr<gui::Skin> m_skin;
   std::unique_ptr<location::LocationService> m_locationService;
   std::unique_ptr<PlacePage> m_placePage;
+  // Points the my position arrow, like the rotation vector sensor on Android.
+  QCompass * m_compass;
   location::EMyPositionMode m_myPositionMode = location::PendingPosition;
+  std::optional<location::GpsInfo> m_lastLocation;
+  bool m_lastLocationShown = false;
+  // The first mode change arrives while the drape engine is still being created.
+  bool m_engineCreated = false;
   QTimer m_updateTimer;
   double m_visualScale = 1.0;
+  qreal m_bottomWidgetsOffset = 0;
   bool m_inBackground = false;
 };
 }  // namespace sailfish

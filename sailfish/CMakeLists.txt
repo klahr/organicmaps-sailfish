@@ -1,11 +1,15 @@
 project(organicmaps_sailfish)
 
-find_package(Qt5 COMPONENTS REQUIRED Gui Qml Quick)
+find_package(Qt5 COMPONENTS REQUIRED Gui Qml Quick Sensors)
 find_package(PkgConfig REQUIRED)
 pkg_check_modules(SAILFISHAPP REQUIRED sailfishapp)
 
 set(SRC
   app.cpp
+  app_info.cpp
+  app_info.hpp
+  bookmarks_model.cpp
+  bookmarks_model.hpp
   countries_model.cpp
   countries_model.hpp
   framework_access.hpp
@@ -35,6 +39,7 @@ target_link_libraries(${PROJECT_NAME}_lib
     Qt5::Gui
     Qt5::Qml
     Qt5::Quick
+    Qt5::Sensors
     ${SAILFISHAPP_LIBRARIES}
 )
 
@@ -62,9 +67,10 @@ install(FILES "${OMIM_ROOT}/data/strings/types_strings.txt" "${OMIM_ROOT}/data/s
 install(TARGETS ${PROJECT_NAME} DESTINATION bin)
 install(TARGETS ${PROJECT_NAME}_lib LIBRARY DESTINATION share/organicmaps/lib)
 install(DIRECTORY qml DESTINATION share/organicmaps)
-install(DIRECTORY icons/layers icons/categories icons/placepage DESTINATION share/organicmaps/icons)
-# The Wikipedia logo is a bitmap on Android too.
+install(DIRECTORY icons/layers icons/categories icons/placepage icons/bookmarks icons/myposition icons/help DESTINATION share/organicmaps/icons)
+# The Wikipedia logo and the direction arrow are bitmaps on Android too.
 install(FILES "${OMIM_ROOT}/android/app/src/main/res/drawable-xxhdpi/ic_wiki.webp"
+              "${OMIM_ROOT}/android/app/src/main/res/drawable-xxhdpi/ic_direction_pagepreview.webp"
         DESTINATION share/organicmaps/icons/placepage)
 install(FILES organicmaps.desktop DESTINATION share/applications)
 foreach(size 86 108 128 172)

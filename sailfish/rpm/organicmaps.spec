@@ -13,10 +13,12 @@ BuildRequires:  pkgconfig(Qt5Core)
 BuildRequires:  pkgconfig(Qt5Network)
 BuildRequires:  pkgconfig(Qt5Positioning)
 BuildRequires:  pkgconfig(Qt5Quick)
+BuildRequires:  pkgconfig(Qt5Sensors)
 BuildRequires:  pkgconfig(sailfishapp)
 BuildRequires:  pkgconfig(glesv2)
 Requires:       sailfishsilica-qt5
 Requires:       qt5-qtpositioning
+Requires:       qt5-qtsensors
 Requires:       libkeepalive
 
 %description

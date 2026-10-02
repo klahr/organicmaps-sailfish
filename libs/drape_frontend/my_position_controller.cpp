@@ -440,14 +440,17 @@ void MyPositionController::OnLocationUpdate(location::GpsInfo const & info, bool
     m_isDirtyViewport = true;
   }
 
-  // Assume that every new position is fresh enough. We can't make some straightforward filtering here
-  // like comparing system_clock::now().time_since_epoch() and info.m_timestamp, because can't rely
-  // on valid time settings on endpoint device.
-  m_positionIsObsolete = false;
+  // Assume that every new position is fresh enough unless the platform says otherwise. We can't make
+  // some straightforward filtering here like comparing system_clock::now().time_since_epoch() and
+  // info.m_timestamp, because can't rely on valid time settings on endpoint device.
+  m_positionIsObsolete = info.m_isObsolete;
 
   if (!m_isPositionAssigned)
   {
     location::EMyPositionMode newMode = m_desiredInitMode;
+    // A last known position is drawn while still waiting for a fix, without moving the map to it.
+    if (info.m_isObsolete && newMode == location::PendingPosition)
+      newMode = location::NotFollow;
     ChangeMode(newMode);
 
     if (!m_hints.m_isFirstLaunch || !AnimationSystem::Instance().AnimationExists(Animation::Object::MapPlane))

@@ -10,9 +10,16 @@
 
 #include "indexer/map_style.hpp"
 
+#include "platform/settings.hpp"
+
+#include "geometry/angles.hpp"
+
 #include "base/assert.hpp"
 #include "base/logging.hpp"
+#include "base/math.hpp"
+#include "base/string_utils.hpp"
 
+#include <QCompass>
 #include <QGuiApplication>
 #include <QOpenGLContext>
 #include <QQuickWindow>
@@ -24,6 +31,9 @@ namespace sailfish
 {
 namespace
 {
+// "lat lon accuracy timestamp" of the last fix.
+char const kLastLocationSetting[] = "SailfishLastLocation";
+
 // Drape presents into a power-of-two framebuffer and reports the used part as a normalized
 // rect, so the texture wrapper is recreated whenever the framebuffer or its size changes.
 class MapTextureNode : public QSGSimpleTextureNode
@@ -58,7 +68,11 @@ MapItem::MapItem(QQuickItem * parent)
   , m_framework(GetFramework())
   , m_locationService(CreateDesktopLocationService(*this))
   , m_placePage(std::make_unique<PlacePage>(m_framework))
+  , m_compass(new QCompass(this))
 {
+  m_compass->setSkipDuplicates(true);
+  connect(m_compass, &QCompass::readingChanged, this, &MapItem::OnCompassReading);
+
   setFlag(ItemHasContents);
   setAcceptedMouseButtons(Qt::LeftButton);
 
@@ -72,6 +86,7 @@ MapItem::MapItem(QQuickItem * parent)
 
 MapItem::~MapItem()
 {
+  SaveLastLocation();
   m_locationService->Stop();
   if (!m_contextFactory)
     return;
@@ -154,7 +169,10 @@ void MapItem::OnMyPositionModeChanged(location::EMyPositionMode mode)
 {
   // Drape asks for a position by entering PendingPosition, either on start or from the button.
   if (mode == location::PendingPosition && !m_inBackground)
+  {
     m_locationService->Start();
+    ShowLastLocation();
+  }
 
   if (mode != m_myPositionMode)
   {
@@ -171,8 +189,56 @@ void MapItem::OnLocationError(location::TLocationError errorCode)
 
 void MapItem::OnLocationUpdated(location::GpsInfo const & info)
 {
+  m_lastLocation = info;
   m_framework.OnLocationUpdate(info);
   m_placePage->UpdateDistance();
+}
+
+void MapItem::SaveLastLocation() const
+{
+  if (!m_lastLocation)
+    return;
+  auto const & l = *m_lastLocation;
+  settings::Set(kLastLocationSetting,
+                strings::to_string_dac(l.m_latitude, 7) + ' ' + strings::to_string_dac(l.m_longitude, 7) + ' ' +
+                    strings::to_string_dac(l.m_horizontalAccuracy, 1) + ' ' + strings::to_string_dac(l.m_timestamp, 0));
+}
+
+void MapItem::ShowLastLocation()
+{
+  // Only once and only before the first fresh fix of this run.
+  if (!m_engineCreated || m_lastLocationShown || m_lastLocation)
+    return;
+  m_lastLocationShown = true;
+
+  std::string saved;
+  if (!settings::Get(kLastLocationSetting, saved))
+    return;
+  auto const values = strings::Tokenize(saved, " ");
+  location::GpsInfo info;
+  if (values.size() != 4 || !strings::to_double(values[0], info.m_latitude) ||
+      !strings::to_double(values[1], info.m_longitude) || !strings::to_double(values[2], info.m_horizontalAccuracy) ||
+      !strings::to_double(values[3], info.m_timestamp))
+  {
+    return;
+  }
+  m_framework.OnLastKnownLocation(info);
+}
+
+void MapItem::OnCompassReading()
+{
+  auto const * reading = m_compass->reading();
+  if (!m_contextFactory || !reading || !window() || !window()->screen())
+    return;
+
+  // The azimuth is measured at the top of the device; turn it with the UI like Android's
+  // LocationUtils.correctCompassAngle(). Magnetic declination is not corrected there either.
+  QScreen const * screen = window()->screen();
+  int const rotation = screen->angleBetween(screen->nativeOrientation(), window()->contentOrientation());
+  location::CompassInfo info;
+  info.m_bearing = ang::AngleIn2PI(math::DegToRad(static_cast<double>(reading->azimuth() + rotation)));
+  m_framework.OnCompassUpdate(info);
+  m_placePage->SetNorth(info.m_bearing);
 }
 
 void MapItem::OnWindowChanged(QQuickWindow * window)
@@ -195,6 +261,8 @@ void MapItem::OnApplicationStateChanged(Qt::ApplicationState state)
   {
     m_updateTimer.stop();
     m_locationService->Stop();
+    m_compass->stop();
+    SaveLastLocation();
     m_framework.SetRenderingDisabled(false /* destroySurface */);
     m_framework.EnterBackground();
   }
@@ -205,6 +273,7 @@ void MapItem::OnApplicationStateChanged(Qt::ApplicationState state)
     m_updateTimer.start();
     if (m_myPositionMode != location::NotFollowNoPosition)
       m_locationService->Start();
+    m_compass->start();
   }
 }
 
@@ -238,8 +307,13 @@ void MapItem::CreateEngine()
   m_framework.CreateDrapeEngine(make_ref(m_contextFactory), std::move(p));
   m_framework.EnterForeground();
   m_contextFactory->WaitForInitialization(nullptr);
+  m_engineCreated = true;
+  UpdateWidgetLayout();
+  if (m_myPositionMode == location::PendingPosition)
+    ShowLastLocation();
 
   m_updateTimer.start();
+  m_compass->start();
 }
 
 void MapItem::Resize(int width, int height)
@@ -249,8 +323,28 @@ void MapItem::Resize(int width, int height)
     return;
 
   m_skin->Resize(width, height);
+  UpdateWidgetLayout();
+}
+
+void MapItem::setBottomWidgetsOffset(qreal offset)
+{
+  if (offset == m_bottomWidgetsOffset)
+    return;
+  m_bottomWidgetsOffset = offset;
+  emit bottomWidgetsOffsetChanged();
+  if (m_skin)
+    UpdateWidgetLayout();
+}
+
+void MapItem::UpdateWidgetLayout()
+{
   gui::TWidgetsLayoutInfo layout;
   m_skin->ForEach([&layout](gui::EWidget w, gui::Position const & pos) { layout[w] = pos.m_pixelPivot; });
+  // Both are anchored to the bottom left corner. Like Map.updateRulerOffset() on Android, the ruler sits
+  // a little higher than the attribution.
+  double const offset = m_bottomWidgetsOffset;
+  layout[gui::WIDGET_RULER].y -= offset + 8 * m_visualScale;
+  layout[gui::WIDGET_COPYRIGHT].y -= offset;
   m_framework.SetWidgetLayout(std::move(layout));
 }
 

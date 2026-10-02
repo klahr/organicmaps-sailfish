@@ -1,5 +1,6 @@
 import QtQuick 2.6
 import Sailfish.Silica 1.0
+import Sailfish.Share 1.0
 import app.organicmaps 1.0
 
 // Bottom sheet for the selected place, like the Android place page. Not modal, so the map stays usable.
@@ -32,7 +33,7 @@ MapPanel {
     SilicaFlickable {
         id: flickable
         width: parent.width
-        height: Math.min(content.height, panel.parent.height * 0.6)
+        height: Math.min(content.height, panel.parent.height * 0.6 - actions.height)
         contentHeight: content.height
         clip: true
 
@@ -50,7 +51,7 @@ MapPanel {
                     anchors {
                         left: parent.left
                         leftMargin: Theme.horizontalPageMargin
-                        right: closeButton.left
+                        right: shareButton.left
                     }
 
                     Label {
@@ -79,6 +80,15 @@ MapPanel {
                     }
                 }
                 IconButton {
+                    id: shareButton
+                    anchors {
+                        right: closeButton.left
+                        top: closeButton.top
+                    }
+                    icon.source: "image://theme/icon-m-share"
+                    onClicked: shareAction.trigger()
+                }
+                IconButton {
                     id: closeButton
                     anchors {
                         right: parent.right
@@ -89,15 +99,30 @@ MapPanel {
                     icon.source: "image://theme/icon-m-cancel"
                     onClicked: placePage.close()
                 }
-                Label {
+                // Direction and distance to the place, the arrow turning with the compass like on Android.
+                Row {
                     anchors {
                         right: parent.right
                         rightMargin: Theme.horizontalPageMargin
                         top: closeButton.bottom
                     }
-                    text: placePage.distance
-                    font.pixelSize: Theme.fontSizeSmall
-                    color: Theme.highlightColor
+                    spacing: Theme.paddingSmall
+                    visible: placePage.distance !== ""
+
+                    Image {
+                        anchors.verticalCenter: parent.verticalCenter
+                        width: Theme.iconSizeSmall
+                        height: width
+                        sourceSize: Qt.size(width, height)
+                        source: "../../icons/placepage/ic_direction_pagepreview.webp"
+                        rotation: placePage.azimuth
+                        visible: placePage.azimuth >= 0
+                    }
+                    Label {
+                        text: placePage.distance
+                        font.pixelSize: Theme.fontSizeSmall
+                        color: Theme.highlightColor
+                    }
                 }
             }
 
@@ -206,15 +231,89 @@ MapPanel {
                     onClicked: Qt.openUrlExternally(modelData.url)
                 }
             }
-            // Tap switches the format like on Android, press and hold copies the value.
-            MenuRow {
-                icon: "image://theme/icon-m-whereami"
-                text: placePage.coordinates
+            // Tap switches the format like on Android, press and hold offers every format for copying.
+            ListItem {
+                width: parent.width
+                contentHeight: Theme.itemSizeMedium
                 onClicked: placePage.nextCoordinatesFormat()
-                onPressAndHold: placePage.copyCoordinates()
+
+                Icon {
+                    id: coordinatesIcon
+                    anchors {
+                        left: parent.left
+                        leftMargin: Theme.horizontalPageMargin
+                        verticalCenter: parent.verticalCenter
+                    }
+                    source: "image://theme/icon-m-whereami"
+                    highlighted: parent.highlighted
+                }
+                Label {
+                    anchors {
+                        left: coordinatesIcon.right
+                        leftMargin: Theme.paddingLarge
+                        right: parent.right
+                        rightMargin: Theme.horizontalPageMargin
+                        verticalCenter: parent.verticalCenter
+                    }
+                    text: placePage.coordinates
+                    truncationMode: TruncationMode.Fade
+                    highlighted: parent.highlighted
+                }
+
+                menu: ContextMenu {
+                    Repeater {
+                        model: placePage.coordinateValues
+
+                        MenuItem {
+                            text: qsTr("Copy %1").arg(modelData)
+                            onClicked: Clipboard.text = modelData
+                        }
+                    }
+                }
+            }
+            // Hands the geo: link to the default handler, e.g. Pure Maps.
+            MenuRow {
+                icon: "../../icons/placepage/ic_open_in.svg"
+                text: qsTr("Open in Another App")
+                onClicked: Qt.openUrlExternally(placePage.geoUri)
             }
         }
 
         VerticalScrollDecorator {}
+    }
+
+    // Fixed actions below the scrolling content, like the Android place page bar.
+    Row {
+        id: actions
+        width: parent.width
+
+        BackgroundItem {
+            width: parent.width
+            height: Theme.itemSizeMedium
+            onClicked: placePage.toggleBookmark()
+
+            Row {
+                anchors.centerIn: parent
+                spacing: Theme.paddingMedium
+
+                Icon {
+                    anchors.verticalCenter: parent.verticalCenter
+                    source: placePage.isBookmark ? "image://theme/icon-m-favorite-selected"
+                                                 : "image://theme/icon-m-favorite"
+                    highlighted: parent.parent.highlighted
+                }
+                Label {
+                    anchors.verticalCenter: parent.verticalCenter
+                    text: placePage.isBookmark ? qsTr("Delete") : qsTr("Save")
+                    highlighted: parent.parent.highlighted
+                }
+            }
+        }
+    }
+
+    ShareAction {
+        id: shareAction
+        mimeType: "text/plain"
+        resources: [{ "type": "text/plain", "data": placePage.shareText, "name": placePage.title }]
     }
 }
