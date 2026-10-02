@@ -1,5 +1,7 @@
 import QtQuick 2.6
 import Sailfish.Silica 1.0
+import Sailfish.Share 1.0
+import Nemo.KeepAlive 1.2
 import app.organicmaps 1.0
 
 Page {
@@ -7,6 +9,26 @@ Page {
     objectName: "mapPage"
     allowedOrientations: Orientation.All
     backNavigation: false
+
+    // Light or dark map following the appearance setting; Auto follows the Sailfish ambience.
+    readonly property bool mapIsDark: appSettings.mapAppearance === AppSettings.AppearanceAuto
+                                      ? Theme.colorScheme === Theme.LightOnDark
+                                      : appSettings.mapAppearance === AppSettings.AppearanceDark
+    onMapIsDarkChanged: appSettings.applyMapAppearance(Theme.colorScheme === Theme.LightOnDark)
+    Component.onCompleted: appSettings.applyMapAppearance(Theme.colorScheme === Theme.LightOnDark)
+
+    // A recording keeps the device awake like the Android foreground service; keep screen on is a setting.
+    KeepAlive {
+        enabled: map.trackRecording
+    }
+    DisplayBlanking {
+        preventBlanking: appSettings.keepScreenOn && Qt.application.active
+    }
+
+    ShareAction {
+        id: shareLocationAction
+        mimeType: "text/plain"
+    }
 
     MapItem {
         id: map
@@ -47,10 +69,12 @@ Page {
         }
 
         MapButton {
+            visible: appSettings.zoomButtons
             source: "image://theme/icon-m-add"
             onClicked: map.zoomIn()
         }
         MapButton {
+            visible: appSettings.zoomButtons
             source: "image://theme/icon-m-remove"
             onClicked: map.zoomOut()
         }
@@ -113,11 +137,39 @@ Page {
         }
     }
 
+    // Blinking status in the top right corner while a track records, like on Android. Tapping it stops.
+    MapButton {
+        id: recordingButton
+        anchors {
+            top: parent.top
+            right: parent.right
+            margins: Theme.dp(8)
+        }
+        visible: map.trackRecording
+        highlighted: true
+        source: Qt.resolvedUrl("../../icons/menu/ic_track_recording_status.svg")
+        onClicked: page.stopTrackRecording()
+
+        SequentialAnimation on opacity {
+            running: recordingButton.visible && Qt.application.active
+            loops: Animation.Infinite
+            NumberAnimation { to: 0.4; duration: 800 }
+            NumberAnimation { to: 1.0; duration: 800 }
+        }
+    }
+
+    function stopTrackRecording() {
+        if (map.isTrackRecordingEmpty())
+            map.stopTrackRecording("")
+        else
+            pageStack.push(Qt.resolvedUrl("SaveTrackDialog.qml"), { map: map })
+    }
+
     // Active search query, kept running on the map like on Android; the cross ends it.
     Rectangle {
         anchors {
             left: layersButton.right
-            right: parent.right
+            right: recordingButton.visible ? recordingButton.left : parent.right
             verticalCenter: layersButton.verticalCenter
             leftMargin: Theme.dp(8)
             rightMargin: Theme.dp(8)
@@ -212,19 +264,26 @@ Page {
             width: parent.width - 2 * x
 
             Repeater {
-                // Order and labels of the Android layers sheet.
-                model: [
-                    { layer: MapItem.Outdoors, icon: "ic_layers_outdoors", text: qsTr("Outdoors") },
-                    { layer: MapItem.Isolines, icon: "ic_layers_isoline", text: qsTr("Contour Lines") },
-                    { layer: MapItem.Hiking, icon: "ic_layers_hiking", text: qsTr("Hiking") },
-                    { layer: MapItem.Cycling, icon: "ic_layers_cycling", text: qsTr("Cycling") },
-                    { layer: MapItem.Subway, icon: "ic_layers_subway", text: qsTr("Subway") }
-                ]
+                id: layersRepeater
+                // Order and labels of the Android layers sheet; Satellite once a tile server is set.
+                model: {
+                    var layers = [
+                        { layer: MapItem.Outdoors, icon: "ic_layers_outdoors", text: appInfo.localized("button_layer_outdoor") },
+                        { layer: MapItem.Isolines, icon: "ic_layers_isoline", text: appInfo.localized("button_layer_isolines") },
+                        { layer: MapItem.Hiking, icon: "ic_layers_hiking", text: appInfo.localized("button_layer_hiking") },
+                        { layer: MapItem.Cycling, icon: "ic_layers_cycling", text: appInfo.localized("button_layer_cycling") },
+                        { layer: MapItem.Subway, icon: "ic_layers_subway", text: appInfo.localized("button_layer_subway") }
+                    ]
+                    if (appSettings.bgTilesUrl !== "")
+                        layers.push({ layer: MapItem.Satellite, icon: "ic_layers_satellite",
+                                      text: appInfo.localized("button_layer_satellite") })
+                    return layers
+                }
 
                 LayerButton {
-                    width: parent.width / 5
+                    width: parent.width / layersRepeater.count
                     source: Qt.resolvedUrl("../../icons/layers/" + modelData.icon
-                                           + (map.darkStyle ? "_night" : "") + ".svg")
+                                           + (page.mapIsDark ? "_night" : "") + ".svg")
                     text: modelData.text
                     checked: (map.enabledLayers & (1 << modelData.layer)) !== 0
                     onClicked: map.setLayerEnabled(modelData.layer, !checked)
@@ -237,12 +296,55 @@ Page {
         id: menuPanel
         spacing: 0
 
+        // Entries and order of the Android main menu. Adding places to OpenStreetMap needs the editor.
         MenuRow {
-            icon: "image://theme/icon-m-cloud-download"
-            text: qsTr("Download maps")
+            icon: "../../icons/menu/ic_download.svg"
+            text: appInfo.localized("download_maps")
             onClicked: {
                 menuPanel.open = false
                 pageStack.push(Qt.resolvedUrl("MapsPage.qml"))
+            }
+        }
+        MenuRow {
+            visible: appSettings.donateUrl !== ""
+            icon: "../../icons/menu/ic_donate.svg"
+            text: appInfo.localized("donate")
+            onClicked: {
+                menuPanel.open = false
+                Qt.openUrlExternally(appSettings.donateUrl)
+            }
+        }
+        MenuRow {
+            icon: "../../icons/menu/ic_settings.svg"
+            text: appInfo.localized("settings")
+            onClicked: {
+                menuPanel.open = false
+                pageStack.push(Qt.resolvedUrl("SettingsPage.qml"))
+            }
+        }
+        MenuRow {
+            icon: map.trackRecording ? "../../icons/menu/ic_track_recording_on.svg"
+                                     : "../../icons/menu/ic_track_recording_off.svg"
+            text: map.trackRecording ? appInfo.localized("stop_track_recording")
+                                     : appInfo.localized("start_track_recording")
+            onClicked: {
+                menuPanel.open = false
+                if (map.trackRecording)
+                    page.stopTrackRecording()
+                else
+                    map.startTrackRecording()
+            }
+        }
+        MenuRow {
+            icon: "../../icons/menu/ic_share.svg"
+            text: appInfo.localized("share_my_location")
+            enabled: map.myPositionMode > 1
+            opacity: enabled ? 1.0 : Theme.opacityLow
+            onClicked: {
+                menuPanel.open = false
+                shareLocationAction.resources = [{ "type": "text/plain", "data": map.myPositionShareText(),
+                                                   "name": appInfo.localized("share_my_location") }]
+                shareLocationAction.trigger()
             }
         }
     }

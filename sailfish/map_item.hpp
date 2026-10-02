@@ -37,6 +37,7 @@ class MapItem
   Q_PROPERTY(int enabledLayers READ enabledLayers NOTIFY layersChanged)
   Q_PROPERTY(bool darkStyle READ darkStyle NOTIFY layersChanged)
   Q_PROPERTY(sailfish::PlacePage * placePage READ placePage CONSTANT)
+  Q_PROPERTY(bool trackRecording READ trackRecording NOTIFY trackRecordingChanged)
   // Height of the map buttons along the bottom edge; the scale line and attribution stay above them.
   Q_PROPERTY(
       qreal bottomWidgetsOffset READ bottomWidgetsOffset WRITE setBottomWidgetsOffset NOTIFY bottomWidgetsOffsetChanged)
@@ -49,7 +50,9 @@ public:
     Isolines,
     Hiking,
     Cycling,
-    Subway
+    Subway,
+    // Offered once a tile server is set in the settings, as on Android.
+    Satellite
   };
   Q_ENUM(Layer)
 
@@ -61,9 +64,17 @@ public:
   Q_INVOKABLE void switchMyPositionMode();
 
   Q_INVOKABLE void setLayerEnabled(int layer, bool enabled);
+  // Track recording as in the Android menu. Location keeps running in the background while recording.
+  Q_INVOKABLE void startTrackRecording();
+  Q_INVOKABLE bool isTrackRecordingEmpty() const;
+  // Saves the recorded track, or discards it with an empty name.
+  Q_INVOKABLE void stopTrackRecording(QString const & saveAsName);
+  // Text for "Share My Location", empty without a position.
+  Q_INVOKABLE QString myPositionShareText() const;
 
   int myPositionMode() const { return m_myPositionMode; }
   PlacePage * placePage() const { return m_placePage.get(); }
+  bool trackRecording() const;
   qreal bottomWidgetsOffset() const { return m_bottomWidgetsOffset; }
   void setBottomWidgetsOffset(qreal offset);
   int enabledLayers() const;
@@ -73,6 +84,7 @@ signals:
   void myPositionModeChanged();
   void layersChanged();
   void bottomWidgetsOffsetChanged();
+  void trackRecordingChanged();
 
 protected:
   QSGNode * updatePaintNode(QSGNode * oldNode, UpdatePaintNodeData *) override;
@@ -91,6 +103,8 @@ private:
   void SendMouseTouch(QMouseEvent * event, int touchType);
   void OnMyPositionModeChanged(location::EMyPositionMode mode);
   void OnCompassReading();
+  // Downloads the map of the region shown when the user is in it, like auto-download on Android.
+  void OnCurrentCountryChanged(std::string const & countryId);
   // The last fix is kept across runs and shown as obsolete until a fresh one arrives.
   void SaveLastLocation() const;
   void ShowLastLocation();

@@ -13,7 +13,7 @@ A = '{http://schemas.android.com/apk/res/android}'
 RES = 'android/app/src/main/res'
 # ic_layers is the monochrome map button icon, the others are the light/night layer previews.
 LAYERS = ['ic_layers', 'ic_layers_outdoors', 'ic_layers_isoline', 'ic_layers_hiking', 'ic_layers_cycling',
-          'ic_layers_subway']
+          'ic_layers_subway', 'ic_layers_satellite']
 # Keys of search::DisplayedCategories.
 CATEGORIES = ['ic_category_' + key for key in (
     'eat', 'hotel', 'food', 'tourism', 'wifi', 'transport', 'fuel', 'parking', 'shopping', 'secondhand', 'atm',
@@ -27,9 +27,15 @@ BOOKMARKS = ['ic_bookmarks_and_tracks', 'ic_show', 'ic_hide']
 MY_POSITION = ['ic_location_off', 'ic_not_follow', 'ic_follow', 'ic_follow_and_rotate']
 # Help button.
 HELP = ['ic_question_mark']
+# Main menu entries and the recording status button. Android tints the single color ones at runtime, so
+# they are made white (WHITE) for Silica to colorize; ic_track_recording_on keeps its two colors.
+MENU = ['ic_download', 'ic_donate', 'ic_settings', 'ic_track_recording_off', 'ic_track_recording_on', 'ic_share',
+        'ic_track_recording_status']
+WHITE = {'ic_download', 'ic_donate', 'ic_settings', 'ic_track_recording_off', 'ic_share', 'ic_track_recording_status'}
 OUTPUTS = [('sailfish/icons/layers', LAYERS), ('sailfish/icons/categories', CATEGORIES),
            ('sailfish/icons/placepage', PLACE_PAGE), ('sailfish/icons/bookmarks', BOOKMARKS),
-           ('sailfish/icons/myposition', MY_POSITION), ('sailfish/icons/help', HELP)]
+           ('sailfish/icons/myposition', MY_POSITION), ('sailfish/icons/help', HELP),
+           ('sailfish/icons/menu', MENU)]
 
 # Android path attribute -> SVG attribute.
 PATH_ATTRS = {
@@ -96,6 +102,13 @@ def convert(node, out, clip_ids):
             ET.SubElement(out, 'path', attrs)
 
 
+def make_white(svg):
+    for element in svg.iter():
+        for attr in ('fill', 'stroke'):
+            if element.get(attr) not in (None, 'none'):
+                element.set(attr, '#ffffff')
+
+
 def to_svg(root):
     # A layer list stretches every item over the same bounds, so the vector viewport is the canvas.
     items = [item[0] for item in root] if root.tag == 'layer-list' else [root]
@@ -125,8 +138,10 @@ def main():
             for name in names:
                 path = os.path.join(RES, variant, name + '.xml')
                 if os.path.exists(path):
-                    to_svg(ET.parse(path).getroot()).write(os.path.join(out_dir, name + suffix + '.svg'),
-                                                           encoding='unicode')
+                    tree = to_svg(ET.parse(path).getroot())
+                    if name in WHITE:
+                        make_white(tree.getroot())
+                    tree.write(os.path.join(out_dir, name + suffix + '.svg'), encoding='unicode')
 
 
 if __name__ == '__main__':

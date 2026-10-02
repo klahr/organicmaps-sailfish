@@ -1,5 +1,6 @@
 #include "sailfish/map_item.hpp"
 
+#include "sailfish/app_settings.hpp"
 #include "sailfish/framework_access.hpp"
 #include "sailfish/place_page.hpp"
 
@@ -12,7 +13,12 @@
 
 #include "platform/settings.hpp"
 
+#include "storage/country_info_getter.hpp"
+#include "storage/storage.hpp"
+#include "storage/storage_helpers.hpp"
+
 #include "geometry/angles.hpp"
+#include "geometry/mercator.hpp"
 
 #include "base/assert.hpp"
 #include "base/logging.hpp"
@@ -21,6 +27,7 @@
 
 #include <QCompass>
 #include <QGuiApplication>
+#include <QNetworkConfigurationManager>
 #include <QOpenGLContext>
 #include <QQuickWindow>
 #include <QSGSimpleTextureNode>
@@ -128,6 +135,7 @@ int MapItem::enabledLayers() const
   set(Hiking, Framework::IsHikingEnabled());
   set(Cycling, Framework::IsCyclingEnabled());
   set(Subway, Framework::LoadTransitSchemeEnabled());
+  set(Satellite, Framework::IsBackgroundTilesEnabled());
   return mask;
 }
 
@@ -154,6 +162,7 @@ void MapItem::setLayerEnabled(int layer, bool enabled)
     m_framework.GetIsolinesManager().SetEnabled(enabled);
     Framework::SaveIsolinesEnabled(enabled);
     break;
+  case Satellite: m_framework.SetBackgroundTilesEnabled(enabled); break;
   case Hiking: m_framework.SetHikingEnabled(enabled); break;
   case Cycling: m_framework.SetCyclingEnabled(enabled); break;
   case Subway:
@@ -194,6 +203,43 @@ void MapItem::OnLocationUpdated(location::GpsInfo const & info)
   m_placePage->UpdateDistance();
 }
 
+bool MapItem::trackRecording() const
+{
+  return m_framework.IsTrackRecordingEnabled();
+}
+
+void MapItem::startTrackRecording()
+{
+  m_framework.StartTrackRecording();
+  // Recording needs fixes even when the my position button is off.
+  m_locationService->Start();
+  emit trackRecordingChanged();
+}
+
+bool MapItem::isTrackRecordingEmpty() const
+{
+  return m_framework.IsTrackRecordingEmpty();
+}
+
+void MapItem::stopTrackRecording(QString const & saveAsName)
+{
+  // The same order as the Android track recording place page: save first, then stop.
+  if (!saveAsName.isEmpty() && !m_framework.IsTrackRecordingEmpty())
+    m_framework.SaveTrackRecordingWithName(saveAsName.toStdString());
+  m_framework.StopTrackRecording();
+  if (m_inBackground)
+    m_locationService->Stop();
+  emit trackRecordingChanged();
+}
+
+QString MapItem::myPositionShareText() const
+{
+  auto const position = m_framework.GetCurrentPosition();
+  if (!position)
+    return {};
+  return QString::fromStdString(m_framework.GetShareDataForMyPosition(mercator::ToLatLon(*position)).m_text);
+}
+
 void MapItem::SaveLastLocation() const
 {
   if (!m_lastLocation)
@@ -223,6 +269,25 @@ void MapItem::ShowLastLocation()
     return;
   }
   m_framework.OnLastKnownLocation(info);
+}
+
+void MapItem::OnCurrentCountryChanged(std::string const & countryId)
+{
+  // The conditions of OnmapDownloader on Android: enabled, on Wi-Fi, in that region and with enough space.
+  if (countryId.empty() || !AppSettings::IsAutoDownloadEnabled())
+    return;
+  auto & storage = m_framework.GetStorage();
+  storage::NodeStatuses statuses;
+  storage.GetNodeStatuses(countryId, statuses);
+  if (statuses.m_status != storage::NodeStatus::NotDownloaded)
+    return;
+  auto const position = m_framework.GetCurrentPosition();
+  if (!position || m_framework.GetCountryInfoGetter().GetRegionCountryId(*position) != countryId)
+    return;
+  if (QNetworkConfigurationManager().defaultConfiguration().bearerType() != QNetworkConfiguration::BearerWLAN)
+    return;
+  if (storage::IsEnoughSpaceForDownload(countryId, storage))
+    storage.DownloadNode(countryId);
 }
 
 void MapItem::OnCompassReading()
@@ -260,7 +325,9 @@ void MapItem::OnApplicationStateChanged(Qt::ApplicationState state)
   if (inBackground)
   {
     m_updateTimer.stop();
-    m_locationService->Stop();
+    // A track keeps recording in the background, like the Android foreground service.
+    if (!m_framework.IsTrackRecordingEnabled())
+      m_locationService->Stop();
     m_compass->stop();
     SaveLastLocation();
     m_framework.SetRenderingDisabled(false /* destroySurface */);
@@ -304,6 +371,8 @@ void MapItem::CreateEngine()
 
   m_framework.SetMyPositionModeListener([this](location::EMyPositionMode mode, bool /* routingActive */)
   { OnMyPositionModeChanged(mode); });
+  m_framework.SetCurrentCountryChangedListener([this](storage::CountryId const & countryId)
+  { OnCurrentCountryChanged(countryId); });
   m_framework.CreateDrapeEngine(make_ref(m_contextFactory), std::move(p));
   m_framework.EnterForeground();
   m_contextFactory->WaitForInitialization(nullptr);

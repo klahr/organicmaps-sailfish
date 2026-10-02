@@ -54,7 +54,7 @@ Page {
 
             SectionHeader {
                 text: qsTr("History")
-                visible: search.history.length > 0
+                visible: appSettings.searchHistory && search.history.length > 0
             }
             Repeater {
                 model: search.history
@@ -66,7 +66,7 @@ Page {
                 }
             }
             MenuRow {
-                visible: search.history.length > 0
+                visible: appSettings.searchHistory && search.history.length > 0
                 icon: "image://theme/icon-m-cancel"
                 text: qsTr("Clear Search History")
                 onClicked: search.clearHistory()

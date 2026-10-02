@@ -1,4 +1,5 @@
 #include "sailfish/app_info.hpp"
+#include "sailfish/app_settings.hpp"
 #include "sailfish/bookmarks_model.hpp"
 #include "sailfish/countries_model.hpp"
 #include "sailfish/framework_access.hpp"
@@ -88,8 +89,11 @@ __attribute__((visibility("default"))) int OrganicMapsMain(int argc, char * argv
 
   // Declared before the view, which uses it until it is destroyed.
   sailfish::AppInfo appInfo;
+  sailfish::AppSettings appSettings(framework);
   std::unique_ptr<QQuickView> view(SailfishApp::createView());
   view->rootContext()->setContextProperty(QStringLiteral("appInfo"), &appInfo);
+  view->rootContext()->setContextProperty(QStringLiteral("appSettings"), &appSettings);
+  qmlRegisterUncreatableType<sailfish::AppSettings>("app.organicmaps", 1, 0, "AppSettings", "Use appSettings");
   view->setSource(SailfishApp::pathToMainQml());
   view->show();
 

@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="54" height="54" viewBox="0 0 54 54">
+  <g>
+    <clipPath id="clip0">
+      <path d="M10,0L44,0A10,10 0,0 1,54 10L54,44A10,10 0,0 1,44 54L10,54A10,10 0,0 1,0 44L0,10A10,10 0,0 1,10 0z" />
+    </clipPath>
+    <g clip-path="url(#clip0)">
+      <path d="M0,0h54v54h-54z" fill="#ccc7ba" stroke="none" />
+      <path d="M27,14a13,13 0 1,0 0,26a13,13 0 1,0 0,-26z" fill="#000000" fill-opacity="0.000" stroke="#496149" stroke-width="2.4" />
+      <path d="M14,27h26" fill="none" stroke="#496149" stroke-width="2.4" stroke-linecap="round" />
+      <path d="M27,14a6.5,13 0 1,0 0,26a6.5,13 0 1,0 0,-26z" fill="#000000" fill-opacity="0.000" stroke="#496149" stroke-width="2.4" />
+    </g>
+  </g>
+</svg>

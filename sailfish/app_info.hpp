@@ -7,7 +7,7 @@
 
 namespace sailfish
 {
-// A shared UI string from data/strings, with its iOS style placeholders (%@, %1$@) filled in.
+// A shared UI string from data/strings, with its placeholders (%@, %1$@, %d, %1$d) filled in.
 QString Localized(QString const & key, QStringList const & args = {});
 
 // App details and shared strings for QML, available as the appInfo context property.

@@ -13,9 +13,12 @@ QString Localized(QString const & key, QStringList const & args)
 {
   QString s = QString::fromStdString(platform::GetLocalizedString(key.toStdString()));
   for (int i = 0; i < args.size(); ++i)
+  {
     s.replace(QStringLiteral("%%1$@").arg(i + 1), args[i]);
+    s.replace(QStringLiteral("%%1$d").arg(i + 1), args[i]);
+  }
   if (!args.isEmpty())
-    s.replace(QStringLiteral("%@"), args[0]);
+    s.replace(QStringLiteral("%@"), args[0]).replace(QStringLiteral("%d"), args[0]);
   return s;
 }
 

@@ -1,5 +1,6 @@
 #include "sailfish/search_model.hpp"
 
+#include "sailfish/app_settings.hpp"
 #include "sailfish/framework_access.hpp"
 
 #include "map/everywhere_search_params.hpp"
@@ -232,7 +233,7 @@ void SearchModel::clearHistory()
 void SearchModel::SaveToHistory(QString const & query)
 {
   QString const trimmed = query.trimmed();
-  if (trimmed.isEmpty())
+  if (trimmed.isEmpty() || !AppSettings::IsSearchHistoryEnabled())
     return;
   m_framework.GetSearchAPI().SaveSearchQuery({m_locale, trimmed.toStdString()});
   emit historyChanged();
