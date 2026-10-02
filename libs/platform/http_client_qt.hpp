@@ -6,6 +6,11 @@
 #include <QNetworkAccessManager>
 #include <QNetworkReply>
 #include <QObject>
+#include <QtGlobal>  // QT_VERSION, QT_VERSION_CHECK
+
+#if QT_VERSION < QT_VERSION_CHECK(5, 15, 0)
+#include <QTimer>
+#endif
 
 #include <cstdint>
 #include <optional>
@@ -91,6 +96,10 @@ private:
   std::string m_httpMethod;
   QByteArray m_bodyBytes;
   RebindCancel m_rebindCancel;
+#if QT_VERSION < QT_VERSION_CHECK(5, 15, 0)
+  // Emulates QNetworkRequest::setTransferTimeout(): aborts when no data moves for the timeout.
+  QTimer * m_transferTimer = nullptr;
+#endif
   int m_retriesRemaining = 1;
   bool m_anyBytesReceived = false;
 };

@@ -29,7 +29,9 @@ char const * const kInstanceExtensions[] = {
     "VK_MVK_macos_surface",
     "VK_KHR_get_physical_device_properties2",
 #endif
-#if defined(OMIM_OS_LINUX)
+#if defined(OMIM_OS_SAILFISH)
+    "VK_KHR_wayland_surface",
+#elif defined(OMIM_OS_LINUX)
     "VK_KHR_xlib_surface",
 #endif
 #if defined(OMIM_OS_WINDOWS)

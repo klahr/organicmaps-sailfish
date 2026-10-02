@@ -1,0 +1,296 @@
+#include "sailfish/search_model.hpp"
+
+#include "sailfish/framework_access.hpp"
+
+#include "map/everywhere_search_params.hpp"
+#include "map/framework.hpp"
+#include "map/search_api.hpp"
+#include "map/viewport_search_params.hpp"
+
+#include "search/displayed_categories.hpp"
+#include "search/result.hpp"
+
+#include "indexer/categories_holder.hpp"
+
+#include "platform/distance.hpp"
+#include "platform/localization.hpp"
+
+#include "geometry/mercator.hpp"
+
+#include <QGuiApplication>
+#include <QInputMethod>
+#include <QPointer>
+
+#include <utility>
+
+namespace sailfish
+{
+namespace
+{
+// The search language follows the keyboard, like on the other platforms.
+std::string GetInputLocale()
+{
+  std::string locale = QGuiApplication::inputMethod()->locale().name().replace('_', '-').toStdString();
+  if (CategoriesHolder::MapLocaleToInteger(locale) == CategoriesHolder::kUnsupportedLocaleCode)
+  {
+    // Try the language without the region, e.g. sv for sv-SE.
+    locale = locale.substr(0, locale.find('-'));
+    if (CategoriesHolder::MapLocaleToInteger(locale) == CategoriesHolder::kUnsupportedLocaleCode)
+      locale = "en";
+  }
+  return locale;
+}
+
+// Wraps the highlight ranges, which index the UTF-16 text like on the other Qt and Java frontends, into
+// colored styled text.
+template <typename RangeFn>
+QString Highlighted(std::string const & text, size_t rangesCount, RangeFn && range, QColor const & color)
+{
+  QString const str = QString::fromStdString(text);
+  QString const open = QStringLiteral("<font color=\"%1\">").arg(color.name());
+  QString styled;
+  int pos = 0;
+  for (size_t i = 0; i < rangesCount; ++i)
+  {
+    auto const & [first, length] = range(i);
+    styled += str.mid(pos, first - pos).toHtmlEscaped();
+    styled += open + str.mid(first, length).toHtmlEscaped() + QStringLiteral("</font>");
+    pos = first + length;
+  }
+  return styled + str.mid(pos).toHtmlEscaped();
+}
+}  // namespace
+
+SearchModel::SearchModel(QObject * parent)
+  : QAbstractListModel(parent)
+  , m_framework(GetFramework())
+  , m_locale(GetInputLocale())
+  , m_results(std::make_unique<search::Results>())
+{}
+
+SearchModel::~SearchModel()
+{
+  // Also clears the viewport search marks.
+  m_framework.GetSearchAPI().CancelAllSearches();
+}
+
+int SearchModel::rowCount(QModelIndex const & parent) const
+{
+  return parent.isValid() ? 0 : static_cast<int>(Results().GetCount());
+}
+
+QVariant SearchModel::data(QModelIndex const & index, int role) const
+{
+  if (!index.isValid() || index.row() >= rowCount())
+    return {};
+
+  auto const & result = Results()[static_cast<size_t>(index.row())];
+  bool const isFeature = result.GetResultType() == search::Result::Type::Feature;
+  switch (role)
+  {
+  case NameRole:
+    // Unnamed places are titled by their type, as on Android.
+    if (result.GetString().empty() && isFeature)
+      return QString::fromStdString(result.GetLocalizedFeatureType()).toHtmlEscaped();
+    return Highlighted(result.GetString(), result.GetHighlightRangesCount(),
+                       [&](size_t i) { return result.GetHighlightRange(i); }, m_highlightColor);
+  case DescriptionRole:
+    return isFeature ? QString::fromStdString(result.GetFeatureDescription(result.GetLocalizedFeatureType()))
+                     : QString();
+  case AddressRole:
+    return Highlighted(result.GetAddress(), result.GetDescHighlightRangesCount(),
+                       [&](size_t i) { return result.GetDescHighlightRange(i); }, m_highlightColor);
+  case DistanceRole:
+  {
+    auto const position = m_framework.GetCurrentPosition();
+    if (!position || !result.HasPoint() || result.IsSuggest())
+      return QString();
+    auto const ll = mercator::ToLatLon(*position);
+    platform::Distance distance;
+    double azimut;
+    m_framework.GetDistanceAndAzimut(result.GetFeatureCenter(), ll.m_lat, ll.m_lon, -1.0, distance, azimut);
+    return QString::fromStdString(distance.ToString());
+  }
+  case OpenStatusRole:
+  {
+    auto const localized = [](char const * key) { return QString::fromStdString(platform::GetLocalizedString(key)); };
+    // Strings from data/strings use the iOS placeholder.
+    auto const in = [&](char const * key, int minutes)
+    { return localized(key).replace(QStringLiteral("%@"), QString::number(minutes) + ' ' + localized("minute")); };
+    switch (GetOpenState(result))
+    {
+    case Open: return localized("editor_time_open");
+    case ClosingSoon: return in("closes_in", result.GetMinutesUntilClosed());
+    case OpeningSoon: return in("opens_in", result.GetMinutesUntilOpen());
+    case Closed: return localized("closed");
+    case OpenUnknown: return QString();
+    }
+    return QString();
+  }
+  case OpenStateRole: return GetOpenState(result);
+  case IsSuggestRole: return result.IsSuggest();
+  default: return {};
+  }
+}
+
+SearchModel::OpenState SearchModel::GetOpenState(search::Result const & result)
+{
+  switch (result.IsOpenNow())
+  {
+  case osm::Yes: return result.GetMinutesUntilClosed() < 60 ? ClosingSoon : Open;
+  case osm::No: return result.GetMinutesUntilOpen() < 60 ? OpeningSoon : Closed;
+  case osm::Unknown: return OpenUnknown;
+  }
+  return OpenUnknown;
+}
+
+QHash<int, QByteArray> SearchModel::roleNames() const
+{
+  return {{NameRole, "name"},          {DescriptionRole, "description"}, {AddressRole, "address"},
+          {DistanceRole, "distance"},  {OpenStatusRole, "openStatus"},   {OpenStateRole, "openState"},
+          {IsSuggestRole, "isSuggest"}};
+}
+
+void SearchModel::setQuery(QString const & query)
+{
+  if (query == m_query)
+    return;
+  m_query = query;
+  emit queryChanged();
+  Run();
+}
+
+QVariantList SearchModel::categories() const
+{
+  QVariantList categories;
+  auto const & displayed = m_framework.GetDisplayedCategories();
+  for (auto const & key : displayed.GetKeys())
+  {
+    // The first synonym in the search language is the category name, with English as a fallback.
+    std::string name, english;
+    displayed.ForEachSynonym(key, [&](std::string const & synonym, std::string const & locale)
+    {
+      if (name.empty() && locale == m_locale)
+        name = synonym;
+      if (english.empty() && locale == "en")
+        english = synonym;
+    });
+    QVariantMap category;
+    category["key"] = QString::fromStdString(key);
+    category["name"] = QString::fromStdString(name.empty() ? english : name);
+    categories.append(category);
+  }
+  return categories;
+}
+
+void SearchModel::searchCategory(QString const & name)
+{
+  // The trailing space tells the search that the category name is complete.
+  m_categoryQuery = name + ' ';
+  setQuery(m_categoryQuery);
+  SaveToHistory(name);
+}
+
+bool SearchModel::activate(int row)
+{
+  if (row < 0 || row >= rowCount())
+    return false;
+
+  auto const & result = Results()[static_cast<size_t>(row)];
+  if (result.IsSuggest())
+  {
+    setQuery(QString::fromStdString(result.GetSuggestionString()));
+    return false;
+  }
+  SaveToHistory(m_query);
+  m_framework.SelectSearchResult(result, true /* animation */);
+  return true;
+}
+
+void SearchModel::showOnMap()
+{
+  if (Results().GetCount() == 0)
+    return;
+  SaveToHistory(m_query);
+  m_framework.UpdateViewport(Results());
+}
+
+QStringList SearchModel::history() const
+{
+  QStringList history;
+  for (auto const & request : m_framework.GetSearchAPI().GetLastSearchQueries())
+    history.append(QString::fromStdString(request.second));
+  return history;
+}
+
+void SearchModel::clearHistory()
+{
+  m_framework.GetSearchAPI().ClearSearchHistory();
+  emit historyChanged();
+}
+
+void SearchModel::SaveToHistory(QString const & query)
+{
+  QString const trimmed = query.trimmed();
+  if (trimmed.isEmpty())
+    return;
+  m_framework.GetSearchAPI().SaveSearchQuery({m_locale, trimmed.toStdString()});
+  emit historyChanged();
+}
+
+void SearchModel::Run()
+{
+  auto const timestamp = ++m_timestamp;
+  beginResetModel();
+  Results().Clear();
+  endResetModel();
+
+  auto & api = m_framework.GetSearchAPI();
+  if (m_query.isEmpty())
+  {
+    api.CancelAllSearches();
+    SetSearching(false);
+    return;
+  }
+
+  bool const isCategory = m_query == m_categoryQuery;
+  // As on Android, the viewport search draws the result marks and SearchAPI repeats it whenever the map
+  // moves, until the query is cleared.
+  api.SearchInViewport(
+      {m_query.toStdString(), m_locale, {} /* timeout */, isCategory, {} /* onStarted */, {} /* onCompleted */});
+
+  // Results arrive on the GUI thread and may outlive the page that owns the model.
+  QPointer<SearchModel> self(this);
+  search::EverywhereSearchParams params{m_query.toStdString(),
+                                        m_locale,
+                                        {} /* timeout */,
+                                        isCategory,
+                                        [self, timestamp](search::Results results)
+  {
+    if (self)
+      self->OnResults(timestamp, std::move(results));
+  }};
+  SetSearching(api.SearchEverywhere(std::move(params)));
+}
+
+void SearchModel::OnResults(uint64_t timestamp, search::Results && results)
+{
+  if (timestamp != m_timestamp)
+    return;
+
+  beginResetModel();
+  *m_results = std::move(results);
+  endResetModel();
+  if (Results().IsEndMarker())
+    SetSearching(false);
+}
+
+void SearchModel::SetSearching(bool searching)
+{
+  if (searching == m_searching)
+    return;
+  m_searching = searching;
+  emit searchingChanged();
+}
+
+}  // namespace sailfish

@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Name=Organic Maps
+Icon=organicmaps
+Exec=organicmaps
+X-Nemo-Application-Type=silica-qt5
+
+[X-Sailjail]
+OrganizationName=app.organicmaps
+ApplicationName=organicmaps
+Permissions=Internet;Location

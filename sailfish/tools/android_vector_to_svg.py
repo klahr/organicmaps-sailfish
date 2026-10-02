@@ -1,0 +1,126 @@
+#!/usr/bin/env python3
+"""Converts Android vector drawables (map layers, search categories) into SVG icons for the Sailfish app.
+
+Only the subset used by those icons is supported: groups with transforms, clip paths, paths with
+fill/stroke colors and alphas, and layer lists of an oval shape under a vector. Run from the repository root:
+  sailfish/tools/android_vector_to_svg.py
+"""
+
+import os
+import xml.etree.ElementTree as ET
+
+A = '{http://schemas.android.com/apk/res/android}'
+RES = 'android/app/src/main/res'
+# ic_layers is the monochrome map button icon, the others are the light/night layer previews.
+LAYERS = ['ic_layers', 'ic_layers_outdoors', 'ic_layers_isoline', 'ic_layers_hiking', 'ic_layers_cycling',
+          'ic_layers_subway']
+# Keys of search::DisplayedCategories.
+CATEGORIES = ['ic_category_' + key for key in (
+    'eat', 'hotel', 'food', 'tourism', 'wifi', 'transport', 'fuel', 'parking', 'shopping', 'secondhand', 'atm',
+    'nightlife', 'children', 'bank', 'entertainment', 'water', 'hospital', 'pharmacy', 'recycling', 'rv', 'police',
+    'toilet', 'post')]
+# Place page row icons missing from the Silica theme.
+PLACE_PAGE = ['ic_wikimedia_commons_white', 'ic_wheelchair_white']
+OUTPUTS = [('sailfish/icons/layers', LAYERS), ('sailfish/icons/categories', CATEGORIES),
+           ('sailfish/icons/placepage', PLACE_PAGE)]
+
+# Android path attribute -> SVG attribute.
+PATH_ATTRS = {
+    'fillAlpha': 'fill-opacity',
+    'strokeAlpha': 'stroke-opacity',
+    'strokeWidth': 'stroke-width',
+    'strokeLineCap': 'stroke-linecap',
+    'strokeLineJoin': 'stroke-linejoin',
+}
+
+
+def color(value):
+    # Android colors are #RGB, #RRGGBB or #AARRGGBB; SVG takes the alpha separately.
+    if value.startswith('@android:color/'):
+        return {'white': '#ffffff', 'black': '#000000'}[value.split('/')[1]], None
+    if len(value) == 9:
+        return '#' + value[3:], int(value[1:3], 16) / 255
+    return value, None
+
+
+def group_transform(group):
+    def num(name, default):
+        return float(group.get(A + name, default))
+
+    px, py = num('pivotX', 0), num('pivotY', 0)
+    tx, ty = num('translateX', 0), num('translateY', 0)
+    sx, sy, rotation = num('scaleX', 1), num('scaleY', 1), num('rotation', 0)
+    if (sx, sy, rotation, tx, ty) == (1, 1, 0, 0, 0):
+        return None
+    # Android applies scale and rotation around the pivot, then the translation.
+    return 'translate(%g %g) rotate(%g) scale(%g %g) translate(%g %g)' % (tx + px, ty + py, rotation, sx, sy, -px, -py)
+
+
+def convert(node, out, clip_ids):
+    for child in node:
+        tag = child.tag
+        if tag == 'group':
+            group = ET.SubElement(out, 'g')
+            transform = group_transform(child)
+            if transform:
+                group.set('transform', transform)
+            convert(child, group, clip_ids)
+        elif tag == 'clip-path':
+            clip_id = 'clip%d' % len(clip_ids)
+            clip_ids.append(clip_id)
+            clip = ET.SubElement(out, 'clipPath', id=clip_id)
+            ET.SubElement(clip, 'path', d=child.get(A + 'pathData'))
+            # A clip path applies to the following siblings, so nest them into a clipped group.
+            out = ET.SubElement(out, 'g', {'clip-path': 'url(#%s)' % clip_id})
+        elif tag == 'path':
+            attrs = {'d': child.get(A + 'pathData')}
+            for kind in ('fill', 'stroke'):
+                value = child.get(A + kind + 'Color')
+                rgb, alpha = color(value) if value else ('none', None)
+                attrs[kind] = rgb
+                if alpha is not None and alpha < 1:
+                    attrs[kind + '-opacity'] = '%.3f' % alpha
+            if child.get(A + 'fillType') == 'evenOdd':
+                attrs['fill-rule'] = 'evenodd'
+            for android_name, svg_name in PATH_ATTRS.items():
+                value = child.get(A + android_name)
+                if value is not None:
+                    attrs[svg_name] = value.lower()
+            ET.SubElement(out, 'path', attrs)
+
+
+def to_svg(root):
+    # A layer list stretches every item over the same bounds, so the vector viewport is the canvas.
+    items = [item[0] for item in root] if root.tag == 'layer-list' else [root]
+    vector = next(item for item in items if item.tag == 'vector')
+    w, h = float(vector.get(A + 'viewportWidth')), float(vector.get(A + 'viewportHeight'))
+    svg = ET.Element('svg', xmlns='http://www.w3.org/2000/svg', width='%g' % w, height='%g' % h,
+                     viewBox='0 0 %g %g' % (w, h))
+    for item in items:
+        if item.tag == 'vector':
+            convert(item, svg, [])
+        elif item.tag == 'shape' and item.get(A + 'shape') == 'oval':
+            rgb, alpha = color(item.find('solid').get(A + 'color'))
+            circle = ET.SubElement(svg, 'ellipse', cx='%g' % (w / 2), cy='%g' % (h / 2), rx='%g' % (w / 2),
+                                   ry='%g' % (h / 2), fill=rgb)
+            if alpha is not None and alpha < 1:
+                circle.set('fill-opacity', '%.3f' % alpha)
+        else:
+            raise ValueError('Unsupported drawable item: ' + item.tag)
+    ET.indent(svg)
+    return ET.ElementTree(svg)
+
+
+def main():
+    for out_dir, names in OUTPUTS:
+        os.makedirs(out_dir, exist_ok=True)
+        for variant, suffix in (('drawable', ''), ('drawable-night', '_night')):
+            for name in names:
+                path = os.path.join(RES, variant, name + '.xml')
+                if os.path.exists(path):
+                    to_svg(ET.parse(path).getroot()).write(os.path.join(out_dir, name + suffix + '.svg'),
+                                                           encoding='unicode')
+
+
+if __name__ == '__main__':
+    main()

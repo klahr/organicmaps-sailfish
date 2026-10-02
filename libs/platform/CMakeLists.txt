@@ -122,8 +122,12 @@ else() # neither iPhone nor Android
                  "${CMAKE_CURRENT_BINARY_DIR}/platform_qt_version.cpp"
                   @ONLY)
 
+  if (PLATFORM_SAILFISH)
+    append(SRC localization_sailfish.cpp)
+  else()
+    append(SRC localization_dummy.cpp)
+  endif()
   append(SRC
-    localization_dummy.cpp
     network_policy_dummy.cpp
     platform_qt.cpp
     "${CMAKE_CURRENT_BINARY_DIR}/platform_qt_version.cpp"
@@ -193,7 +197,9 @@ target_link_libraries(${PROJECT_NAME}
     coding
     glaze::glaze
     $<$<BOOL:${PLATFORM_DESKTOP}>:Qt6::Core>
-    $<$<BOOL:${PLATFORM_LINUX}>:Qt6::Network>
+    $<$<BOOL:${PLATFORM_SAILFISH}>:Qt5::Core>
+    $<$<AND:$<BOOL:${PLATFORM_LINUX}>,$<NOT:$<BOOL:${PLATFORM_SAILFISH}>>>:Qt6::Network>
+    $<$<BOOL:${PLATFORM_SAILFISH}>:Qt5::Network>
     $<$<BOOL:${PLATFORM_WIN}>:Qt6::Network>
     $<$<BOOL:${PLATFORM_WIN}>:shlwapi>  # PathIsDirectoryEmptyA
     $<$<BOOL:${PLATFORM_MAC}>:
@@ -206,7 +212,7 @@ target_link_libraries(${PROJECT_NAME}
 
 omim_add_test_subdirectory(platform_tests_support)
 omim_add_test_subdirectory(platform_tests)
-if (NOT SKIP_QT_GUI)
+if (NOT SKIP_QT_GUI OR PLATFORM_SAILFISH)
   add_subdirectory(location_service)
 endif()
 
