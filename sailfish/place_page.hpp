@@ -27,6 +27,8 @@ class PlacePage : public QObject
   Q_PROPERTY(QString shareText READ shareText NOTIFY changed)
   Q_PROPERTY(QString geoUri READ geoUri NOTIFY changed)
   Q_PROPERTY(bool isBookmark READ isBookmark NOTIFY changed)
+  // The place can be edited in OpenStreetMap.
+  Q_PROPERTY(bool canEdit READ canEdit NOTIFY changed)
   Q_PROPERTY(QString coordinates READ coordinates NOTIFY changed)
   // Bare values of all coordinate formats available at the place, offered for copying like on Android.
   Q_PROPERTY(QStringList coordinateValues READ coordinateValues NOTIFY changed)
@@ -62,6 +64,7 @@ public:
   QString shareText() const { return m_shareText; }
   QString geoUri() const { return m_geoUri; }
   bool isBookmark() const { return m_isBookmark; }
+  bool canEdit() const { return m_canEdit; }
   QString coordinates() const { return m_coordinates; }
   QStringList coordinateValues() const { return m_coordinateValues; }
   QVariantList details() const { return m_details; }
@@ -102,6 +105,7 @@ private:
   QString m_shareText;
   QString m_geoUri;
   bool m_isBookmark = false;
+  bool m_canEdit = false;
   QString m_coordinates;
   QStringList m_coordinateValues;
   QVariantList m_details;

@@ -137,6 +137,7 @@ void PlacePage::Update()
   }
 
   m_isBookmark = info.IsBookmark();
+  m_canEdit = info.ShouldShowEditPlace();
   m_shareText = QString::fromStdString(m_framework.GetShareData(info).m_text);
   m_geoUri = QString::fromStdString(
       ge0::GenerateGeoUri(info.GetLatLon().m_lat, info.GetLatLon().m_lon, m_framework.GetDrawScale(), info.GetTitle()));

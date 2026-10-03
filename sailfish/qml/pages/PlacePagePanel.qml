@@ -279,6 +279,12 @@ MapPanel {
                 text: qsTr("Open in Another App")
                 onClicked: Qt.openUrlExternally(placePage.geoUri)
             }
+            MenuRow {
+                visible: placePage.canEdit
+                icon: "image://theme/icon-m-edit"
+                text: appInfo.localized("edit_place")
+                onClicked: pageStack.push(Qt.resolvedUrl("EditPlacePage.qml"))
+            }
         }
 
         VerticalScrollDecorator {}

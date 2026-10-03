@@ -17,6 +17,10 @@ set(SRC
   framework_access.hpp
   map_item.cpp
   map_item.hpp
+  osm_account.cpp
+  osm_account.hpp
+  place_editor.cpp
+  place_editor.hpp
   place_page.cpp
   place_page.hpp
   routing.cpp

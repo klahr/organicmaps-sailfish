@@ -135,6 +135,15 @@ Page {
             }
 
             SectionHeader {
+                text: "OpenStreetMap"
+            }
+            ValueButton {
+                label: appInfo.localized("osm_account")
+                value: osmAccount.loggedIn ? osmAccount.userName : appInfo.localized("login")
+                onClicked: pageStack.push(Qt.resolvedUrl("OsmAccountPage.qml"))
+            }
+
+            SectionHeader {
                 text: appInfo.localized("privacy")
             }
             TextSwitch {
