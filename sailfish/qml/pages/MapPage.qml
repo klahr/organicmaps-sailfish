@@ -42,6 +42,7 @@ Page {
     }
 
     readonly property bool navigating: map.routing.navigating
+    readonly property bool choosingPosition: map.choosingPosition
 
     NavigationTopPanel {
         anchors {
@@ -58,7 +59,7 @@ Page {
 
     MapButton {
         id: layersButton
-        visible: !page.navigating
+        visible: !page.navigating && !page.choosingPosition
         anchors {
             top: parent.top
             left: parent.left
@@ -73,6 +74,7 @@ Page {
     // Positions follow the Android map_buttons_layout_regular.xml (and layout-land); the look stays Silica.
     Column {
         id: rightButtons
+        visible: !page.choosingPosition
         anchors {
             right: parent.right
             rightMargin: Theme.dp(8)
@@ -127,7 +129,7 @@ Page {
     // landscape; the gaps are about 0.6 of a button, as measured on the Android app.
     Row {
         id: bottomButtons
-        visible: !page.navigating
+        visible: !page.navigating && !page.choosingPosition
         // Positioned by x: switching between left and horizontalCenter anchors on rotation can leave both set.
         x: page.isPortrait ? (parent.width - width) / 2 : Theme.dp(8)
         anchors {
@@ -200,8 +202,10 @@ Page {
         radius: page.isPortrait ? 0 : Theme.paddingLarge
         visible: page.navigating
         navigation: map.routing.navigation
+        routing: map.routing
         onStopClicked: map.routing.stopNavigation()
         onSettingsClicked: pageStack.push(Qt.resolvedUrl("SettingsPage.qml"), { mapPageRouting: map.routing })
+        onVoiceSettingsClicked: pageStack.push(Qt.resolvedUrl("VoicePage.qml"), { routing: map.routing })
     }
 
     // Search and bookmarks stay at hand on the left while navigating, as on Android, with the
@@ -241,6 +245,81 @@ Page {
         }
     }
 
+    // "Add Place to OpenStreetMap": the core draws the cross in the middle of the map, this bar
+    // explains it and leads on to the category, like the Android point chooser.
+    Rectangle {
+        id: positionChooser
+        anchors {
+            top: parent.top
+            left: parent.left
+            right: parent.right
+        }
+        height: chooserColumn.height + 2 * Theme.paddingMedium
+                + (page.orientation === Orientation.Portrait ? Screen.topCutout.height : 0)
+        visible: page.choosingPosition
+        color: Theme.overlayBackgroundColor
+
+        property bool invalidPosition
+
+        onVisibleChanged: invalidPosition = false
+
+        PanelBackground {
+            anchors.fill: parent
+        }
+
+        IconButton {
+            id: chooserCancel
+            anchors {
+                left: parent.left
+                verticalCenter: chooserColumn.verticalCenter
+            }
+            icon.source: "image://theme/icon-m-cancel"
+            onClicked: map.stopChoosingPosition()
+        }
+
+        Column {
+            id: chooserColumn
+            anchors {
+                left: chooserCancel.right
+                right: chooserDone.left
+                bottom: parent.bottom
+                bottomMargin: Theme.paddingMedium
+            }
+            spacing: Theme.paddingSmall
+
+            Label {
+                width: parent.width
+                text: appInfo.localized("editor_add_select_location")
+                color: Theme.highlightColor
+                font.pixelSize: Theme.fontSizeLarge
+                truncationMode: TruncationMode.Fade
+            }
+            Label {
+                width: parent.width
+                text: positionChooser.invalidPosition ? appInfo.localized("message_invalid_feature_position")
+                                                      : appInfo.localized("editor_focus_map_on_location")
+                color: positionChooser.invalidPosition ? Theme.errorColor : Theme.secondaryHighlightColor
+                font.pixelSize: Theme.fontSizeExtraSmall
+                wrapMode: Text.Wrap
+            }
+        }
+
+        IconButton {
+            id: chooserDone
+            anchors {
+                right: parent.right
+                verticalCenter: chooserColumn.verticalCenter
+            }
+            icon.source: "image://theme/icon-m-acknowledge"
+            onClicked: {
+                var position = map.confirmChosenPosition()
+                positionChooser.invalidPosition = position.length === 0
+                if (!positionChooser.invalidPosition)
+                    pageStack.push(Qt.resolvedUrl("CategoryPage.qml"), { lat: position[0], lon: position[1] })
+            }
+        }
+    }
+
     // Lives with the map so the last query and its results come back when search is reopened.
     SearchModel {
         id: search
@@ -251,6 +330,7 @@ Page {
         id: placePagePanel
         placePage: map.placePage
         routing: map.routing
+        onAddPlaceClicked: map.startChoosingPosition()
     }
 
     RoutePanel {
@@ -326,7 +406,15 @@ Page {
         id: menuPanel
         spacing: 0
 
-        // Entries and order of the Android main menu. Adding places to OpenStreetMap needs the editor.
+        // Entries and order of the Android main menu.
+        MenuRow {
+            icon: "image://theme/icon-m-add"
+            text: appInfo.localized("placepage_add_place_button")
+            onClicked: {
+                menuPanel.open = false
+                map.startChoosingPosition()
+            }
+        }
         MenuRow {
             icon: "../../icons/menu/ic_download.svg"
             text: appInfo.localized("download_maps")

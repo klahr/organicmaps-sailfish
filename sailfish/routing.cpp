@@ -2,6 +2,7 @@
 
 #include "sailfish/app_info.hpp"
 #include "sailfish/countries_model.hpp"
+#include "sailfish/voice_guide.hpp"
 
 #include "map/framework.hpp"
 #include "map/place_page_info.hpp"
@@ -15,7 +16,10 @@
 
 #include "indexer/map_style.hpp"
 
+#include "platform/get_text_by_id.hpp"
+#include "platform/languages.hpp"
 #include "platform/measurement_utils.hpp"
+#include "platform/preferred_languages.hpp"
 #include "platform/settings.hpp"
 
 #include "storage/storage.hpp"
@@ -25,13 +29,28 @@
 #include <QLocale>
 #include <QVariantMap>
 
+#include <algorithm>
 #include <utility>
+#include <vector>
 
 namespace sailfish
 {
 namespace
 {
 using routing::RouterResultCode;
+
+char const kVoiceEnabledSetting[] = "SailfishVoiceInstructions";
+// Empty for the app language.
+char const kVoiceLanguageSetting[] = "SailfishVoiceLanguage";
+char const kAnnounceStreetsSetting[] = "SailfishVoiceStreetNames";
+
+QString VoiceLanguageName(std::string const & code)
+{
+  for (auto const & [lang, name] : routing::turns::sound::kLanguageList)
+    if (lang == code)
+      return QString::fromUtf8(name.data(), static_cast<int>(name.size()));
+  return QString::fromStdString(code);
+}
 
 // The step icons of TransitStepType on Android.
 QString TransitIcon(TransitType type)
@@ -102,8 +121,12 @@ QString FormatTime(int seconds)
 }
 }  // namespace
 
-Routing::Routing(Framework & framework, QObject * parent) : QObject(parent), m_framework(framework)
+Routing::Routing(Framework & framework, QObject * parent)
+  : QObject(parent)
+  , m_framework(framework)
+  , m_voice(new VoiceGuide(this))
 {
+  SetupVoice();
   connect(this, &Routing::routeBuildingFinished, this, &Routing::OnRouteBuilt, Qt::QueuedConnection);
   m_framework.GetRoutingManager().SetRouteBuildingListener(
       [this](RouterResultCode code, storage::CountriesSet const & absent)
@@ -235,17 +258,159 @@ void Routing::start()
   }
   manager.FollowRoute();
   m_navigating = true;
+  // Picks up voices installed since the start.
+  m_voice->Refresh();
+  m_framework.GetRoutingManager().EnableTurnNotifications(voiceEnabled());
   SetNavigationStyle(true);
   UpdateNavigation(-1.0);
 }
 
 void Routing::stopNavigation()
 {
+  m_voice->Stop();
   m_navigating = false;
   m_navigation.clear();
   SetNavigationStyle(false);
   close();
   emit navigationChanged();
+}
+
+std::string Routing::AppVoiceLanguage() const
+{
+  // The app language when there are voice instructions in it, like the system language on Android.
+  auto const has = [](std::string const & code)
+  {
+    auto const & list = routing::turns::sound::kLanguageList;
+    return std::any_of(list.begin(), list.end(), [&code](auto const & lang) { return lang.first == code; });
+  };
+  auto language = languages::GetCurrentTwine();
+  if (!has(language))
+    language = language.substr(0, language.find('-'));
+  return has(language) ? language : "en";
+}
+
+void Routing::SetupVoice()
+{
+  // Voices are found in the background, Speech Note ones over D-Bus.
+  connect(m_voice, &VoiceGuide::Changed, this, [this]
+  {
+    auto & manager = m_framework.GetRoutingManager();
+    if (m_voice->IsAvailable())
+      manager.SetTurnNotificationsLocale(m_voice->Language());
+    if (m_navigating)
+      manager.EnableTurnNotifications(voiceEnabled());
+    emit voiceChanged();
+  });
+  std::string preferred;
+  settings::TryGet(kVoiceLanguageSetting, preferred);
+  m_voice->SetPreferredLanguage(preferred, AppVoiceLanguage());
+  m_voice->Refresh();
+}
+
+bool Routing::voiceAvailable() const
+{
+  return m_voice->IsAvailable();
+}
+
+bool Routing::voiceEnabled() const
+{
+  bool enabled = true;
+  settings::TryGet(kVoiceEnabledSetting, enabled);
+  return enabled && m_voice->IsAvailable();
+}
+
+void Routing::setVoiceEnabled(bool enabled)
+{
+  settings::Set(kVoiceEnabledSetting, enabled);
+  m_framework.GetRoutingManager().EnableTurnNotifications(voiceEnabled());
+  if (!enabled)
+    m_voice->Stop();
+  emit voiceChanged();
+}
+
+QString Routing::voiceLanguage() const
+{
+  return QString::fromStdString(m_voice->Language());
+}
+
+void Routing::setVoiceLanguage(QString const & language)
+{
+  // The app language again is stored as no choice, so that it follows later app language changes.
+  auto const code = language.toStdString();
+  settings::Set(kVoiceLanguageSetting, code == AppVoiceLanguage() ? std::string() : code);
+  m_voice->SetPreferredLanguage(code, AppVoiceLanguage());
+}
+
+QVariantList Routing::voiceLanguages() const
+{
+  QVariantList languages;
+  for (auto const & code : m_voice->Languages())
+  {
+    languages.append(QVariantMap{{"code", QString::fromStdString(code)},
+                                 {"name", VoiceLanguageName(code)},
+                                 {"speechNote", m_voice->HasSpeechNoteVoice(code)}});
+  }
+  return languages;
+}
+
+bool Routing::speechNoteInstalled() const
+{
+  return m_voice->IsSpeechNoteInstalled();
+}
+
+bool Routing::speechNoteVoice() const
+{
+  return m_voice->IsAvailable() && m_voice->HasSpeechNoteVoice(m_voice->Language());
+}
+
+QString Routing::wantedVoiceLanguageName() const
+{
+  std::string preferred;
+  settings::TryGet(kVoiceLanguageSetting, preferred);
+  return VoiceLanguageName(preferred.empty() ? AppVoiceLanguage() : preferred);
+}
+
+bool Routing::announceStreets() const
+{
+  bool announce = false;
+  settings::TryGet(kAnnounceStreetsSetting, announce);
+  return announce;
+}
+
+void Routing::setAnnounceStreets(bool announce)
+{
+  settings::Set(kAnnounceStreetsSetting, announce);
+  emit voiceChanged();
+}
+
+void Routing::refreshVoice()
+{
+  m_voice->Refresh();
+}
+
+void Routing::openSpeechNote()
+{
+  m_voice->OpenSpeechNote();
+}
+
+void Routing::testVoice()
+{
+  // Turn notifications in the voice language. Android reads app tips instead, which here would be in the app
+  // language when no voice speaks it.
+  std::pair<char const *, char const *> constexpr kTests[] = {{"in_200_meters", "make_a_left_turn"},
+                                                              {"in_1_kilometer", "make_a_slight_right_turn"},
+                                                              {nullptr, "you_have_reached_the_destination"}};
+  if (!m_voice->IsAvailable())
+    return;
+  auto const text = platform::GetTextByIdFactory(platform::TextSource::TtsSound, m_voice->Language());
+  if (!text)
+    return;
+  auto const & [distance, turn] = kTests[m_voiceTestIndex];
+  QString speech = QString::fromStdString((*text)(turn));
+  if (distance)
+    speech = QString::fromStdString((*text)(distance)) + ", " + speech.left(1).toLower() + speech.mid(1);
+  m_voice->Speak({speech});
+  m_voiceTestIndex = (m_voiceTestIndex + 1) % std::size(kTests);
 }
 
 void Routing::SetNavigationStyle(bool enabled)
@@ -268,9 +433,24 @@ void Routing::UpdateNavigation(double speedMps)
   if (!m_navigating)
     return;
   auto & manager = m_framework.GetRoutingManager();
+  // Before the finish check, so that the arrival is announced, like on Android.
+  if (voiceEnabled())
+  {
+    std::vector<std::string> notifications;
+    manager.GenerateNotifications(notifications, announceStreets());
+    QStringList texts;
+    for (auto const & text : notifications)
+      texts.append(QString::fromStdString(text));
+    m_voice->Speak(texts);
+  }
   if (manager.IsRouteFinished())
   {
-    stopNavigation();
+    // Lets the arrival be heard.
+    m_navigating = false;
+    m_navigation.clear();
+    SetNavigationStyle(false);
+    close();
+    emit navigationChanged();
     return;
   }
 

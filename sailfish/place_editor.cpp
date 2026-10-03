@@ -5,6 +5,7 @@
 
 #include "map/framework.hpp"
 
+#include "editor/new_feature_categories.hpp"
 #include "editor/osm_editor.hpp"
 
 #include "indexer/classificator.hpp"
@@ -14,8 +15,14 @@
 #include "opening_hours/opening_hours.hpp"
 
 #include "platform/localization.hpp"
+#include "platform/preferred_languages.hpp"
 
 #include "coding/string_utf8_multilang.hpp"
+
+#include "base/assert.hpp"
+#include "base/stl_helpers.hpp"
+
+#include "geometry/mercator.hpp"
 
 #include <QVariantMap>
 
@@ -28,6 +35,19 @@ namespace
 {
 using feature::Metadata;
 
+// Shared like on Android: the search index and the recent categories are built once.
+osm::NewFeatureCategories & GetFeatureCategories()
+{
+  static osm::NewFeatureCategories categories = []
+  {
+    auto c = GetFramework().GetEditorCategories();
+    c.AddLanguage(languages::GetCurrentNorm());
+    c.AddLanguage("en");
+    return c;
+  }();
+  return categories;
+}
+
 QString FromUtf8View(std::string_view s)
 {
   return QString::fromUtf8(s.data(), static_cast<int>(s.size()));
@@ -36,6 +56,9 @@ QString FromUtf8View(std::string_view s)
 struct FieldInfo
 {
   PlaceEditor::Kind m_kind;
+  PlaceEditor::Section m_section;
+  // An icon in icons/editor, from the Android editor.
+  char const * m_icon;
   // A UI string key, or a brand name when not localized.
   char const * m_label;
   bool m_localized;
@@ -45,32 +68,56 @@ struct FieldInfo
   char const * m_error;
 };
 
-// The detail fields of the Android editor, in its order, see EditorFragment.
-std::optional<FieldInfo> GetFieldInfo(Metadata::EType id)
+// The fields of the Android editor in its order, see fragment_editor.xml.
+// TODO: Cuisine needs a picker of the supported values.
+Metadata::EType constexpr kFieldOrder[] = {Metadata::FMD_POSTCODE,
+                                           Metadata::FMD_OPEN_HOURS,
+                                           Metadata::FMD_OPERATOR,
+                                           Metadata::FMD_WEBSITE,
+                                           Metadata::FMD_WEBSITE_MENU,
+                                           Metadata::FMD_PHONE_NUMBER,
+                                           Metadata::FMD_EMAIL,
+                                           Metadata::FMD_INTERNET,
+                                           Metadata::FMD_SELF_SERVICE,
+                                           Metadata::FMD_CONTACT_FACEBOOK,
+                                           Metadata::FMD_CONTACT_INSTAGRAM,
+                                           Metadata::FMD_CONTACT_TWITTER,
+                                           Metadata::FMD_CONTACT_VK,
+                                           Metadata::FMD_CONTACT_LINE};
+
+FieldInfo GetFieldInfo(Metadata::EType id)
 {
   using K = PlaceEditor::Kind;
+  using S = PlaceEditor::Section;
   switch (id)
   {
-  case Metadata::FMD_OPEN_HOURS: return FieldInfo{K::Text, "editor_time_title", true, "", nullptr};
-  case Metadata::FMD_PHONE_NUMBER: return FieldInfo{K::Text, "phone", true, "phone", "error_enter_correct_phone"};
-  case Metadata::FMD_WEBSITE: return FieldInfo{K::Text, "website", true, "url", "error_enter_correct_web"};
-  case Metadata::FMD_WEBSITE_MENU: return FieldInfo{K::Text, "website_menu", true, "url", "error_enter_correct_web"};
-  case Metadata::FMD_EMAIL: return FieldInfo{K::Text, "email", true, "email", "error_enter_correct_email"};
+  case Metadata::FMD_POSTCODE:
+    return {K::Text, S::Address, "ic_address", "editor_zip_code", true, "", "error_enter_correct_zip_code"};
+  case Metadata::FMD_OPEN_HOURS:
+    return {K::Text, S::Details, "ic_operating_hours", "editor_time_title", true, "", nullptr};
+  case Metadata::FMD_OPERATOR: return {K::Text, S::Details, "ic_operator", "editor_operator", true, "", nullptr};
+  case Metadata::FMD_WEBSITE:
+    return {K::Text, S::Details, "ic_website", "website", true, "url", "error_enter_correct_web"};
+  case Metadata::FMD_WEBSITE_MENU:
+    return {K::Text, S::Details, "ic_website_menu", "website_menu", true, "url", "error_enter_correct_web"};
+  case Metadata::FMD_PHONE_NUMBER:
+    return {K::Text, S::Details, "ic_phone", "phone", true, "phone", "error_enter_correct_phone"};
+  case Metadata::FMD_EMAIL:
+    return {K::Text, S::Details, "ic_email", "email", true, "email", "error_enter_correct_email"};
+  case Metadata::FMD_INTERNET: return {K::Wifi, S::Details, "ic_wifi", "category_wifi", true, "", nullptr};
+  case Metadata::FMD_SELF_SERVICE:
+    return {K::SelfService, S::Details, "ic_self_service", "self_service", true, "", nullptr};
   case Metadata::FMD_CONTACT_FACEBOOK:
-    return FieldInfo{K::Text, "Facebook", false, "url", "error_enter_correct_facebook_page"};
+    return {K::Text, S::SocialMedia, "ic_facebook", "Facebook", false, "url", "error_enter_correct_facebook_page"};
   case Metadata::FMD_CONTACT_INSTAGRAM:
-    return FieldInfo{K::Text, "Instagram", false, "url", "error_enter_correct_instagram_page"};
+    return {K::Text, S::SocialMedia, "ic_instagram", "Instagram", false, "url", "error_enter_correct_instagram_page"};
   case Metadata::FMD_CONTACT_TWITTER:
-    return FieldInfo{K::Text, "X (Twitter)", false, "url", "error_enter_correct_twitter_page"};
-  case Metadata::FMD_CONTACT_VK: return FieldInfo{K::Text, "VK", false, "url", "error_enter_correct_vk_page"};
-  case Metadata::FMD_CONTACT_LINE: return FieldInfo{K::Text, "LINE", false, "url", "error_enter_correct_line_page"};
-  case Metadata::FMD_OPERATOR: return FieldInfo{K::Text, "editor_operator", true, "", nullptr};
-  case Metadata::FMD_LEVEL: return FieldInfo{K::Text, "level", true, "", nullptr};
-  case Metadata::FMD_POSTCODE: return FieldInfo{K::Text, "editor_zip_code", true, "", "error_enter_correct_zip_code"};
-  case Metadata::FMD_INTERNET: return FieldInfo{K::Wifi, "category_wifi", true, "", nullptr};
-  case Metadata::FMD_SELF_SERVICE: return FieldInfo{K::SelfService, "self_service", true, "", nullptr};
-  // TODO: Cuisine needs a picker of the supported values.
-  default: return {};
+    return {K::Text, S::SocialMedia, "ic_twitterx", "X (Twitter)", false, "url", "error_enter_correct_twitter_page"};
+  case Metadata::FMD_CONTACT_VK:
+    return {K::Text, S::SocialMedia, "ic_vk", "VK", false, "url", "error_enter_correct_vk_page"};
+  case Metadata::FMD_CONTACT_LINE:
+    return {K::Text, S::SocialMedia, "ic_line", "LINE", false, "url", "error_enter_correct_line_page"};
+  default: UNREACHABLE();
   }
 }
 }  // namespace
@@ -85,6 +132,44 @@ void PlaceEditor::start()
   m_valid = framework.HasPlacePageInfo() &&
             framework.GetEditableMapObject(framework.GetCurrentPlacePageInfo().GetID(), *m_object);
   emit changed();
+}
+
+bool PlaceEditor::create(QString const & type, double lat, double lon)
+{
+  auto const typeName = type.toStdString();
+  m_valid = GetFramework().CreateMapObject(mercator::FromLatLon(lat, lon),
+                                           classif().GetTypeByReadableObjectName(typeName), *m_object);
+  if (m_valid)
+    GetFeatureCategories().AddToRecentCategories(typeName);
+  emit changed();
+  return m_valid;
+}
+
+QVariantList PlaceEditor::categories(QString const & query) const
+{
+  auto const & categories = GetFeatureCategories();
+  auto const toList = [](osm::NewFeatureCategories::TypeNames const & types, bool recent, bool sort)
+  {
+    std::vector<std::pair<QString, std::string>> named;
+    named.reserve(types.size());
+    for (auto const & type : types)
+      named.emplace_back(QString::fromStdString(platform::GetLocalizedTypeName(type)), type);
+    if (sort)
+    {
+      std::sort(named.begin(), named.end(),
+                [](auto const & a, auto const & b) { return QString::localeAwareCompare(a.first, b.first) < 0; });
+    }
+    QVariantList list;
+    for (auto const & [name, type] : named)
+      list.append(QVariantMap{{"type", QString::fromStdString(type)}, {"name", name}, {"recent", recent}});
+    return list;
+  };
+
+  auto const q = query.trimmed().toStdString();
+  if (!q.empty())
+    return toList(categories.Search(q), false /* recent */, true /* sort */);
+  return toList(categories.GetRecentCategories(), true /* recent */, false /* sort */) +
+         toList(categories.GetAllCreatableTypeNames(), false /* recent */, true /* sort */);
 }
 
 QString PlaceEditor::category() const
@@ -109,6 +194,40 @@ QString PlaceEditor::name() const
 void PlaceEditor::setName(QString const & name)
 {
   m_object->SetName(name.trimmed().toStdString(), StringUtf8Multilang::kDefaultCode);
+}
+
+QVariantList PlaceEditor::localizedNames() const
+{
+  QVariantList names;
+  auto const source = m_object->GetNamesDataSource();
+  for (auto const & name : source.names)
+  {
+    if (name.m_code == StringUtf8Multilang::kDefaultCode)
+      continue;
+    names.append(QVariantMap{{"code", static_cast<int>(name.m_code)},
+                             {"language", FromUtf8View(name.m_langName)},
+                             {"value", QString::fromStdString(name.m_name)}});
+  }
+  return names;
+}
+
+void PlaceEditor::setLocalizedName(int code, QString const & name)
+{
+  m_object->SetName(name.trimmed().toStdString(), static_cast<int8_t>(code));
+}
+
+QVariantList PlaceEditor::otherLanguages() const
+{
+  auto const & names = m_object->GetNameMultilang();
+  QVariantList languages;
+  for (auto const & lang : StringUtf8Multilang::GetSupportedLanguages(false /* includeServiceLangs */))
+  {
+    auto const code = StringUtf8Multilang::GetLangIndex(lang.m_code);
+    if (code == StringUtf8Multilang::kDefaultCode || names.Has(code))
+      continue;
+    languages.append(QVariantMap{{"code", static_cast<int>(code)}, {"language", FromUtf8View(lang.m_name)}});
+  }
+  return languages;
 }
 
 bool PlaceEditor::addressEditable() const
@@ -159,16 +278,14 @@ QVariantList PlaceEditor::fields() const
   if (!m_valid)
     return fields;
 
-  auto ids = m_object->GetEditableProperties();
-  // Android shows the postcode with the address.
-  if (m_object->IsAddressEditable() && std::find(ids.begin(), ids.end(), Metadata::FMD_POSTCODE) == ids.end())
-    ids.insert(ids.begin(), Metadata::FMD_POSTCODE);
-
-  for (auto const id : ids)
+  auto const editable = m_object->GetEditableProperties();
+  for (auto const id : kFieldOrder)
   {
-    auto const info = GetFieldInfo(id);
-    if (!info)
+    // Android shows the postcode with an editable address.
+    bool const shown = id == Metadata::FMD_POSTCODE ? m_object->IsAddressEditable() : base::IsExist(editable, id);
+    if (!shown)
       continue;
+    auto const info = GetFieldInfo(id);
 
     QString value;
     if (id == Metadata::FMD_INTERNET)
@@ -184,10 +301,12 @@ QVariantList PlaceEditor::fields() const
       value = FromUtf8View(m_object->GetMetadata(id));
 
     fields.append(QVariantMap{{"id", static_cast<int>(id)},
-                              {"kind", info->m_kind},
-                              {"label", info->m_localized ? Localized(info->m_label) : info->m_label},
+                              {"kind", info.m_kind},
+                              {"section", info.m_section},
+                              {"icon", QStringLiteral("../../icons/editor/%1.svg").arg(info.m_icon)},
+                              {"label", info.m_localized ? Localized(info.m_label) : info.m_label},
                               {"value", value},
-                              {"inputHint", info->m_inputHint}});
+                              {"inputHint", info.m_inputHint}});
   }
   return fields;
 }
@@ -222,7 +341,7 @@ QString PlaceEditor::fieldError(int id, QString const & value) const
   if (osm::EditableMapObject::IsValidMetadata(metaId, v))
     return {};
   auto const info = GetFieldInfo(metaId);
-  return info && info->m_error ? Localized(info->m_error) : tr("Invalid value");
+  return info.m_error ? Localized(info.m_error) : tr("Invalid value");
 }
 
 QString PlaceEditor::nameError(QString const & name) const
@@ -264,6 +383,13 @@ bool PlaceEditor::save()
   case osm::Editor::SaveResult::SavingError: return false;
   }
   return false;
+}
+
+void PlaceEditor::createNote(QString const & note)
+{
+  auto const text = note.trimmed().toStdString();
+  if (m_valid && !text.empty())
+    GetFramework().CreateNote(*m_object, osm::Editor::NoteProblemType::General, text);
 }
 
 bool PlaceEditor::canReset() const

@@ -12,6 +12,8 @@ MapPanel {
     // MapItem.routing, for the route buttons.
     property QtObject routing
 
+    signal addPlaceClicked()
+
     modal: false
     spacing: 0
 
@@ -279,11 +281,22 @@ MapPanel {
                 text: qsTr("Open in Another App")
                 onClicked: Qt.openUrlExternally(placePage.geoUri)
             }
+            // Hidden while a route is planned and disabled where the map can't be edited, as on Android.
             MenuRow {
                 visible: placePage.canEdit
+                enabled: placePage.editable
+                opacity: enabled ? 1.0 : Theme.opacityLow
                 icon: "image://theme/icon-m-edit"
                 text: appInfo.localized("edit_place")
                 onClicked: pageStack.push(Qt.resolvedUrl("EditPlacePage.qml"))
+            }
+            MenuRow {
+                visible: placePage.canAddPlace && !routing.active
+                enabled: placePage.editable
+                opacity: enabled ? 1.0 : Theme.opacityLow
+                icon: "image://theme/icon-m-add"
+                text: appInfo.localized("placepage_add_place_button")
+                onClicked: panel.addPlaceClicked()
             }
         }
 

@@ -10,6 +10,8 @@ BuildRequires:  cmake
 BuildRequires:  ninja
 BuildRequires:  python3-base
 BuildRequires:  pkgconfig(Qt5Core)
+BuildRequires:  pkgconfig(Qt5DBus)
+BuildRequires:  pkgconfig(Qt5Multimedia)
 BuildRequires:  pkgconfig(Qt5Network)
 BuildRequires:  pkgconfig(Qt5Positioning)
 BuildRequires:  pkgconfig(Qt5Quick)
@@ -17,6 +19,7 @@ BuildRequires:  pkgconfig(Qt5Sensors)
 BuildRequires:  pkgconfig(sailfishapp)
 BuildRequires:  pkgconfig(glesv2)
 Requires:       sailfishsilica-qt5
+Requires:       qt5-qtmultimedia
 Requires:       qt5-qtpositioning
 Requires:       qt5-qtsensors
 Requires:       libkeepalive
@@ -45,4 +48,5 @@ DESTDIR=%{buildroot} cmake -P build/sailfish/cmake_install.cmake
 %{_bindir}/organicmaps
 %{_datadir}/organicmaps
 %{_datadir}/applications/organicmaps.desktop
+%{_sysconfdir}/sailjail/permissions/organicmaps.profile
 %{_datadir}/icons/hicolor/*/apps/organicmaps.png

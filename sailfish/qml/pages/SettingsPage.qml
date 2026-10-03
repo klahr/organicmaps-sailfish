@@ -20,6 +20,12 @@ Page {
             PageHeader {
                 title: appInfo.localized("settings")
             }
+            // First and without a group, as on Android.
+            ValueButton {
+                label: appInfo.localized("profile")
+                value: osmAccount.loggedIn ? osmAccount.userName : appInfo.localized("not_signed_in")
+                onClicked: pageStack.push(Qt.resolvedUrl("OsmAccountPage.qml"))
+            }
 
             SectionHeader {
                 text: appInfo.localized("prefs_group_general")
@@ -124,6 +130,14 @@ Page {
                 checked: appSettings.perspectiveView
                 onCheckedChanged: appSettings.perspectiveView = checked
             }
+            ValueButton {
+                label: appInfo.localized("pref_tts_enable_title")
+                value: !mapPageRouting.voiceAvailable ? appInfo.localized("pref_tts_unavailable")
+                     : mapPageRouting.voiceEnabled ? mapPageRouting.voiceLanguages.filter(function(language) {
+                           return language.code === mapPageRouting.voiceLanguage })[0].name
+                     : appInfo.localized("off")
+                onClicked: pageStack.push(Qt.resolvedUrl("VoicePage.qml"), { routing: mapPageRouting })
+            }
             TextSwitch {
                 text: appInfo.localized("pref_map_auto_zoom")
                 checked: appSettings.autoZoom
@@ -132,15 +146,6 @@ Page {
             ValueButton {
                 label: appInfo.localized("driving_options_title")
                 onClicked: pageStack.push(Qt.resolvedUrl("RoutingOptionsPage.qml"), { routing: mapPageRouting })
-            }
-
-            SectionHeader {
-                text: "OpenStreetMap"
-            }
-            ValueButton {
-                label: appInfo.localized("osm_account")
-                value: osmAccount.loggedIn ? osmAccount.userName : appInfo.localized("login")
-                onClicked: pageStack.push(Qt.resolvedUrl("OsmAccountPage.qml"))
             }
 
             SectionHeader {

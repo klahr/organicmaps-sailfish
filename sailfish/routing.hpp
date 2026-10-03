@@ -10,6 +10,11 @@ class Framework;
 
 namespace sailfish
 {
+class VoiceGuide;
+}  // namespace sailfish
+
+namespace sailfish
+{
 // Route planning like the Android RoutingController: route points from the place page, the router
 // type, building and its result. Kept free of map headers, which Qt 5.6 moc can't parse.
 class Routing : public QObject
@@ -43,6 +48,19 @@ class Routing : public QObject
   // The Android navigation panels: turnIcon, distanceToTurn, street, nextTurnIcon, timeLeft, distanceLeft,
   // arrival, speed, speedUnits, speedLimit and progress (0..1).
   Q_PROPERTY(QVariantMap navigation READ navigation NOTIFY navigationChanged)
+  // Voice instructions while navigating, see VoiceGuide: there is a voice for some language.
+  Q_PROPERTY(bool voiceAvailable READ voiceAvailable NOTIFY voiceChanged)
+  Q_PROPERTY(bool voiceEnabled READ voiceEnabled WRITE setVoiceEnabled NOTIFY voiceChanged)
+  // The spoken language, a code of voiceLanguages; setting it chooses it over the app language.
+  Q_PROPERTY(QString voiceLanguage READ voiceLanguage WRITE setVoiceLanguage NOTIFY voiceChanged)
+  // Languages with a voice as {code, name, speechNote}.
+  Q_PROPERTY(QVariantList voiceLanguages READ voiceLanguages NOTIFY voiceChanged)
+  // Speech Note speaks with natural voices; without a voice for a language it offers to get one.
+  Q_PROPERTY(bool speechNoteInstalled READ speechNoteInstalled NOTIFY voiceChanged)
+  Q_PROPERTY(bool speechNoteVoice READ speechNoteVoice NOTIFY voiceChanged)
+  // The language voice instructions would ideally be in: the chosen or the app language.
+  Q_PROPERTY(QString wantedVoiceLanguageName READ wantedVoiceLanguageName NOTIFY voiceChanged)
+  Q_PROPERTY(bool announceStreets READ announceStreets WRITE setAnnounceStreets NOTIFY voiceChanged)
 
 public:
   enum RouterType
@@ -114,12 +132,30 @@ public:
   // Ends navigation and the route, like the Android Stop button.
   Q_INVOKABLE void stopNavigation();
 
+  bool voiceAvailable() const;
+  bool voiceEnabled() const;
+  void setVoiceEnabled(bool enabled);
+  QString voiceLanguage() const;
+  void setVoiceLanguage(QString const & language);
+  QVariantList voiceLanguages() const;
+  bool speechNoteInstalled() const;
+  bool speechNoteVoice() const;
+  QString wantedVoiceLanguageName() const;
+  bool announceStreets() const;
+  void setAnnounceStreets(bool announce);
+  // Looks for voices again, e.g. back from installing Speech Note or a voice.
+  Q_INVOKABLE void refreshVoice();
+  Q_INVOKABLE void openSpeechNote();
+  // Speaks a turn notification, like "Test Voice Directions" on Android.
+  Q_INVOKABLE void testVoice();
+
 signals:
   void pointsChanged();
   void routerTypeChanged();
   void stateChanged();
   void optionsChanged();
   void navigationChanged();
+  void voiceChanged();
   // Route building results may come from routing threads; this is delivered queued to the GUI thread.
   void routeBuildingFinished(int code, QStringList absentCountries);
 
@@ -130,6 +166,8 @@ private:
   void OnRouteBuilt(int code, QStringList const & absentCountries);
   void SetError(QString const & title, QString const & message);
   void SetNavigationStyle(bool enabled);
+  void SetupVoice();
+  std::string AppVoiceLanguage() const;
 
   Framework & m_framework;
   bool m_building = false;
@@ -145,5 +183,7 @@ private:
   // START moved the start to the position; navigate once the route is rebuilt.
   bool m_startWhenBuilt = false;
   QVariantMap m_navigation;
+  VoiceGuide * m_voice;
+  int m_voiceTestIndex = 0;
 };
 }  // namespace sailfish

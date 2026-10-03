@@ -8,6 +8,7 @@
 
 #include <QQuickItem>
 #include <QTimer>
+#include <QVariantList>
 
 class QCompass;
 
@@ -43,6 +44,8 @@ class MapItem
   Q_PROPERTY(
       qreal viewportBottomInset READ viewportBottomInset WRITE setViewportBottomInset NOTIFY viewportBottomInsetChanged)
   Q_PROPERTY(bool trackRecording READ trackRecording NOTIFY trackRecordingChanged)
+  // The map shows the cross for "Add Place to OpenStreetMap", taps don't select places.
+  Q_PROPERTY(bool choosingPosition READ choosingPosition NOTIFY choosingPositionChanged)
   // Height of the map buttons along the bottom edge; the scale line and attribution stay above them.
   Q_PROPERTY(
       qreal bottomWidgetsOffset READ bottomWidgetsOffset WRITE setBottomWidgetsOffset NOTIFY bottomWidgetsOffsetChanged)
@@ -77,12 +80,19 @@ public:
   // Text for "Share My Location", empty without a position.
   Q_INVOKABLE QString myPositionShareText() const;
 
+  // Starts choosing the position of a new place, at the selected place when there is one.
+  Q_INVOKABLE void startChoosingPosition();
+  Q_INVOKABLE void stopChoosingPosition();
+  // Ends choosing and returns [lat, lon] of the cross, or an empty list when no map is downloaded there.
+  Q_INVOKABLE QVariantList confirmChosenPosition();
+
   int myPositionMode() const { return m_myPositionMode; }
   PlacePage * placePage() const { return m_placePage.get(); }
   Routing * routing() const { return m_routing.get(); }
   qreal viewportBottomInset() const { return m_viewportBottomInset; }
   void setViewportBottomInset(qreal inset);
   bool trackRecording() const;
+  bool choosingPosition() const { return m_choosingPosition; }
   qreal bottomWidgetsOffset() const { return m_bottomWidgetsOffset; }
   void setBottomWidgetsOffset(qreal offset);
   int enabledLayers() const;
@@ -93,6 +103,7 @@ signals:
   void layersChanged();
   void bottomWidgetsOffsetChanged();
   void trackRecordingChanged();
+  void choosingPositionChanged();
   void viewportBottomInsetChanged();
 
 protected:
@@ -129,6 +140,7 @@ private:
   std::unique_ptr<location::LocationService> m_locationService;
   std::unique_ptr<PlacePage> m_placePage;
   std::unique_ptr<Routing> m_routing;
+  bool m_choosingPosition = false;
   // Points the my position arrow, like the rotation vector sensor on Android.
   QCompass * m_compass;
   location::EMyPositionMode m_myPositionMode = location::PendingPosition;

@@ -29,6 +29,10 @@ class PlacePage : public QObject
   Q_PROPERTY(bool isBookmark READ isBookmark NOTIFY changed)
   // The place can be edited in OpenStreetMap.
   Q_PROPERTY(bool canEdit READ canEdit NOTIFY changed)
+  // "Add Place to OpenStreetMap" is offered, e.g. for an area or an empty spot.
+  Q_PROPERTY(bool canAddPlace READ canAddPlace NOTIFY changed)
+  // The map here is downloaded and editable; edit and add are disabled otherwise, as on Android.
+  Q_PROPERTY(bool editable READ editable NOTIFY changed)
   Q_PROPERTY(QString coordinates READ coordinates NOTIFY changed)
   // Bare values of all coordinate formats available at the place, offered for copying like on Android.
   Q_PROPERTY(QStringList coordinateValues READ coordinateValues NOTIFY changed)
@@ -65,6 +69,8 @@ public:
   QString geoUri() const { return m_geoUri; }
   bool isBookmark() const { return m_isBookmark; }
   bool canEdit() const { return m_canEdit; }
+  bool canAddPlace() const { return m_canAddPlace; }
+  bool editable() const { return m_editable; }
   QString coordinates() const { return m_coordinates; }
   QStringList coordinateValues() const { return m_coordinateValues; }
   QVariantList details() const { return m_details; }
@@ -106,6 +112,8 @@ private:
   QString m_geoUri;
   bool m_isBookmark = false;
   bool m_canEdit = false;
+  bool m_canAddPlace = false;
+  bool m_editable = false;
   QString m_coordinates;
   QStringList m_coordinateValues;
   QVariantList m_details;

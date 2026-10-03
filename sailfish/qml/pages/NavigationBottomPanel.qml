@@ -8,8 +8,11 @@ Rectangle {
     id: bottom
 
     property var navigation
+    // MapItem.routing, for the voice instructions.
+    property QtObject routing
     signal stopClicked
     signal settingsClicked
+    signal voiceSettingsClicked
 
     height: column.height + Theme.paddingMedium
     color: Theme.rgba(Theme.overlayBackgroundColor, 0.95)
@@ -91,11 +94,18 @@ Rectangle {
             height: Theme.itemSizeMedium
             spacing: Theme.paddingLarge
 
-            // Voice instructions need a speech engine, which Sailfish OS doesn't have.
+            // Voice instructions need a speech synthesizer installed on the device.
             IconButton {
                 anchors.verticalCenter: parent.verticalCenter
-                icon.source: "image://theme/icon-m-speaker-mute"
-                enabled: false
+                icon.source: bottom.routing.voiceEnabled ? "image://theme/icon-m-speaker-on"
+                                                         : "image://theme/icon-m-speaker-mute"
+                // Without a voice it leads to the voice settings, which tell how to get one.
+                onClicked: {
+                    if (bottom.routing.voiceAvailable)
+                        bottom.routing.voiceEnabled = !bottom.routing.voiceEnabled
+                    else
+                        bottom.voiceSettingsClicked()
+                }
             }
             IconButton {
                 anchors.verticalCenter: parent.verticalCenter

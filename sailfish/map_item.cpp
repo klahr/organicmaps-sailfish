@@ -243,6 +243,41 @@ QString MapItem::myPositionShareText() const
   return QString::fromStdString(m_framework.GetShareDataForMyPosition(mercator::ToLatLon(*position)).m_text);
 }
 
+void MapItem::startChoosingPosition()
+{
+  // Like Android, the cross starts at the selected place and the map zooms in to it.
+  std::optional<m2::PointD> position;
+  if (m_framework.HasPlacePageInfo())
+    position = m_framework.GetCurrentPlacePageInfo().GetMercator();
+  m_placePage->close();
+  m_framework.BlockTapEvents(true);
+  m_framework.EnableChoosePositionMode(true, false /* enableBounds */, position ? &*position : nullptr,
+                                       true /* shouldChangeViewport */);
+  m_choosingPosition = true;
+  emit choosingPositionChanged();
+}
+
+void MapItem::stopChoosingPosition()
+{
+  if (!m_choosingPosition)
+    return;
+  m_framework.EnableChoosePositionMode(false, false /* enableBounds */, nullptr, false /* shouldChangeViewport */);
+  m_framework.BlockTapEvents(false);
+  m_choosingPosition = false;
+  emit choosingPositionChanged();
+}
+
+QVariantList MapItem::confirmChosenPosition()
+{
+  // Taken now: the viewport can still move while the category is picked.
+  auto const center = m_framework.GetViewportCenter();
+  if (!storage::IsPointCoveredByDownloadedMaps(center, m_framework.GetStorage(), m_framework.GetCountryInfoGetter()))
+    return {};
+  stopChoosingPosition();
+  auto const latLon = mercator::ToLatLon(center);
+  return {latLon.m_lat, latLon.m_lon};
+}
+
 void MapItem::SaveLastLocation() const
 {
   if (!m_lastLocation)

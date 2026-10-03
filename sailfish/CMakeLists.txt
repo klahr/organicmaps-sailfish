@@ -1,6 +1,6 @@
 project(organicmaps_sailfish)
 
-find_package(Qt5 COMPONENTS REQUIRED Gui Network Qml Quick Sensors)
+find_package(Qt5 COMPONENTS REQUIRED DBus Gui Multimedia Network Qml Quick Sensors)
 find_package(PkgConfig REQUIRED)
 pkg_check_modules(SAILFISHAPP REQUIRED sailfishapp)
 
@@ -27,6 +27,8 @@ set(SRC
   routing.hpp
   search_model.cpp
   search_model.hpp
+  voice_guide.cpp
+  voice_guide.hpp
   ${OMIM_ROOT}/qt/qt_common/qtoglcontext.cpp
   ${OMIM_ROOT}/qt/qt_common/qtoglcontext.hpp
   ${OMIM_ROOT}/qt/qt_common/qtoglcontextfactory.cpp
@@ -44,7 +46,9 @@ target_link_libraries(${PROJECT_NAME}_lib
     Boost::headers
     map
     location_service
+    Qt5::DBus
     Qt5::Gui
+    Qt5::Multimedia
     Qt5::Network
     Qt5::Qml
     Qt5::Quick
@@ -60,7 +64,8 @@ set_target_properties(${PROJECT_NAME} PROPERTIES
 target_link_libraries(${PROJECT_NAME} PRIVATE ${PROJECT_NAME}_lib)
 
 file(STRINGS "${OMIM_ROOT}/qt/runtime_resources.txt" RUNTIME_RESOURCES)
-list(APPEND RUNTIME_RESOURCES icudt78l.dat)
+# The phrases of the voice instructions, which the desktop app doesn't have.
+list(APPEND RUNTIME_RESOURCES icudt78l.dat sound-strings)
 foreach(resource ${RUNTIME_RESOURCES})
   if (IS_DIRECTORY "${OMIM_ROOT}/data/${resource}")
     install(DIRECTORY "${OMIM_ROOT}/data/${resource}" DESTINATION share/organicmaps/data)
@@ -76,7 +81,7 @@ install(FILES "${OMIM_ROOT}/data/strings/types_strings.txt" "${OMIM_ROOT}/data/s
 install(TARGETS ${PROJECT_NAME} DESTINATION bin)
 install(TARGETS ${PROJECT_NAME}_lib LIBRARY DESTINATION share/organicmaps/lib)
 install(DIRECTORY qml DESTINATION share/organicmaps)
-install(DIRECTORY icons/layers icons/categories icons/placepage icons/bookmarks icons/myposition icons/help icons/menu icons/routing icons/navigation DESTINATION share/organicmaps/icons)
+install(DIRECTORY icons/layers icons/categories icons/placepage icons/bookmarks icons/myposition icons/help icons/menu icons/routing icons/navigation icons/editor DESTINATION share/organicmaps/icons)
 # Bitmaps on Android too, installed from its resources: router and route point buttons.
 set(ANDROID_RES "${OMIM_ROOT}/android/app/src/main/res")
 install(FILES
@@ -106,6 +111,8 @@ install(FILES "${OMIM_ROOT}/android/app/src/main/res/drawable-xxhdpi/ic_wiki.web
               "${OMIM_ROOT}/android/app/src/main/res/drawable-xxhdpi/ic_direction_pagepreview.webp"
         DESTINATION share/organicmaps/icons/placepage)
 install(FILES organicmaps.desktop DESTINATION share/applications)
+# Sailjail applies it to the app by name, see the file.
+install(FILES organicmaps.profile DESTINATION /etc/sailjail/permissions)
 foreach(size 86 108 128 172)
   install(FILES icons/${size}x${size}/organicmaps.png DESTINATION share/icons/hicolor/${size}x${size}/apps)
 endforeach()
