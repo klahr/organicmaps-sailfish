@@ -54,7 +54,9 @@ static location::TLocationError TLocationErrorFromQGeoPositionInfoError(QGeoPosi
 
 location::TLocationSource QStringToTLocationSource(QString const & sourceName)
 {
-  if ("geoclue2" == sourceName)
+  // Sailfish OS has the GeoClue 1 "geoclue" plugin. An undefined source makes GpsInfo invalid,
+  // so the extrapolator would drop every fix.
+  if ("geoclue2" == sourceName || "geoclue" == sourceName)
     return location::TLocationSource::EGeoClue2;
 
   return location::TLocationSource::EUndefined;

@@ -146,6 +146,7 @@ MyPositionController::MyPositionController(Params && params, ref_ptr<DrapeNotifi
   , m_isDirectionAssigned(false)
   , m_isCompassAvailable(false)
   , m_positionIsObsolete(false)
+  , m_isLastKnownPositionShown(false)
   , m_needBlockAutoZoom(false)
   , m_routingNotFollowNotifyId(DrapeNotifier::kInvalidId)
   , m_blockAutoZoomNotifyId(DrapeNotifier::kInvalidId)
@@ -445,12 +446,20 @@ void MyPositionController::OnLocationUpdate(location::GpsInfo const & info, bool
   // info.m_timestamp, because can't rely on valid time settings on endpoint device.
   m_positionIsObsolete = info.m_isObsolete;
 
+  // A last known position is only drawn while waiting for a fix: the mode and the map stay as they are.
+  if (info.m_isObsolete && !m_isPositionAssigned)
+  {
+    m_isLastKnownPositionShown = true;
+    return;
+  }
+
   if (!m_isPositionAssigned)
   {
     location::EMyPositionMode newMode = m_desiredInitMode;
-    // A last known position is drawn while still waiting for a fix, without moving the map to it.
-    if (info.m_isObsolete && newMode == location::PendingPosition)
-      newMode = location::NotFollow;
+    // The pending indicator was already replaced by the last known position, so follow the first fix right away.
+    if (m_isLastKnownPositionShown && newMode == location::PendingPosition)
+      newMode = m_isInRouting ? location::FollowAndRotate : location::Follow;
+    m_isLastKnownPositionShown = false;
     ChangeMode(newMode);
 
     if (!m_hints.m_isFirstLaunch || !AnimationSystem::Instance().AnimationExists(Animation::Object::MapPlane))
@@ -571,7 +580,8 @@ void MyPositionController::Render(ref_ptr<dp::GraphicsContext> context, ref_ptr<
 {
   CheckNotFollowRouting();
 
-  if (m_shape != nullptr && IsModeHasPosition())
+  if (m_shape != nullptr &&
+      (IsModeHasPosition() || (m_mode == location::PendingPosition && m_isLastKnownPositionShown)))
   {
     CheckBlockAutoZoom();
     CheckUpdateLocation();
