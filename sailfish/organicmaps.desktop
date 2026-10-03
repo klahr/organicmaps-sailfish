@@ -4,8 +4,14 @@ Name=Organic Maps
 Icon=organicmaps
 Exec=organicmaps
 X-Nemo-Application-Type=silica-qt5
+# Bookmark and track files, and map links, like the Android intent filters.
+MimeType=application/vnd.google-earth.kml+xml;application/vnd.google-earth.kmz;application/gpx+xml;application/geo+json;x-scheme-handler/geo;x-scheme-handler/om;x-scheme-handler/ge0;x-scheme-handler/mapsme;x-scheme-handler/mapswithme;
+X-Maemo-Service=app.organicmaps.organicmaps
+X-Maemo-Object-Path=/app/organicmaps
+X-Maemo-Method=app.organicmaps.organicmaps.openUrl
 
 [X-Sailjail]
 OrganizationName=app.organicmaps
 ApplicationName=organicmaps
-Permissions=Audio;Internet;Location;Sharing
+# UserDirs and RemovableMedia: imported files, backups and maps on a memory card.
+Permissions=Audio;Internet;Location;Sharing;UserDirs;RemovableMedia

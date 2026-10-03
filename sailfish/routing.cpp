@@ -10,6 +10,7 @@
 #include "map/transit/transit_display.hpp"
 
 #include "routing/following_info.hpp"
+#include "routing/lanes/lane_info.hpp"
 #include "routing/router.hpp"
 #include "routing/routing_callbacks.hpp"
 #include "routing/routing_options.hpp"
@@ -23,9 +24,14 @@
 
 #include "storage/storage.hpp"
 
+#include "geometry/mercator.hpp"
+
+#include <sailfishapp.h>
+
 #include <QColor>
 #include <QDateTime>
 #include <QLocale>
+#include <QUrl>
 #include <QVariantMap>
 
 #include <algorithm>
@@ -111,6 +117,48 @@ QString TurnIcon(routing::turns::CarDirection turn, uint32_t exitNum)
   }
 }
 
+// The lane arrows of LaneWay on Android, which reuse the turn arrows.
+QString LaneIcon(routing::turns::lanes::LaneWay way)
+{
+  using routing::turns::lanes::LaneWay;
+  switch (way)
+  {
+  case LaneWay::ReverseLeft: return QStringLiteral("ic_turn_uleft.webp");
+  case LaneWay::SharpLeft: return QStringLiteral("ic_turn_left_sharp.webp");
+  case LaneWay::Left: return QStringLiteral("ic_turn_left.webp");
+  case LaneWay::MergeToLeft:
+  case LaneWay::SlightLeft: return QStringLiteral("ic_turn_left_slight.webp");
+  case LaneWay::SlightRight:
+  case LaneWay::MergeToRight: return QStringLiteral("ic_turn_right_slight.webp");
+  case LaneWay::Right: return QStringLiteral("ic_turn_right.webp");
+  case LaneWay::SharpRight: return QStringLiteral("ic_turn_right_sharp.webp");
+  case LaneWay::ReverseRight: return QStringLiteral("ic_turn_uright.webp");
+  default: return QStringLiteral("ic_turn_straight.webp");
+  }
+}
+
+// Lanes as {icon, active}: the recommended way of an active lane, else its first way, like LanesDrawable.
+QVariantList Lanes(routing::turns::lanes::LanesInfo const & lanes)
+{
+  using routing::turns::lanes::LaneWay;
+  QVariantList result;
+  for (auto const & lane : lanes)
+  {
+    bool const active = lane.recommendedWay != LaneWay::None;
+    LaneWay way = lane.recommendedWay;
+    for (uint8_t i = 0; !active && i < static_cast<uint8_t>(LaneWay::Count); ++i)
+    {
+      if (lane.laneWays.Contains(static_cast<LaneWay>(i)))
+      {
+        way = static_cast<LaneWay>(i);
+        break;
+      }
+    }
+    result.append(QVariantMap{{"icon", LaneIcon(way)}, {"active", active}});
+  }
+  return result;
+}
+
 QString TurnIcon(routing::turns::PedestrianDirection turn)
 {
   using routing::turns::PedestrianDirection;
@@ -129,6 +177,7 @@ Routing::Routing(Framework & framework, QObject * parent)
   , m_framework(framework)
   , m_voice(new VoiceGuide(this))
 {
+  m_beep.setMedia(SailfishApp::pathTo(QStringLiteral("sounds/speed_cams_beep.wav")));
   SetupVoice();
   connect(this, &Routing::routeBuildingFinished, this, &Routing::OnRouteBuilt, Qt::QueuedConnection);
   m_framework.GetRoutingManager().SetRouteBuildingListener(
@@ -459,6 +508,9 @@ void Routing::UpdateNavigation(double speedMps)
       texts.append(QString::fromStdString(text));
     m_voice->Speak(texts);
   }
+  // The core decides by the speed cameras setting, like MWMTextToSpeech.playWarningSound on iOS.
+  if (manager.GetSpeedCamManager().ShouldPlayBeepSignal())
+    m_beep.play();
   if (manager.IsRouteFinished())
   {
     // Without stopping the voice, so that the arrival is heard.
@@ -494,6 +546,8 @@ void Routing::UpdateNavigation(double speedMps)
   nav["speedLimit"] = info.m_speedLimitMps > 0
                         ? QString::fromStdString(measurement_utils::FormatSpeedNumeric(info.m_speedLimitMps, units))
                         : QString();
+  nav["speedCamLimitExceeded"] = manager.IsSpeedCamLimitExceeded();
+  nav["lanes"] = Lanes(info.m_lanes);
   nav["progress"] = info.m_completionPercent / 100.0;
   m_navigation = nav;
   emit navigationChanged();
@@ -553,6 +607,34 @@ void Routing::AddPlacePoint(int type)
     setStartToMyPosition();
   else
     OnPointsChanged();
+}
+
+void Routing::planRoute(int routerType, QVariantList const & points)
+{
+  if (points.size() < 2)
+    return;
+  if (m_navigating)
+    EndNavigation();
+  auto & manager = m_framework.GetRoutingManager();
+  manager.CloseRouting(true /* removeRoutePoints */);
+  auto const router = static_cast<routing::RouterType>(routerType);
+  manager.SetRouter(router);
+  manager.SetLastUsedRouter(router);
+  emit routerTypeChanged();
+  for (int i = 0; i < points.size(); ++i)
+  {
+    auto const point = points[i].toMap();
+    RouteMarkData data;
+    data.m_pointType = i == 0                 ? RouteMarkType::Start
+                     : i + 1 == points.size() ? RouteMarkType::Finish
+                                              : RouteMarkType::Intermediate;
+    data.m_intermediateIndex = static_cast<size_t>(std::max(0, i - 1));
+    data.m_title = point["name"].toString().toStdString();
+    data.m_position = mercator::FromLatLon(point["lat"].toDouble(), point["lon"].toDouble());
+    manager.AddRoutePoint(std::move(data), false /* optimize */);
+  }
+  m_framework.DeactivateMapSelection();
+  OnPointsChanged();
 }
 
 void Routing::removePoint(int index)

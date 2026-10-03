@@ -1,0 +1,3 @@
+[D-BUS Service]
+Name=app.organicmaps.organicmaps
+Exec=/usr/bin/invoker --type=silica-qt5 --id=organicmaps --single-instance /usr/bin/organicmaps

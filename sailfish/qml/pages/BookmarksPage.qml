@@ -1,5 +1,6 @@
 import QtQuick 2.6
 import Sailfish.Silica 1.0
+import Sailfish.Pickers 1.0
 import app.organicmaps 1.0
 
 // Bookmark lists, like the Android "Bookmarks and Tracks" screen.
@@ -27,6 +28,18 @@ Page {
         }
 
         PullDownMenu {
+            MenuItem {
+                text: appInfo.localized("bookmarks_import")
+                onClicked: pageStack.push(importPicker)
+            }
+            MenuItem {
+                text: appInfo.localized("bookmarks_export")
+                onClicked: bookmarksIO.exportAll()
+            }
+            MenuItem {
+                text: appInfo.localized(categories.allVisible ? "bookmark_lists_hide_all" : "bookmark_lists_show_all")
+                onClicked: categories.setAllVisible(!categories.allVisible)
+            }
             MenuItem {
                 text: appInfo.localized("bookmarks_create_new_group")
                 onClicked: pageStack.push(Qt.resolvedUrl("NewListDialog.qml"), { categories: categories })
@@ -95,6 +108,14 @@ Page {
                     onClicked: categories.setVisible(index, !model.isVisible)
                 }
                 MenuItem {
+                    text: appInfo.localized("export_file")
+                    onClicked: bookmarksIO.exportCategory(model.categoryId, BookmarksIO.Kmz)
+                }
+                MenuItem {
+                    text: appInfo.localized("export_file_gpx")
+                    onClicked: bookmarksIO.exportCategory(model.categoryId, BookmarksIO.Gpx)
+                }
+                MenuItem {
                     // The core keeps at least one list.
                     visible: listView.count > 1
                     text: appInfo.localized("delete")
@@ -104,5 +125,16 @@ Page {
         }
 
         VerticalScrollDecorator {}
+    }
+
+    // KML, KMZ, GPX and GeoJSON files, as the Android import accepts.
+    Component {
+        id: importPicker
+
+        FilePickerPage {
+            title: appInfo.localized("bookmarks_import")
+            nameFilters: bookmarksIO.importFilters
+            onSelectedContentPropertiesChanged: bookmarksIO.importFile(selectedContentProperties.filePath)
+        }
     }
 }

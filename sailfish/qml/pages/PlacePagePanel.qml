@@ -131,6 +131,11 @@ MapPanel {
                 }
             }
 
+            ElevationProfile {
+                visible: placePage.isTrack
+                placePage: panel.placePage
+            }
+
             // Opening state with the next change, expanding to the full schedule.
             BackgroundItem {
                 width: parent.width
@@ -259,6 +264,12 @@ MapPanel {
                 text: appInfo.localized(placePage.isTrack ? "edit_track" : "placepage_edit_bookmark_button")
                 onClicked: pageStack.push(Qt.resolvedUrl("EditBookmarkPage.qml"),
                                           { itemId: placePage.userMarkId, isTrack: placePage.isTrack })
+            }
+            MenuRow {
+                visible: placePage.isTrack
+                icon: "image://theme/icon-m-share"
+                text: appInfo.localized("export_file_gpx")
+                onClicked: bookmarksIO.exportTrack(placePage.userMarkId, BookmarksIO.Gpx)
             }
             // Hands the geo: link to the default handler, e.g. Pure Maps.
             MenuRow {

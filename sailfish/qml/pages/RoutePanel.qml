@@ -1,6 +1,7 @@
 import QtQuick 2.6
 import Sailfish.Silica 1.0
 import app.organicmaps 1.0
+import "downloads.js" as Downloads
 
 // Route planning sheet like on Android: router types, the route summary and its points.
 // Not modal, so places can still be picked on the map.
@@ -221,7 +222,7 @@ MapPanel {
         anchors.horizontalCenter: parent.horizontalCenter
         visible: routing.missingMaps.length > 0
         text: appInfo.localized("download") + " (" + routing.missingMapsSize + ")"
-        onClicked: routing.downloadMissingMaps()
+        onClicked: Downloads.start(pageStack, function() { routing.downloadMissingMaps() })
     }
 
     // Route points in a card. Like on Android a missing start or finish shows as an empty slot, and

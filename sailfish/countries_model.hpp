@@ -27,6 +27,9 @@ class CountriesModel : public QAbstractListModel
   Q_PROPERTY(bool downloadedOnly READ downloadedOnly WRITE setDownloadedOnly NOTIFY downloadedOnlyChanged)
   // Searches all maps by name when set; leading and trailing spaces are ignored.
   Q_PROPERTY(QString query READ query WRITE setQuery NOTIFY queryChanged)
+  // Downloaded maps with a newer version, and the download size of all their updates.
+  Q_PROPERTY(int updateCount READ updateCount NOTIFY updatesChanged)
+  Q_PROPERTY(QString updateSize READ updateSize NOTIFY updatesChanged)
 
 public:
   // Mirrors storage::NodeStatus for QML.
@@ -96,12 +99,21 @@ public:
   Q_INVOKABLE void update(QString const & countryId);
   Q_INVOKABLE void retry(QString const & countryId);
   Q_INVOKABLE void showOnMap(QString const & countryId);
+  // Updates all outdated maps, like "Update all" on Android.
+  Q_INVOKABLE void updateAll();
+  // There are updates the user wasn't asked about yet, like the Android map update dialog after an app update.
+  Q_INVOKABLE bool shouldOfferUpdate() const;
+  Q_INVOKABLE void setUpdateOffered();
+
+  int updateCount() const;
+  QString updateSize() const;
 
 signals:
   void parentIdChanged();
   void downloadInProgressChanged();
   void downloadedOnlyChanged();
   void queryChanged();
+  void updatesChanged();
 
 private:
   void Reload();

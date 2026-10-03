@@ -48,5 +48,6 @@ DESTDIR=%{buildroot} cmake -P build/sailfish/cmake_install.cmake
 %{_bindir}/organicmaps
 %{_datadir}/organicmaps
 %{_datadir}/applications/organicmaps.desktop
+%{_datadir}/dbus-1/services/app.organicmaps.organicmaps.service
 %{_sysconfdir}/sailjail/permissions/organicmaps.profile
 %{_datadir}/icons/hicolor/*/apps/organicmaps.png

@@ -65,6 +65,28 @@ Page {
                 checked: appSettings.autoDownload
                 onCheckedChanged: appSettings.autoDownload = checked
             }
+            ComboBox {
+                label: appInfo.localized("mobile_data")
+                description: appInfo.localized("mobile_data_description")
+                currentIndex: appSettings.mobileData
+                menu: ContextMenu {
+                    MenuItem { text: appInfo.localized("mobile_data_option_ask") }
+                    MenuItem { text: appInfo.localized("mobile_data_option_always") }
+                    MenuItem { text: appInfo.localized("mobile_data_option_never") }
+                }
+                onCurrentIndexChanged: appSettings.mobileData = currentIndex
+            }
+            ValueButton {
+                label: appInfo.localized("maps_storage")
+                value: mapsStorage.currentName
+                onClicked: pageStack.push(Qt.resolvedUrl("StoragePage.qml"))
+            }
+            ValueButton {
+                label: appInfo.localized("backup")
+                value: bookmarksIO.backupPeriod === 0 ? appInfo.localized("off")
+                     : appInfo.localized(bookmarksIO.backupPeriod === 1 ? "backup_daily" : "backup_weekly")
+                onClicked: pageStack.push(Qt.resolvedUrl("BackupPage.qml"))
+            }
             TextSwitch {
                 text: appInfo.localized("show_downloaded_regions")
                 checked: appSettings.showDownloadedRegions
@@ -140,6 +162,16 @@ Page {
                 text: appInfo.localized("pref_map_auto_zoom")
                 checked: appSettings.autoZoom
                 onCheckedChanged: appSettings.autoZoom = checked
+            }
+            ComboBox {
+                label: appInfo.localized("speedcams_alert_title")
+                currentIndex: appSettings.speedCamerasMode
+                menu: ContextMenu {
+                    MenuItem { text: appInfo.localized("pref_tts_speedcams_auto") }
+                    MenuItem { text: appInfo.localized("pref_tts_speedcams_always") }
+                    MenuItem { text: appInfo.localized("pref_tts_speedcams_never") }
+                }
+                onCurrentIndexChanged: appSettings.speedCamerasMode = currentIndex
             }
             ValueButton {
                 label: appInfo.localized("driving_options_title")

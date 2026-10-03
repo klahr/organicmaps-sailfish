@@ -2,11 +2,16 @@ import QtQuick 2.6
 import Sailfish.Silica 1.0
 import app.organicmaps 1.0
 import "navigation.js" as Navigation
+import "downloads.js" as Downloads
 
 // Map downloader like on Android: it opens on the downloaded maps with a map search, and the pull-down
 // menu leads to the maps left to download, grouped by first letter after the ones near the position.
 Page {
     id: page
+
+    function download(id) { Downloads.start(pageStack, function() { countries.download(id) }) }
+    function retry(id) { Downloads.start(pageStack, function() { countries.retry(id) }) }
+    function update(id) { Downloads.start(pageStack, function() { countries.update(id) }) }
 
     property alias parentId: countries.parentId
     property alias downloadedOnly: countries.downloadedOnly
@@ -81,6 +86,11 @@ Page {
         PullDownMenu {
             visible: page.isRoot && page.downloadedOnly
             MenuItem {
+                visible: countries.updateCount > 0
+                text: appInfo.localized("downloader_update_all_button") + " (" + countries.updateSize + ")"
+                onClicked: Downloads.start(pageStack, function() { countries.updateAll() })
+            }
+            MenuItem {
                 text: appInfo.localized("download_maps")
                 onClicked: pageStack.push(Qt.resolvedUrl("MapsPage.qml"), { downloadedOnly: false })
             }
@@ -110,9 +120,9 @@ Page {
                     pageStack.push(Qt.resolvedUrl("MapsPage.qml"),
                                    { parentId: model.countryId, downloadedOnly: page.downloadedOnly && !page.searching })
                 else if (model.status === CountriesModel.NotDownloaded)
-                    countries.download(model.countryId)
+                    page.download(model.countryId)
                 else if (model.status === CountriesModel.Error)
-                    countries.retry(model.countryId)
+                    page.retry(model.countryId)
                 else if (model.status === CountriesModel.OnDisk)
                     page.showOnMap(model.countryId)
                 else
@@ -204,17 +214,17 @@ Page {
                     MenuItem {
                         text: appInfo.localized("download")
                         visible: model.status === CountriesModel.NotDownloaded || model.status === CountriesModel.Partly
-                        onClicked: countries.download(model.countryId)
+                        onClicked: page.download(model.countryId)
                     }
                     MenuItem {
                         text: appInfo.localized("downloader_retry")
                         visible: model.status === CountriesModel.Error
-                        onClicked: countries.retry(model.countryId)
+                        onClicked: page.retry(model.countryId)
                     }
                     MenuItem {
                         text: appInfo.localized("downloader_update_map")
                         visible: model.status === CountriesModel.OnDiskOutOfDate
-                        onClicked: countries.update(model.countryId)
+                        onClicked: page.update(model.countryId)
                     }
                     MenuItem {
                         text: appInfo.localized("cancel_download")

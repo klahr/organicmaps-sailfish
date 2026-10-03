@@ -1,5 +1,6 @@
 #include "sailfish/map_item.hpp"
 
+#include "sailfish/app_info.hpp"
 #include "sailfish/app_settings.hpp"
 #include "sailfish/framework_access.hpp"
 #include "sailfish/place_page.hpp"
@@ -90,6 +91,10 @@ MapItem::MapItem(QQuickItem * parent)
   connect(this, &QQuickItem::windowChanged, this, &MapItem::OnWindowChanged);
   connect(qGuiApp, &QGuiApplication::applicationStateChanged, this, &MapItem::OnApplicationStateChanged);
 
+  m_storageSlot = m_framework.GetStorage().Subscribe([this](storage::CountryId const &) {
+    UpdateCurrentCountry();
+  }, [this](storage::CountryId const &, downloader::Progress const &) { UpdateCurrentCountry(); });
+
   // Drape renders on its own threads, so poll for new frames like the desktop map widget.
   m_updateTimer.setInterval(1000 / 60);
   connect(&m_updateTimer, &QTimer::timeout, this, &QQuickItem::update);
@@ -97,6 +102,7 @@ MapItem::MapItem(QQuickItem * parent)
 
 MapItem::~MapItem()
 {
+  m_framework.GetStorage().Unsubscribe(m_storageSlot);
   m_locationService->Stop();
   if (!m_contextFactory)
     return;
@@ -268,6 +274,9 @@ QVariantList MapItem::confirmChosenPosition()
 
 void MapItem::OnCurrentCountryChanged(std::string const & countryId)
 {
+  m_currentCountryId = countryId;
+  UpdateCurrentCountry();
+
   // The conditions of OnmapDownloader on Android: enabled, on Wi-Fi, in that region and with enough space.
   if (countryId.empty() || !AppSettings::IsAutoDownloadEnabled())
     return;
@@ -283,6 +292,60 @@ void MapItem::OnCurrentCountryChanged(std::string const & countryId)
     return;
   if (storage::IsEnoughSpaceForDownload(countryId, storage))
     storage.DownloadNode(countryId);
+}
+
+void MapItem::UpdateCurrentCountry()
+{
+  QVariantMap country;
+  if (!m_currentCountryId.empty())
+  {
+    storage::NodeAttrs attrs;
+    m_framework.GetStorage().GetNodeAttrs(m_currentCountryId, attrs);
+    using storage::NodeStatus;
+    switch (attrs.m_status)
+    {
+    case NodeStatus::NotDownloaded:
+    case NodeStatus::Downloading:
+    case NodeStatus::Applying:
+    case NodeStatus::InQueue:
+    case NodeStatus::Error:
+    {
+      auto const & progress = attrs.m_downloadingProgress;
+      country["countryId"] = QString::fromStdString(m_currentCountryId);
+      country["name"] = QString::fromStdString(attrs.m_nodeLocalName);
+      country["size"] = FormatSize(static_cast<qint64>(attrs.m_mwmSize));
+      country["status"] = static_cast<int>(attrs.m_status);
+      country["progress"] =
+          progress.m_bytesTotal > 0 ? static_cast<double>(progress.m_bytesDownloaded) / progress.m_bytesTotal : 0.0;
+      break;
+    }
+    default: break;
+    }
+  }
+  if (country != m_currentCountry)
+  {
+    m_currentCountry = country;
+    emit currentCountryChanged();
+  }
+}
+
+void MapItem::downloadCurrentCountry()
+{
+  if (m_currentCountryId.empty())
+    return;
+  auto & storage = m_framework.GetStorage();
+  storage::NodeStatuses statuses;
+  storage.GetNodeStatuses(m_currentCountryId, statuses);
+  if (statuses.m_status == storage::NodeStatus::Error)
+    storage.RetryDownloadNode(m_currentCountryId);
+  else
+    storage.DownloadNode(m_currentCountryId);
+}
+
+void MapItem::cancelCurrentCountry()
+{
+  if (!m_currentCountryId.empty())
+    m_framework.GetStorage().CancelDownloadNode(m_currentCountryId);
 }
 
 void MapItem::OnCompassReading()

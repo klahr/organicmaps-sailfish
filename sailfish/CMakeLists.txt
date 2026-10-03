@@ -12,12 +12,16 @@ set(SRC
   app_settings.hpp
   bookmark_editor.cpp
   bookmark_editor.hpp
+  bookmarks_io.cpp
+  bookmarks_io.hpp
   bookmarks_model.cpp
   bookmarks_model.hpp
   countries_model.cpp
   countries_model.hpp
   framework_access.hpp
   map_item.cpp
+  maps_storage.cpp
+  maps_storage.hpp
   map_item.hpp
   osm_account.cpp
   osm_account.hpp
@@ -29,6 +33,8 @@ set(SRC
   routing.hpp
   search_model.cpp
   search_model.hpp
+  url_handler.cpp
+  url_handler.hpp
   voice_guide.cpp
   voice_guide.hpp
   ${OMIM_ROOT}/qt/qt_common/qtoglcontext.cpp
@@ -82,7 +88,7 @@ install(FILES "${OMIM_ROOT}/data/strings/types_strings.txt" "${OMIM_ROOT}/data/s
 
 install(TARGETS ${PROJECT_NAME} DESTINATION bin)
 install(TARGETS ${PROJECT_NAME}_lib LIBRARY DESTINATION share/organicmaps/lib)
-install(DIRECTORY qml DESTINATION share/organicmaps)
+install(DIRECTORY qml sounds DESTINATION share/organicmaps)
 # SVG icons converted from the Android vector drawables.
 set(SVG_ICONS_DIR "${CMAKE_CURRENT_BINARY_DIR}/icons")
 add_custom_command(
@@ -124,6 +130,8 @@ install(FILES "${OMIM_ROOT}/android/app/src/main/res/drawable-xxhdpi/ic_wiki.web
               "${OMIM_ROOT}/android/app/src/main/res/drawable-xxhdpi/ic_direction_pagepreview.webp"
         DESTINATION share/organicmaps/icons/placepage)
 install(FILES organicmaps.desktop DESTINATION share/applications)
+# Starts the app for the launcher's openUrl calls, see organicmaps.desktop.
+install(FILES app.organicmaps.organicmaps.service DESTINATION share/dbus-1/services)
 # Sailjail applies it to the app by name, see the file.
 install(FILES organicmaps.profile DESTINATION /etc/sailjail/permissions)
 foreach(size 86 108 128 172)

@@ -9,6 +9,7 @@
 #include <QQuickItem>
 #include <QTimer>
 #include <QVariantList>
+#include <QVariantMap>
 
 #include <memory>
 
@@ -40,6 +41,9 @@ class MapItem
   Q_PROPERTY(bool trackRecording READ trackRecording NOTIFY trackRecordingChanged)
   // The map shows the cross for "Add Place to OpenStreetMap", taps don't select places.
   Q_PROPERTY(bool choosingPosition READ choosingPosition NOTIFY choosingPositionChanged)
+  // The region in the middle of the map while its map isn't downloaded, like the Android on-map downloader:
+  // {countryId, name, size, status (a CountriesModel::Status), progress (0..1)}; empty otherwise.
+  Q_PROPERTY(QVariantMap currentCountry READ currentCountry NOTIFY currentCountryChanged)
   // Height of the map buttons along the bottom edge; the scale line and attribution stay above them.
   Q_PROPERTY(
       qreal bottomWidgetsOffset READ bottomWidgetsOffset WRITE setBottomWidgetsOffset NOTIFY bottomWidgetsOffsetChanged)
@@ -91,6 +95,10 @@ public:
   // Ends choosing and returns [lat, lon] of the cross, or an empty list when no map is downloaded there.
   Q_INVOKABLE QVariantList confirmChosenPosition();
 
+  // Downloads or retries the map of currentCountry, or cancels its download.
+  Q_INVOKABLE void downloadCurrentCountry();
+  Q_INVOKABLE void cancelCurrentCountry();
+
   int myPositionMode() const { return m_myPositionMode; }
   PlacePage * placePage() const { return m_placePage.get(); }
   Routing * routing() const { return m_routing.get(); }
@@ -101,6 +109,7 @@ public:
   qreal bottomWidgetsOffset() const { return m_bottomWidgetsOffset; }
   void setBottomWidgetsOffset(qreal offset);
   int enabledLayers() const;
+  QVariantMap currentCountry() const { return m_currentCountry; }
 
 signals:
   void myPositionModeChanged();
@@ -109,6 +118,7 @@ signals:
   void trackRecordingChanged();
   void choosingPositionChanged();
   void viewportBottomInsetChanged();
+  void currentCountryChanged();
 
 protected:
   QSGNode * updatePaintNode(QSGNode * oldNode, UpdatePaintNodeData *) override;
@@ -130,6 +140,7 @@ private:
   void OnCompassReading();
   // Downloads the map of the region shown when the user is in it, like auto-download on Android.
   void OnCurrentCountryChanged(std::string const & countryId);
+  void UpdateCurrentCountry();
 
   // location::LocationObserver
   void OnLocationError(location::TLocationError errorCode) override;
@@ -150,5 +161,8 @@ private:
   qreal m_bottomWidgetsOffset = 0;
   qreal m_viewportBottomInset = 0;
   bool m_inBackground = false;
+  std::string m_currentCountryId;
+  QVariantMap m_currentCountry;
+  int m_storageSlot = 0;
 };
 }  // namespace sailfish

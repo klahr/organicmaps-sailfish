@@ -47,6 +47,17 @@ class PlacePage : public QObject
   Q_PROPERTY(QString openingHours READ openingHours NOTIFY changed)
   Q_PROPERTY(QString wikiDescription READ wikiDescription NOTIFY changed)
   Q_PROPERTY(QString wikiUrl READ wikiUrl NOTIFY changed)
+  // A track's statistics as {label, value} rows, like the Android elevation profile header.
+  Q_PROPERTY(QVariantList trackStats READ trackStats NOTIFY changed)
+  // A track's elevation profile as [distance, altitude] pairs in meters, flattened; empty without altitudes.
+  Q_PROPERTY(QVariantList elevationProfile READ elevationProfile NOTIFY changed)
+  Q_PROPERTY(double trackLength READ trackLength NOTIFY changed)
+  Q_PROPERTY(QString minElevation READ minElevation NOTIFY changed)
+  Q_PROPERTY(QString maxElevation READ maxElevation NOTIFY changed)
+  // Distances along the track in meters of the point chosen on the profile or the map, and of the position;
+  // negative when there is none.
+  Q_PROPERTY(double elevationActivePoint READ elevationActivePoint NOTIFY elevationPointsChanged)
+  Q_PROPERTY(double elevationMyPosition READ elevationMyPosition NOTIFY elevationPointsChanged)
   // Detail rows as {icon, text, url}; url is opened externally when set.
   Q_PROPERTY(QVariantList details READ details NOTIFY changed)
 
@@ -85,12 +96,21 @@ public:
   QString openingHours() const { return m_openingHours; }
   QString wikiDescription() const { return m_wikiDescription; }
   QString wikiUrl() const { return m_wikiUrl; }
+  QVariantList trackStats() const { return m_trackStats; }
+  QVariantList elevationProfile() const { return m_elevationProfile; }
+  double trackLength() const { return m_trackLength; }
+  QString minElevation() const { return m_minElevation; }
+  QString maxElevation() const { return m_maxElevation; }
+  double elevationActivePoint() const;
+  double elevationMyPosition() const;
 
   Q_INVOKABLE void close();
   // Cycles the coordinates format and remembers it, like a tap on the mobile place pages.
   Q_INVOKABLE void nextCoordinatesFormat();
   // Saves the place to the last edited list, or deletes its bookmark, like the Android Save button.
   Q_INVOKABLE void toggleBookmark();
+  // Marks the point at the distance along the selected track on the map, like a tap on the Android profile.
+  Q_INVOKABLE void setElevationActivePoint(double distance);
 
   // Called on every location update; does nothing without a selected place.
   void UpdateDistance();
@@ -100,10 +120,12 @@ public:
 signals:
   void changed();
   void distanceChanged();
+  void elevationPointsChanged();
 
 private:
   void Update();
   void UpdateOpeningHours(std::string_view openingHours);
+  void UpdateTrack();
 
   Framework & m_framework;
   bool m_open = false;
@@ -130,5 +152,10 @@ private:
   QString m_openingHours;
   QString m_wikiDescription;
   QString m_wikiUrl;
+  QVariantList m_trackStats;
+  QVariantList m_elevationProfile;
+  double m_trackLength = 0;
+  QString m_minElevation;
+  QString m_maxElevation;
 };
 }  // namespace sailfish

@@ -9,6 +9,8 @@
 #include "platform/measurement_utils.hpp"
 #include "platform/settings.hpp"
 
+#include <QNetworkConfiguration>
+#include <QNetworkConfigurationManager>
 #include <QVariantMap>
 
 namespace sailfish
@@ -21,6 +23,7 @@ std::string_view constexpr kZoomButtons = "SailfishZoomButtons";
 std::string_view constexpr kKeepScreenOn = "SailfishKeepScreenOn";
 std::string_view constexpr kSearchHistory = "SailfishSearchHistory";
 std::string_view constexpr kAutoDownload = "SailfishAutoDownload";
+std::string_view constexpr kMobileData = "SailfishMobileData";
 
 template <typename T>
 T Load(std::string_view key, T defaultValue)
@@ -232,6 +235,41 @@ void AppSettings::setAutoDownload(bool enabled)
   emit changed();
 }
 
+int AppSettings::mobileData() const
+{
+  return Load(kMobileData, static_cast<int>(MobileDataAsk));
+}
+
+void AppSettings::setMobileData(int mobileData)
+{
+  settings::Set(kMobileData, mobileData);
+  emit changed();
+}
+
+int AppSettings::downloadPermission() const
+{
+  if (!IsOnMobileData())
+    return DownloadAllowed;
+  switch (mobileData())
+  {
+  case MobileDataAlways: return DownloadAllowed;
+  case MobileDataNever: return DownloadDenied;
+  default: return DownloadAsk;
+  }
+}
+
+// static
+bool AppSettings::IsOnMobileData()
+{
+  switch (QNetworkConfigurationManager().defaultConfiguration().bearerTypeFamily())
+  {
+  case QNetworkConfiguration::Bearer2G:
+  case QNetworkConfiguration::Bearer3G:
+  case QNetworkConfiguration::Bearer4G: return true;
+  default: return false;
+  }
+}
+
 int AppSettings::powerScheme() const
 {
   return static_cast<int>(m_framework.GetPowerManager().GetScheme());
@@ -240,6 +278,17 @@ int AppSettings::powerScheme() const
 void AppSettings::setPowerScheme(int scheme)
 {
   m_framework.GetPowerManager().SetScheme(static_cast<power_management::Scheme>(scheme));
+  emit changed();
+}
+
+int AppSettings::speedCamerasMode() const
+{
+  return static_cast<int>(m_framework.GetRoutingManager().GetSpeedCamManager().GetMode());
+}
+
+void AppSettings::setSpeedCamerasMode(int mode)
+{
+  m_framework.GetRoutingManager().GetSpeedCamManager().SetMode(static_cast<routing::SpeedCameraManagerMode>(mode));
   emit changed();
 }
 

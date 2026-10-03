@@ -1,15 +1,18 @@
 #include "sailfish/app_info.hpp"
 #include "sailfish/app_settings.hpp"
 #include "sailfish/bookmark_editor.hpp"
+#include "sailfish/bookmarks_io.hpp"
 #include "sailfish/bookmarks_model.hpp"
 #include "sailfish/countries_model.hpp"
 #include "sailfish/framework_access.hpp"
 #include "sailfish/map_item.hpp"
+#include "sailfish/maps_storage.hpp"
 #include "sailfish/osm_account.hpp"
 #include "sailfish/place_editor.hpp"
 #include "sailfish/place_page.hpp"
 #include "sailfish/routing.hpp"
 #include "sailfish/search_model.hpp"
+#include "sailfish/url_handler.hpp"
 
 #include "map/framework.hpp"
 
@@ -19,6 +22,8 @@
 #include "base/logging.hpp"
 
 #include <qqml.h>
+#include <QDBusConnection>
+#include <QDBusMessage>
 #include <QDir>
 #include <QGuiApplication>
 #include <QQmlContext>
@@ -70,7 +75,9 @@ __attribute__((visibility("default"))) int OrganicMapsMain(int argc, char * argv
 
   // Platform reads these on first use; the defaults match the installed RPM layout and Sailjail.
   SetEnvIfUnset("MWM_RESOURCES_DIR", SailfishApp::pathTo(QStringLiteral("data")).toLocalFile());
-  QString const writableDir = QStandardPaths::writableLocation(QStandardPaths::AppDataLocation);
+  QString writableDir = sailfish::MapsStorage::ConfiguredDir();
+  if (writableDir.isEmpty())
+    writableDir = QStandardPaths::writableLocation(QStandardPaths::AppDataLocation);
   QDir().mkpath(writableDir);
   SetEnvIfUnset("MWM_WRITABLE_DIR", writableDir);
 
@@ -98,13 +105,33 @@ __attribute__((visibility("default"))) int OrganicMapsMain(int argc, char * argv
   sailfish::AppInfo appInfo;
   sailfish::AppSettings appSettings(framework);
   sailfish::OsmAccount osmAccount;
+  sailfish::BookmarksIO bookmarksIO(framework);
+  sailfish::MapsStorage mapsStorage(framework);
+  sailfish::UrlHandler urlHandler(framework, bookmarksIO);
+  QStringList const urls = app->arguments().mid(1);
+  if (!urlHandler.RegisterOnDBus() && !urls.isEmpty())
+  {
+    // Another instance runs: hand it the files and links, like the launcher does.
+    auto message = QDBusMessage::createMethodCall(
+        QStringLiteral("app.organicmaps.organicmaps"), QStringLiteral("/app/organicmaps"),
+        QStringLiteral("app.organicmaps.organicmaps"), QStringLiteral("openUrl"));
+    message << urls;
+    QDBusConnection::sessionBus().call(message);
+    return 0;
+  }
   std::unique_ptr<QQuickView> view(SailfishApp::createView());
   view->rootContext()->setContextProperty(QStringLiteral("appInfo"), &appInfo);
   view->rootContext()->setContextProperty(QStringLiteral("appSettings"), &appSettings);
   view->rootContext()->setContextProperty(QStringLiteral("osmAccount"), &osmAccount);
+  view->rootContext()->setContextProperty(QStringLiteral("bookmarksIO"), &bookmarksIO);
+  view->rootContext()->setContextProperty(QStringLiteral("urlHandler"), &urlHandler);
+  view->rootContext()->setContextProperty(QStringLiteral("mapsStorage"), &mapsStorage);
   qmlRegisterUncreatableType<sailfish::AppSettings>("app.organicmaps", 1, 0, "AppSettings", "Use appSettings");
+  qmlRegisterUncreatableType<sailfish::BookmarksIO>("app.organicmaps", 1, 0, "BookmarksIO", "Use bookmarksIO");
   view->setSource(SailfishApp::pathToMainQml());
   view->show();
+  if (!urls.isEmpty())
+    urlHandler.openUrl(urls);
 
   return app->exec();
 }

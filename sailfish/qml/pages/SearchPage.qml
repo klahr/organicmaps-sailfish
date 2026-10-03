@@ -23,6 +23,8 @@ Page {
     SearchField {
         id: searchField
         width: parent.width
+        // Clear the camera notch in portrait, like the Silica PageHeader does.
+        y: page.orientation === Orientation.Portrait ? Screen.topCutout.height : 0
         placeholderText: appInfo.localized("search")
         text: search.query
         onTextChanged: search.query = text

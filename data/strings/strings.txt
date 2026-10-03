@@ -45433,3 +45433,146 @@ de = Speech Note installieren
 ru = Установить Speech Note
 sv = Hämta Speech Note
 uk = Встановити Speech Note
+
+[backup_description]
+comment = Sailfish OS: explanation on the bookmarks backup settings page
+tags = sailfish
+en = Bookmarks and tracks are saved to KMZ files in a folder. Import a file on the bookmarks page to restore it.
+de = Lesezeichen und Tracks werden als KMZ-Dateien in einem Ordner gespeichert. Importiere eine Datei auf der Lesezeichenseite, um sie wiederherzustellen.
+es = Los marcadores y las rutas se guardan como archivos KMZ en una carpeta. Importa un archivo en la página de marcadores para restaurarlo.
+fr = Les signets et les traces sont enregistrés dans des fichiers KMZ dans un dossier. Importez un fichier depuis la page des signets pour le restaurer.
+ru = Метки и треки сохраняются в файлы KMZ в папке. Чтобы восстановить их, импортируйте файл на странице меток.
+sv = Bokmärken och spår sparas som KMZ-filer i en mapp. Importera en fil på bokmärkessidan för att återställa den.
+uk = Мітки та треки зберігаються у файли KMZ у теці. Щоб відновити їх, імпортуйте файл на сторінці міток.
+
+[backup_automatic]
+comment = Sailfish OS: setting for how often bookmarks are backed up automatically
+tags = sailfish
+en = Automatic backup
+de = Automatische Sicherung
+es = Copia de seguridad automática
+fr = Sauvegarde automatique
+ru = Автоматическое резервное копирование
+sv = Automatisk säkerhetskopiering
+uk = Автоматичне резервне копіювання
+
+[backup_daily]
+comment = Sailfish OS: automatic backup option
+tags = sailfish
+en = Daily
+de = Täglich
+es = Diaria
+fr = Quotidienne
+ru = Ежедневно
+sv = Dagligen
+uk = Щодня
+
+[backup_weekly]
+comment = Sailfish OS: automatic backup option
+tags = sailfish
+en = Weekly
+de = Wöchentlich
+es = Semanal
+fr = Hebdomadaire
+ru = Еженедельно
+sv = Varje vecka
+uk = Щотижня
+
+[backup_folder]
+comment = Sailfish OS: setting for the folder bookmark backups are saved to
+tags = sailfish
+en = Backup folder
+de = Sicherungsordner
+es = Carpeta de copias de seguridad
+fr = Dossier de sauvegarde
+ru = Папка для резервных копий
+sv = Mapp för säkerhetskopior
+uk = Тека для резервних копій
+
+[backup_now]
+comment = Sailfish OS: button that backs up all bookmarks and tracks
+tags = sailfish
+en = Back up now
+de = Jetzt sichern
+es = Hacer copia ahora
+fr = Sauvegarder maintenant
+ru = Создать копию сейчас
+sv = Säkerhetskopiera nu
+uk = Створити копію зараз
+
+[backup_last]
+comment = Sailfish OS: date of the last bookmarks backup
+tags = sailfish
+en = Last backup: %@
+de = Letzte Sicherung: %@
+es = Última copia: %@
+fr = Dernière sauvegarde : %@
+ru = Последняя копия: %@
+sv = Senaste säkerhetskopia: %@
+uk = Остання копія: %@
+
+[backup_none]
+comment = Sailfish OS: shown when bookmarks were never backed up
+tags = sailfish
+en = No backups yet
+de = Noch keine Sicherungen
+es = Aún no hay copias
+fr = Aucune sauvegarde pour le moment
+ru = Резервных копий ещё нет
+sv = Inga säkerhetskopior än
+uk = Резервних копій ще немає
+
+[backup_failed]
+comment = Sailfish OS: error when bookmarks could not be backed up
+tags = sailfish
+en = Backup failed
+de = Sicherung fehlgeschlagen
+es = No se pudo hacer la copia
+fr = Échec de la sauvegarde
+ru = Не удалось создать копию
+sv = Säkerhetskopieringen misslyckades
+uk = Не вдалося створити копію
+
+[mobile_data_downloads_off]
+comment = Sailfish OS: a map download was not started because mobile internet is off in the settings
+tags = sailfish
+en = Map downloads over mobile internet are turned off in the settings.
+de = Kartendownloads über mobiles Internet sind in den Einstellungen deaktiviert.
+es = Las descargas de mapas por internet móvil están desactivadas en los ajustes.
+fr = Les téléchargements de cartes via l’internet mobile sont désactivés dans les paramètres.
+ru = Загрузка карт через мобильный интернет отключена в настройках.
+sv = Kartnedladdningar via mobilt internet är avstängda i inställningarna.
+uk = Завантаження мап через мобільний інтернет вимкнено в налаштуваннях.
+
+[maps_storage_moving]
+comment = Sailfish OS: progress text while maps move to another folder
+tags = sailfish
+en = Moving maps…
+de = Karten werden verschoben…
+es = Moviendo los mapas…
+fr = Déplacement des cartes…
+ru = Перемещение карт…
+sv = Flyttar kartor…
+uk = Переміщення мап…
+
+[maps_storage_restart]
+comment = Sailfish OS: the maps were moved and the app must be started again
+tags = sailfish
+en = The maps were moved. Start Organic Maps again to use them.
+de = Die Karten wurden verschoben. Starte Organic Maps erneut, um sie zu verwenden.
+es = Los mapas se han movido. Vuelve a abrir Organic Maps para usarlos.
+fr = Les cartes ont été déplacées. Relancez Organic Maps pour les utiliser.
+ru = Карты перемещены. Запустите Organic Maps снова, чтобы использовать их.
+sv = Kartorna har flyttats. Starta Organic Maps igen för att använda dem.
+uk = Мапи переміщено. Запустіть Organic Maps знову, щоб користуватися ними.
+
+[maps_storage_move_failed]
+comment = Sailfish OS: error when maps could not be moved, e.g. because of free space
+tags = sailfish
+en = The maps could not be moved. Check the free space and that no maps are downloading.
+de = Die Karten konnten nicht verschoben werden. Prüfe den freien Speicher und dass keine Karten heruntergeladen werden.
+es = No se pudieron mover los mapas. Comprueba el espacio libre y que no se estén descargando mapas.
+fr = Impossible de déplacer les cartes. Vérifiez l’espace libre et qu’aucune carte n’est en cours de téléchargement.
+ru = Не удалось переместить карты. Проверьте свободное место и что карты сейчас не загружаются.
+sv = Kartorna kunde inte flyttas. Kontrollera ledigt utrymme och att inga kartor laddas ned.
+uk = Не вдалося перемістити мапи. Перевірте вільне місце і що мапи зараз не завантажуються.

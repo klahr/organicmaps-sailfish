@@ -4,8 +4,10 @@
 
 #include "map/bookmark_helpers.hpp"
 #include "map/bookmark_manager.hpp"
+#include "map/elevation_info.hpp"
 #include "map/framework.hpp"
 #include "map/place_page_info.hpp"
+#include "map/track.hpp"
 
 #include "ge0/url_generator.hpp"
 
@@ -32,6 +34,9 @@ using feature::Metadata;
 // Same setting and default as the desktop place page.
 std::string_view constexpr kCoordinatesFormatSetting = "CoordinatesFormat";
 
+// Enough points for a phone wide chart.
+size_t constexpr kMaxProfilePoints = 600;
+
 int32_t SavedCoordinatesFormat()
 {
   auto saved = static_cast<int32_t>(place_page::CoordinatesFormat::LatLonDecimal);
@@ -47,11 +52,35 @@ PlacePage::PlacePage(Framework & framework, QObject * parent) : QObject(parent),
     m_open = false;
     emit changed();
   }, [this] { Update(); }, {} /* onSwitchFullScreen */);
+  auto & manager = m_framework.GetBookmarkManager();
+  manager.SetElevationActivePointChangedCallback([this](kml::TrackId, double) { emit elevationPointsChanged(); });
+  manager.SetElevationMyPositionChangedCallback([this](kml::TrackId, double) { emit elevationPointsChanged(); });
 }
 
 PlacePage::~PlacePage()
 {
   m_framework.SetPlacePageListeners({}, {}, {}, {});
+  auto & manager = m_framework.GetBookmarkManager();
+  manager.SetElevationActivePointChangedCallback({});
+  manager.SetElevationMyPositionChangedCallback({});
+}
+
+double PlacePage::elevationActivePoint() const
+{
+  auto const & manager = m_framework.GetBookmarkManager();
+  return m_isTrack && manager.HasTrack(m_userMarkId) ? manager.GetElevationActivePoint(m_userMarkId) : -1.0;
+}
+
+double PlacePage::elevationMyPosition() const
+{
+  auto const & manager = m_framework.GetBookmarkManager();
+  return m_isTrack && manager.HasTrack(m_userMarkId) ? manager.GetElevationMyPosition(m_userMarkId) : -1.0;
+}
+
+void PlacePage::setElevationActivePoint(double distance)
+{
+  if (m_isTrack && m_framework.GetBookmarkManager().HasTrack(m_userMarkId))
+    m_framework.GetBookmarkManager().SetElevationActivePoint(m_userMarkId, distance);
 }
 
 void PlacePage::close()
@@ -166,8 +195,59 @@ void PlacePage::Update()
     add("../../icons/placepage/ic_wheelchair_white.svg",
         QString::fromStdString(platform::GetLocalizedTypeName(std::string(wheelchair))));
 
+  UpdateTrack();
   UpdateDistance();
   emit changed();
+}
+
+void PlacePage::UpdateTrack()
+{
+  m_trackStats.clear();
+  m_elevationProfile.clear();
+  m_trackLength = 0;
+  m_minElevation.clear();
+  m_maxElevation.clear();
+  auto & manager = m_framework.GetBookmarkManager();
+  auto const * track = m_isTrack ? manager.GetTrack(m_userMarkId) : nullptr;
+  if (!track)
+    return;
+
+  auto const add = [this](char const * label, std::string const & value)
+  { m_trackStats.append(QVariantMap{{"label", Localized(label)}, {"value", QString::fromStdString(value)}}); };
+  auto const stats = track->GetStatistics();
+  m_trackLength = stats.m_length;
+  add("elevation_profile_distance", stats.GetFormattedLength());
+  if (stats.m_duration > 0)
+    m_trackStats.append(QVariantMap{{"label", Localized("elevation_profile_time")},
+                                    {"value", FormatDuration(static_cast<long>(stats.m_duration))}});
+
+  auto const * elevation = track->GetElevationInfo();
+  if (!elevation || elevation->IsEmpty())
+    return;
+  add("elevation_profile_ascent", stats.GetFormattedAscent());
+  add("elevation_profile_descent", stats.GetFormattedDescent());
+  add("elevation_profile_max_elevation", stats.GetFormattedMaxElevation());
+  add("elevation_profile_min_elevation", stats.GetFormattedMinElevation());
+  char const * const difficulties[] = {nullptr, "elevation_profile_diff_level_easy",
+                                       "elevation_profile_diff_level_moderate", "elevation_profile_diff_level_hard"};
+  if (auto const difficulty = elevation->GetDifficulty(); difficulty > 0 && difficulty < std::size(difficulties))
+    add("elevation_profile_difficulty", Localized(difficulties[difficulty]).toStdString());
+  m_minElevation = QString::fromStdString(stats.GetFormattedMinElevation());
+  m_maxElevation = QString::fromStdString(stats.GetFormattedMaxElevation());
+
+  size_t const count = elevation->GetSize();
+  size_t const step = count / kMaxProfilePoints + 1;
+  size_t i = 0;
+  elevation->ForEachPoint([&](double distance, geometry::Altitude altitude)
+  {
+    // Keeps the last point, so that the profile ends with the track.
+    if (i % step == 0 || i + 1 == count)
+      m_elevationProfile << distance << altitude;
+    ++i;
+    m_trackLength = distance;
+  });
+  // The position marker follows location updates along the track.
+  manager.UpdateElevationMyPosition(m_userMarkId);
 }
 
 void PlacePage::UpdateOpeningHours(std::string_view openingHours)

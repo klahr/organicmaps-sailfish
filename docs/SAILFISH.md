@@ -42,3 +42,7 @@ ssh defaultuser@<device> devel-su pkcon install-local organicmaps-*.aarch64.rpm
   `sailfish/tools/android_vector_to_svg.py`.
 - Voice guidance uses Speech Note over D-Bus when installed, or a local speech synthesizer such as espeak-ng.
 - The app runs in Sailjail with the permissions in `sailfish/organicmaps.profile` and `sailfish/organicmaps.desktop`.
+- Bookmark files and map links (`geo:`, `om://`, `ge0://`) reach the app through the `openUrl` D-Bus method named in
+  `sailfish/organicmaps.desktop`; `sailfish/app.organicmaps.organicmaps.service` starts it when it isn't running.
+  To try one: `gdbus call --session --dest app.organicmaps.organicmaps --object-path /app/organicmaps
+  --method app.organicmaps.organicmaps.openUrl "['geo:59.33,18.06?z=15']"`.

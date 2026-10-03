@@ -35,11 +35,15 @@ class AppSettings : public QObject
   Q_PROPERTY(QString donateUrl READ donateUrl CONSTANT)
   Q_PROPERTY(bool buildings3d READ buildings3d WRITE setBuildings3d NOTIFY changed)
   Q_PROPERTY(bool autoDownload READ autoDownload WRITE setAutoDownload NOTIFY changed)
+  // MobileData: map downloads over a cellular connection, like the Android Mobile Internet setting.
+  Q_PROPERTY(int mobileData READ mobileData WRITE setMobileData NOTIFY changed)
   // Navigation group: the tilted map and zooming by speed while navigating.
   Q_PROPERTY(bool perspectiveView READ perspectiveView WRITE setPerspectiveView NOTIFY changed)
   Q_PROPERTY(bool autoZoom READ autoZoom WRITE setAutoZoom NOTIFY changed)
   // power_management::Scheme: Normal (never), EconomyMaximum (always) or Auto (low battery).
   Q_PROPERTY(int powerScheme READ powerScheme WRITE setPowerScheme NOTIFY changed)
+  // routing::SpeedCameraManagerMode: Auto, Always or Never.
+  Q_PROPERTY(int speedCamerasMode READ speedCamerasMode WRITE setSpeedCamerasMode NOTIFY changed)
   // settings::Placement: None, Right or Bottom.
   Q_PROPERTY(int bookmarksTextPlacement READ bookmarksTextPlacement WRITE setBookmarksTextPlacement NOTIFY changed)
   // Satellite imagery from a user provided XYZ tile server.
@@ -56,6 +60,23 @@ public:
     AppearanceDark
   };
   Q_ENUM(MapAppearance)
+
+  enum MobileData
+  {
+    MobileDataAsk,
+    MobileDataAlways,
+    MobileDataNever
+  };
+  Q_ENUM(MobileData)
+
+  // Whether a map download may start now, see downloadPermission().
+  enum DownloadPermission
+  {
+    DownloadAllowed,
+    DownloadAsk,
+    DownloadDenied
+  };
+  Q_ENUM(DownloadPermission)
 
   explicit AppSettings(Framework & framework, QObject * parent = nullptr);
 
@@ -88,8 +109,14 @@ public:
   bool autoZoom() const;
   void setAutoZoom(bool enabled);
   void setAutoDownload(bool enabled);
+  int mobileData() const;
+  void setMobileData(int mobileData);
+  // Downloads are allowed on other connections; on a cellular one the setting decides.
+  Q_INVOKABLE int downloadPermission() const;
   int powerScheme() const;
   void setPowerScheme(int scheme);
+  int speedCamerasMode() const;
+  void setSpeedCamerasMode(int mode);
   int bookmarksTextPlacement() const;
   void setBookmarksTextPlacement(int placement);
   bool bgTilesEnabled() const;
@@ -107,6 +134,7 @@ public:
   // UI only setting read by other C++ code.
   static bool IsSearchHistoryEnabled();
   static bool IsAutoDownloadEnabled();
+  static bool IsOnMobileData();
 
 signals:
   void changed();

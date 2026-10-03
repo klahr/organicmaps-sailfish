@@ -3,6 +3,7 @@ import Sailfish.Silica 1.0
 import Sailfish.Share 1.0
 import Nemo.KeepAlive 1.2
 import app.organicmaps 1.0
+import "downloads.js" as Downloads
 
 Page {
     id: page
@@ -46,6 +47,18 @@ Page {
 
     function openSearch() {
         pageStack.push(Qt.resolvedUrl("SearchPage.qml"), { search: search })
+    }
+    Connections {
+        target: urlHandler
+        onRouteRequested: {
+            pageStack.pop(page, PageStackAction.Immediate)
+            map.routing.planRoute(routerType, points)
+        }
+        onSearchRequested: {
+            pageStack.pop(page, PageStackAction.Immediate)
+            search.query = query
+            page.openSearch()
+        }
     }
     function openBookmarks() {
         pageStack.push(Qt.resolvedUrl("BookmarksPage.qml"))
@@ -231,7 +244,69 @@ Page {
         RoadSign {
             width: Theme.itemSizeMedium * 1.2
             text: map.routing.navigation.speed || "0"
+            alert: !!map.routing.navigation.speedCamLimitExceeded
             fontSize: Theme.fontSizeExtraLarge
+        }
+    }
+
+    // The map of the region in the middle of the map isn't downloaded: its name and size with a download
+    // button, then the progress, like the Android on-map downloader.
+    Rectangle {
+        id: onMapDownloader
+        readonly property var country: map.currentCountry
+        readonly property bool busy: country.status === CountriesModel.Downloading
+                                     || country.status === CountriesModel.InQueue
+                                     || country.status === CountriesModel.Applying
+
+        visible: !!country.countryId && !page.navigating && !page.choosingPosition
+                 && placePagePanel.visibleSize === 0 && routePanel.visibleSize === 0
+        anchors.centerIn: parent
+        width: Math.min(parent.width - 2 * Theme.horizontalPageMargin, Theme.itemSizeHuge * 3)
+        height: downloaderColumn.height + 2 * Theme.paddingLarge
+        radius: Theme.paddingLarge
+        color: Theme.rgba(Theme.overlayBackgroundColor, 0.9)
+
+        Column {
+            id: downloaderColumn
+            anchors.centerIn: parent
+            width: parent.width - 2 * Theme.paddingLarge
+            spacing: Theme.paddingMedium
+
+            Label {
+                width: parent.width
+                horizontalAlignment: Text.AlignHCenter
+                text: onMapDownloader.country.name || ""
+                font.pixelSize: Theme.fontSizeLarge
+                color: Theme.highlightColor
+                wrapMode: Text.Wrap
+            }
+            Label {
+                width: parent.width
+                horizontalAlignment: Text.AlignHCenter
+                text: onMapDownloader.country.status === CountriesModel.Error
+                      ? appInfo.localized("country_status_download_failed")
+                      : onMapDownloader.country.size || ""
+                color: onMapDownloader.country.status === CountriesModel.Error ? Theme.errorColor
+                                                                               : Theme.secondaryHighlightColor
+            }
+            ProgressBar {
+                width: parent.width
+                visible: onMapDownloader.busy
+                indeterminate: onMapDownloader.country.status !== CountriesModel.Downloading
+                value: onMapDownloader.country.progress || 0
+            }
+            Button {
+                anchors.horizontalCenter: parent.horizontalCenter
+                text: onMapDownloader.busy ? appInfo.localized("cancel")
+                    : onMapDownloader.country.status === CountriesModel.Error ? appInfo.localized("downloader_retry")
+                    : appInfo.localized("downloader_download_map")
+                onClicked: {
+                    if (onMapDownloader.busy)
+                        map.cancelCurrentCountry()
+                    else
+                        Downloads.start(pageStack, function() { map.downloadCurrentCountry() })
+                }
+            }
         }
     }
 

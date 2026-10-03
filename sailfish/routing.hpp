@@ -1,5 +1,6 @@
 #pragma once
 
+#include <QMediaPlayer>
 #include <QObject>
 #include <QString>
 #include <QStringList>
@@ -43,7 +44,8 @@ class Routing : public QObject
   Q_PROPERTY(bool canStart READ canStart NOTIFY stateChanged)
   Q_PROPERTY(bool navigating READ navigating NOTIFY navigationChanged)
   // The Android navigation panels: turnIcon, distanceToTurn, street, nextTurnIcon, hoursLeft, minutesLeft,
-  // hourUnits, minuteUnits, arrival, distanceLeftValue, distanceLeftUnits, speed, speedLimit and progress (0..1).
+  // hourUnits, minuteUnits, arrival, distanceLeftValue, distanceLeftUnits, speed, speedLimit, speedCamLimitExceeded,
+  // lanes as {icon, active} and progress (0..1).
   Q_PROPERTY(QVariantMap navigation READ navigation NOTIFY navigationChanged)
   // Voice instructions while navigating, see VoiceGuide: there is a voice for some language.
   Q_PROPERTY(bool voiceAvailable READ voiceAvailable NOTIFY voiceChanged)
@@ -125,6 +127,9 @@ public:
   Q_INVOKABLE void routeToPlace();
   Q_INVOKABLE void addStopFromPlace();
   Q_INVOKABLE void setStartToMyPosition();
+  // Replaces the route with points given as {lat, lon, name}, e.g. by an om:// route link; the first is the
+  // start and the last the finish.
+  Q_INVOKABLE void planRoute(int routerType, QVariantList const & points);
   Q_INVOKABLE void removePoint(int index);
   Q_INVOKABLE void movePoint(int from, int to);
   Q_INVOKABLE void downloadMissingMaps();
@@ -193,6 +198,8 @@ private:
   bool m_startWhenBuilt = false;
   QVariantMap m_navigation;
   VoiceGuide * m_voice;
+  // Speed camera warning.
+  QMediaPlayer m_beep;
   int m_voiceTestIndex = 0;
 };
 }  // namespace sailfish

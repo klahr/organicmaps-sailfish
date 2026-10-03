@@ -9,6 +9,9 @@
 #include "storage/country_info_getter.hpp"
 #include "storage/downloader_search_params.hpp"
 #include "storage/storage.hpp"
+#include "storage/storage_helpers.hpp"
+
+#include "platform/settings.hpp"
 
 #include <QCollator>
 #include <QPointer>
@@ -21,6 +24,9 @@ namespace
 {
 using storage::NodeErrorCode;
 using storage::NodeStatus;
+
+// The data version the update was last offered for.
+std::string_view constexpr kUpdateOfferedSetting = "SailfishUpdateOfferedVersion";
 
 static_assert(CountriesModel::Undefined == static_cast<int>(NodeStatus::Undefined));
 static_assert(CountriesModel::Downloading == static_cast<int>(NodeStatus::Downloading));
@@ -202,6 +208,39 @@ void CountriesModel::OnCountryChanged(storage::CountryId const & countryId)
     m_downloadInProgress = inProgress;
     emit downloadInProgressChanged();
   }
+  emit updatesChanged();
+}
+
+int CountriesModel::updateCount() const
+{
+  storage::Storage::UpdateInfo info;
+  return m_storage.GetUpdateInfo(m_storage.GetRootId(), info) ? static_cast<int>(info.m_numberOfMwmFilesToUpdate) : 0;
+}
+
+QString CountriesModel::updateSize() const
+{
+  storage::Storage::UpdateInfo info;
+  if (!m_storage.GetUpdateInfo(m_storage.GetRootId(), info))
+    return {};
+  return FormatSize(static_cast<qint64>(info.m_totalDownloadSizeInBytes));
+}
+
+void CountriesModel::updateAll()
+{
+  m_storage.UpdateNode(m_storage.GetRootId());
+}
+
+bool CountriesModel::shouldOfferUpdate() const
+{
+  int64_t offered = 0;
+  settings::TryGet(kUpdateOfferedSetting, offered);
+  return updateCount() > 0 && offered != m_storage.GetCurrentDataVersion() &&
+         storage::IsEnoughSpaceForUpdate(m_storage.GetRootId(), m_storage);
+}
+
+void CountriesModel::setUpdateOffered()
+{
+  settings::Set(kUpdateOfferedSetting, m_storage.GetCurrentDataVersion());
 }
 
 int CountriesModel::rowCount(QModelIndex const & parent) const
