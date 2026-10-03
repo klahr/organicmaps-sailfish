@@ -25,7 +25,7 @@ class CountriesModel : public QAbstractListModel
   // Like the Android downloader: only maps with something downloaded, or the maps left to download,
   // with the regions around the current position first at the root.
   Q_PROPERTY(bool downloadedOnly READ downloadedOnly WRITE setDownloadedOnly NOTIFY downloadedOnlyChanged)
-  // Searches all maps by name when set.
+  // Searches all maps by name when set; leading and trailing spaces are ignored.
   Q_PROPERTY(QString query READ query WRITE setQuery NOTIFY queryChanged)
 
 public:
@@ -43,6 +43,16 @@ public:
     Partly,
   };
   Q_ENUM(Status)
+
+  // Mirrors storage::NodeErrorCode for QML.
+  enum ErrorCode
+  {
+    NoError,
+    UnknownError,
+    OutOfMemFailed,
+    NoInetConnection,
+  };
+  Q_ENUM(ErrorCode)
 
   enum Roles
   {
@@ -86,7 +96,6 @@ public:
   Q_INVOKABLE void update(QString const & countryId);
   Q_INVOKABLE void retry(QString const & countryId);
   Q_INVOKABLE void showOnMap(QString const & countryId);
-  Q_INVOKABLE static QString formatSize(qint64 bytes);
 
 signals:
   void parentIdChanged();

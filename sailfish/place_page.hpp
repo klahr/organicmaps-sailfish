@@ -27,6 +27,9 @@ class PlacePage : public QObject
   Q_PROPERTY(QString shareText READ shareText NOTIFY changed)
   Q_PROPERTY(QString geoUri READ geoUri NOTIFY changed)
   Q_PROPERTY(bool isBookmark READ isBookmark NOTIFY changed)
+  Q_PROPERTY(bool isTrack READ isTrack NOTIFY changed)
+  // The selected bookmark or track, for BookmarkEditor.
+  Q_PROPERTY(quint64 userMarkId READ userMarkId NOTIFY changed)
   // The place can be edited in OpenStreetMap.
   Q_PROPERTY(bool canEdit READ canEdit NOTIFY changed)
   // "Add Place to OpenStreetMap" is offered, e.g. for an area or an empty spot.
@@ -68,6 +71,8 @@ public:
   QString shareText() const { return m_shareText; }
   QString geoUri() const { return m_geoUri; }
   bool isBookmark() const { return m_isBookmark; }
+  bool isTrack() const { return m_isTrack; }
+  quint64 userMarkId() const { return m_userMarkId; }
   bool canEdit() const { return m_canEdit; }
   bool canAddPlace() const { return m_canAddPlace; }
   bool editable() const { return m_editable; }
@@ -87,7 +92,7 @@ public:
   // Saves the place to the last edited list, or deletes its bookmark, like the Android Save button.
   Q_INVOKABLE void toggleBookmark();
 
-  // Called on location updates while the page is open.
+  // Called on every location update; does nothing without a selected place.
   void UpdateDistance();
   // Compass heading in radians from true north.
   void SetNorth(double north);
@@ -111,6 +116,8 @@ private:
   QString m_shareText;
   QString m_geoUri;
   bool m_isBookmark = false;
+  bool m_isTrack = false;
+  quint64 m_userMarkId = 0;
   bool m_canEdit = false;
   bool m_canAddPlace = false;
   bool m_editable = false;

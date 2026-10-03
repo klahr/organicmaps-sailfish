@@ -1,5 +1,6 @@
 #include "sailfish/search_model.hpp"
 
+#include "sailfish/app_info.hpp"
 #include "sailfish/app_settings.hpp"
 #include "sailfish/framework_access.hpp"
 
@@ -11,15 +12,10 @@
 #include "search/displayed_categories.hpp"
 #include "search/result.hpp"
 
-#include "indexer/categories_holder.hpp"
-
 #include "platform/distance.hpp"
-#include "platform/localization.hpp"
 
 #include "geometry/mercator.hpp"
 
-#include <QGuiApplication>
-#include <QInputMethod>
 #include <QPointer>
 
 #include <utility>
@@ -28,18 +24,15 @@ namespace sailfish
 {
 namespace
 {
-// The search language follows the keyboard, like on the other platforms.
-std::string GetInputLocale()
+SearchModel::OpenState GetOpenState(search::Result const & result)
 {
-  std::string locale = QGuiApplication::inputMethod()->locale().name().replace('_', '-').toStdString();
-  if (CategoriesHolder::MapLocaleToInteger(locale) == CategoriesHolder::kUnsupportedLocaleCode)
+  switch (result.IsOpenNow())
   {
-    // Try the language without the region, e.g. sv for sv-SE.
-    locale = locale.substr(0, locale.find('-'));
-    if (CategoriesHolder::MapLocaleToInteger(locale) == CategoriesHolder::kUnsupportedLocaleCode)
-      locale = "en";
+  case osm::Yes: return result.GetMinutesUntilClosed() < 60 ? SearchModel::ClosingSoon : SearchModel::Open;
+  case osm::No: return result.GetMinutesUntilOpen() < 60 ? SearchModel::OpeningSoon : SearchModel::Closed;
+  case osm::Unknown: return SearchModel::OpenUnknown;
   }
-  return locale;
+  return SearchModel::OpenUnknown;
 }
 
 // Wraps the highlight ranges, which index the UTF-16 text like on the other Qt and Java frontends, into
@@ -106,50 +99,29 @@ QVariant SearchModel::data(QModelIndex const & index, int role) const
     auto const position = m_framework.GetCurrentPosition();
     if (!position || !result.HasPoint() || result.IsSuggest())
       return QString();
-    auto const ll = mercator::ToLatLon(*position);
-    platform::Distance distance;
-    double azimut;
-    m_framework.GetDistanceAndAzimut(result.GetFeatureCenter(), ll.m_lat, ll.m_lon, -1.0, distance, azimut);
-    return QString::fromStdString(distance.ToString());
+    return QString::fromStdString(
+        platform::Distance::CreateFormatted(mercator::DistanceOnEarth(*position, result.GetFeatureCenter()))
+            .ToString());
   }
   case OpenStatusRole:
-  {
-    auto const localized = [](char const * key) { return QString::fromStdString(platform::GetLocalizedString(key)); };
-    // Strings from data/strings use the iOS placeholder.
-    auto const in = [&](char const * key, int minutes)
-    { return localized(key).replace(QStringLiteral("%@"), QString::number(minutes) + ' ' + localized("minute")); };
     switch (GetOpenState(result))
     {
-    case Open: return localized("editor_time_open");
-    case ClosingSoon: return in("closes_in", result.GetMinutesUntilClosed());
-    case OpeningSoon: return in("opens_in", result.GetMinutesUntilOpen());
-    case Closed: return localized("closed");
+    case Open: return Localized("editor_time_open");
+    case ClosingSoon: return Localized("closes_in", {FormatDuration(result.GetMinutesUntilClosed() * 60L)});
+    case OpeningSoon: return Localized("opens_in", {FormatDuration(result.GetMinutesUntilOpen() * 60L)});
+    case Closed: return Localized("closed");
     case OpenUnknown: return QString();
     }
     return QString();
-  }
   case OpenStateRole: return GetOpenState(result);
-  case IsSuggestRole: return result.IsSuggest();
   default: return {};
   }
 }
 
-SearchModel::OpenState SearchModel::GetOpenState(search::Result const & result)
-{
-  switch (result.IsOpenNow())
-  {
-  case osm::Yes: return result.GetMinutesUntilClosed() < 60 ? ClosingSoon : Open;
-  case osm::No: return result.GetMinutesUntilOpen() < 60 ? OpeningSoon : Closed;
-  case osm::Unknown: return OpenUnknown;
-  }
-  return OpenUnknown;
-}
-
 QHash<int, QByteArray> SearchModel::roleNames() const
 {
-  return {{NameRole, "name"},          {DescriptionRole, "description"}, {AddressRole, "address"},
-          {DistanceRole, "distance"},  {OpenStatusRole, "openStatus"},   {OpenStateRole, "openState"},
-          {IsSuggestRole, "isSuggest"}};
+  return {{NameRole, "name"},         {DescriptionRole, "description"}, {AddressRole, "address"},
+          {DistanceRole, "distance"}, {OpenStatusRole, "openStatus"},   {OpenStateRole, "openState"}};
 }
 
 void SearchModel::setQuery(QString const & query)

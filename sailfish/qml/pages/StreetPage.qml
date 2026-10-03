@@ -37,18 +37,10 @@ Page {
             }
         }
 
-        delegate: BackgroundItem {
-            width: parent.width
+        delegate: TextRow {
+            text: modelData
+            current: modelData === page.current
             onClicked: page.select(modelData)
-
-            Label {
-                x: Theme.horizontalPageMargin
-                width: parent.width - 2 * x
-                anchors.verticalCenter: parent.verticalCenter
-                text: modelData
-                truncationMode: TruncationMode.Fade
-                color: highlighted || modelData === page.current ? Theme.highlightColor : Theme.primaryColor
-            }
         }
 
         VerticalScrollDecorator {}

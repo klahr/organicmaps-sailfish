@@ -10,21 +10,16 @@
 #include <QTimer>
 #include <QVariantList>
 
-class QCompass;
-
 #include <memory>
-#include <optional>
 
 class Framework;
+class QCompass;
 
 namespace sailfish
 {
 class PlacePage;
 class Routing;
-}  // namespace sailfish
 
-namespace sailfish
-{
 // Hosts the drape engine inside Qt Quick. Drape renders into offscreen framebuffers in
 // contexts shared through QOpenGLContext::globalShareContext(); the item shows the last
 // presented frame as a scene graph texture.
@@ -33,11 +28,10 @@ class MapItem
   , public location::LocationObserver
 {
   Q_OBJECT
-  // location::EMyPositionMode, drives the my position button.
+  // MyPositionMode, drives the my position button.
   Q_PROPERTY(int myPositionMode READ myPositionMode NOTIFY myPositionModeChanged)
   // Bit mask of enabled Layer values.
   Q_PROPERTY(int enabledLayers READ enabledLayers NOTIFY layersChanged)
-  Q_PROPERTY(bool darkStyle READ darkStyle NOTIFY layersChanged)
   Q_PROPERTY(sailfish::PlacePage * placePage READ placePage CONSTANT)
   Q_PROPERTY(sailfish::Routing * routing READ routing CONSTANT)
   // Height covered by panels at the bottom; routes and searches are fitted into the map above it.
@@ -63,6 +57,17 @@ public:
     Satellite
   };
   Q_ENUM(Layer)
+
+  // Mirrors location::EMyPositionMode for QML.
+  enum MyPositionMode
+  {
+    PendingPosition,
+    NotFollowNoPosition,
+    NotFollow,
+    Follow,
+    FollowAndRotate
+  };
+  Q_ENUM(MyPositionMode)
 
   explicit MapItem(QQuickItem * parent = nullptr);
   ~MapItem() override;
@@ -96,7 +101,6 @@ public:
   qreal bottomWidgetsOffset() const { return m_bottomWidgetsOffset; }
   void setBottomWidgetsOffset(qreal offset);
   int enabledLayers() const;
-  bool darkStyle() const;
 
 signals:
   void myPositionModeChanged();
@@ -126,9 +130,6 @@ private:
   void OnCompassReading();
   // Downloads the map of the region shown when the user is in it, like auto-download on Android.
   void OnCurrentCountryChanged(std::string const & countryId);
-  // The last fix is kept across runs and shown as obsolete until a fresh one arrives.
-  void SaveLastLocation() const;
-  void ShowLastLocation();
 
   // location::LocationObserver
   void OnLocationError(location::TLocationError errorCode) override;
@@ -144,10 +145,6 @@ private:
   // Points the my position arrow, like the rotation vector sensor on Android.
   QCompass * m_compass;
   location::EMyPositionMode m_myPositionMode = location::PendingPosition;
-  std::optional<location::GpsInfo> m_lastLocation;
-  bool m_lastLocationShown = false;
-  // The first mode change arrives while the drape engine is still being created.
-  bool m_engineCreated = false;
   QTimer m_updateTimer;
   double m_visualScale = 1.0;
   qreal m_bottomWidgetsOffset = 0;

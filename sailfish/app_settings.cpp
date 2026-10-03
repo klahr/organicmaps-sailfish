@@ -1,8 +1,8 @@
 #include "sailfish/app_settings.hpp"
 
-#include "map/framework.hpp"
+#include "sailfish/app_info.hpp"
 
-#include "indexer/map_style.hpp"
+#include "map/framework.hpp"
 
 #include "coding/string_utf8_multilang.hpp"
 
@@ -30,6 +30,13 @@ T Load(std::string_view key, T defaultValue)
 }
 }  // namespace
 
+MapStyle BaseMapStyle(bool dark, bool outdoors)
+{
+  if (outdoors)
+    return dark ? MapStyleOutdoorsDark : MapStyleOutdoorsLight;
+  return dark ? MapStyleDefaultDark : MapStyleDefaultLight;
+}
+
 AppSettings::AppSettings(Framework & framework, QObject * parent) : QObject(parent), m_framework(framework) {}
 
 int AppSettings::mapAppearance() const
@@ -55,7 +62,7 @@ void AppSettings::applyMapAppearance(bool isAmbienceDark)
 
 int AppSettings::units() const
 {
-  return static_cast<int>(Load(settings::kMeasurementUnits, measurement_utils::Units::Metric));
+  return static_cast<int>(measurement_utils::GetMeasurementUnits());
 }
 
 void AppSettings::setUnits(int units)
@@ -152,10 +159,8 @@ void AppSettings::setMapLanguage(QString const & code)
 QString AppSettings::mapLanguageName() const
 {
   auto const code = Framework::GetMapLanguageCode();
-  for (auto const & lang : StringUtf8Multilang::GetSupportedLanguages(false /* includeServiceLangs */))
-    if (lang.m_code == code)
-      return QString::fromUtf8(lang.m_name.data(), static_cast<int>(lang.m_name.size()));
-  return QString::fromStdString(code);
+  auto const name = StringUtf8Multilang::GetLangNameByCode(StringUtf8Multilang::GetLangIndex(code));
+  return name.empty() ? QString::fromStdString(code) : ToQString(name);
 }
 
 QVariantList AppSettings::mapLanguages() const
@@ -165,8 +170,8 @@ QVariantList AppSettings::mapLanguages() const
   for (auto const & lang : StringUtf8Multilang::GetSupportedLanguages(false /* includeServiceLangs */))
   {
     QVariantMap item;
-    item["code"] = QString::fromUtf8(lang.m_code.data(), static_cast<int>(lang.m_code.size()));
-    item["name"] = QString::fromUtf8(lang.m_name.data(), static_cast<int>(lang.m_name.size()));
+    item["code"] = ToQString(lang.m_code);
+    item["name"] = ToQString(lang.m_name);
     languages.append(item);
   }
   return languages;

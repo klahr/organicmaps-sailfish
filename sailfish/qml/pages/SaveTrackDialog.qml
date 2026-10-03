@@ -21,7 +21,7 @@ Dialog {
         TextField {
             id: nameField
             width: parent.width
-            label: qsTr("Track name")
+            label: appInfo.localized("placepage_track_name_hint")
             text: Qt.formatDateTime(new Date(), Locale.ShortFormat)
             EnterKey.enabled: text.trim() !== ""
             EnterKey.iconSource: "image://theme/icon-m-enter-accept"

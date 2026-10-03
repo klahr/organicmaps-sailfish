@@ -52,8 +52,6 @@ public:
   double m_verticalAccuracy = -1.0;     //!< metres
   double m_bearing = -1.0;              //!< positive degrees from the true North
   double m_speed = -1.0;                //!< metres per second
-  /// A last known position replayed before a fresh fix, drawn as obsolete (see Framework::OnLastKnownLocation).
-  bool m_isObsolete = false;
 
   bool IsValid() const { return m_source != EUndefined; }
   bool HasBearing() const { return m_bearing >= 0.0; }

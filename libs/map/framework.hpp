@@ -398,9 +398,6 @@ public:
   /// @name GPS location updates routine.
   void OnLocationError(location::TLocationError error);
   void OnLocationUpdate(location::GpsInfo const & info);
-  /// Shows a position saved earlier as obsolete until the first fresh OnLocationUpdate(). It is not
-  /// passed to routing or track recording.
-  void OnLastKnownLocation(location::GpsInfo info);
   void OnCompassUpdate(location::CompassInfo const & info);
   void SwitchMyPositionNextMode();
   /// Should be set before Drape initialization. Guarantees that fn is called in main thread context.

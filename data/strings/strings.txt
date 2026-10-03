@@ -45324,3 +45324,112 @@ uk = Зупинити та зберегти
 vi = Dừng và lưu
 zh-Hans = 停止并保存
 zh-Hant = 停止並儲存
+
+[[Sailfish OS strings]]
+
+[less]
+comment = Sailfish OS: collapses the expanded Wikipedia description on the place page
+tags = sailfish
+en = Less
+de = Weniger
+es = Menos
+fr = Moins
+ru = Свернуть
+sv = Mindre
+uk = Згорнути
+
+[copy_value]
+comment = Sailfish OS: menu item that copies the given coordinates to the clipboard
+tags = sailfish
+en = Copy %@
+de = %@ kopieren
+es = Copiar %@
+fr = Copier %@
+ru = Копировать %@
+sv = Kopiera %@
+uk = Копіювати %@
+
+[move_up]
+comment = Sailfish OS: menu item that moves a route point up in the list
+tags = sailfish
+en = Move up
+de = Nach oben
+es = Subir
+fr = Monter
+ru = Переместить вверх
+sv = Flytta upp
+uk = Перемістити вгору
+
+[move_down]
+comment = Sailfish OS: menu item that moves a route point down in the list
+tags = sailfish
+en = Move down
+de = Nach unten
+es = Bajar
+fr = Descendre
+ru = Переместить вниз
+sv = Flytta ned
+uk = Перемістити вниз
+
+[editor_pending_edits]
+comment = Sailfish OS: OpenStreetMap profile, number of local map edits not uploaded yet
+tags = sailfish
+en = Edits waiting for upload
+de = Noch nicht hochgeladene Änderungen
+ru = Правки, ожидающие отправки
+sv = Ändringar som väntar på uppladdning
+uk = Правки, що очікують надсилання
+
+[speech_note_install]
+comment = Sailfish OS: voice instructions settings, Speech Note is an app name, %@ is a language name
+tags = sailfish
+en = Speech Note speaks the instructions with natural voices. Install it, then download a voice for %@ in it.
+de = Speech Note spricht die Anweisungen mit natürlichen Stimmen. Installiere es und lade darin eine Stimme für %@ herunter.
+ru = Speech Note произносит подсказки естественными голосами. Установите его, затем скачайте в нём голос для языка %@.
+sv = Speech Note läser upp instruktionerna med naturliga röster. Installera den och ladda sedan ned en röst för %@ i den.
+uk = Speech Note озвучує підказки природними голосами. Встановіть його, а потім завантажте в ньому голос для мови %@.
+
+[speech_note_other_synthesizers]
+comment = Sailfish OS: voice instructions settings, eSpeak NG, mimic and flite are app names
+tags = sailfish
+en = eSpeak NG, mimic or flite also work, with plainer voices.
+de = eSpeak NG, mimic oder flite funktionieren auch, mit einfacheren Stimmen.
+ru = Также подойдут eSpeak NG, mimic или flite, но с более простыми голосами.
+sv = eSpeak NG, mimic eller flite fungerar också, med enklare röster.
+uk = Також підійдуть eSpeak NG, mimic або flite, але з простішими голосами.
+
+[speech_note_download_voice]
+comment = Sailfish OS: voice instructions settings, Speech Note is an app name, %@ is a language name
+tags = sailfish
+en = Download a voice for %@ in Speech Note to hear the instructions in it.
+de = Lade in Speech Note eine Stimme für %@ herunter, um die Anweisungen darin zu hören.
+ru = Скачайте в Speech Note голос для языка %@, чтобы слышать подсказки на нём.
+sv = Ladda ned en röst för %@ i Speech Note för att höra instruktionerna på det språket.
+uk = Завантажте в Speech Note голос для мови %@, щоб чути підказки нею.
+
+[speech_note_in_use]
+comment = Sailfish OS: voice instructions settings, Speech Note is an app name
+tags = sailfish
+en = The instructions are spoken by Speech Note. It has more voices to download.
+de = Die Anweisungen werden von Speech Note gesprochen. Dort gibt es weitere Stimmen zum Herunterladen.
+ru = Подсказки произносит Speech Note. В нём можно скачать и другие голоса.
+sv = Instruktionerna läses upp av Speech Note. Där finns fler röster att ladda ned.
+uk = Підказки озвучує Speech Note. У ньому можна завантажити й інші голоси.
+
+[speech_note_open]
+comment = Sailfish OS: button that opens the Speech Note app
+tags = sailfish
+en = Open Speech Note
+de = Speech Note öffnen
+ru = Открыть Speech Note
+sv = Öppna Speech Note
+uk = Відкрити Speech Note
+
+[speech_note_get]
+comment = Sailfish OS: button that opens the store page of the Speech Note app
+tags = sailfish
+en = Get Speech Note
+de = Speech Note installieren
+ru = Установить Speech Note
+sv = Hämta Speech Note
+uk = Встановити Speech Note

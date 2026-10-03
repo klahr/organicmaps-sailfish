@@ -1,7 +1,7 @@
 #include "sailfish/routing.hpp"
 
 #include "sailfish/app_info.hpp"
-#include "sailfish/countries_model.hpp"
+#include "sailfish/app_settings.hpp"
 #include "sailfish/voice_guide.hpp"
 
 #include "map/framework.hpp"
@@ -10,11 +10,10 @@
 #include "map/transit/transit_display.hpp"
 
 #include "routing/following_info.hpp"
+#include "routing/router.hpp"
 #include "routing/routing_callbacks.hpp"
 #include "routing/routing_options.hpp"
 #include "routing/turns.hpp"
-
-#include "indexer/map_style.hpp"
 
 #include "platform/get_text_by_id.hpp"
 #include "platform/languages.hpp"
@@ -38,18 +37,33 @@ namespace sailfish
 namespace
 {
 using routing::RouterResultCode;
+using routing::RoutingOptions;
 
-char const kVoiceEnabledSetting[] = "SailfishVoiceInstructions";
+static_assert(Routing::Vehicle == static_cast<int>(routing::RouterType::Vehicle));
+static_assert(Routing::Pedestrian == static_cast<int>(routing::RouterType::Pedestrian));
+static_assert(Routing::Bicycle == static_cast<int>(routing::RouterType::Bicycle));
+static_assert(Routing::Transit == static_cast<int>(routing::RouterType::Transit));
+static_assert(Routing::Ruler == static_cast<int>(routing::RouterType::Ruler));
+static_assert(Routing::Start == static_cast<int>(RouteMarkType::Start));
+static_assert(Routing::Intermediate == static_cast<int>(RouteMarkType::Intermediate));
+static_assert(Routing::Finish == static_cast<int>(RouteMarkType::Finish));
+static_assert(Routing::Toll == static_cast<int>(RoutingOptions::Toll));
+static_assert(Routing::Motorway == static_cast<int>(RoutingOptions::Motorway));
+static_assert(Routing::Ferry == static_cast<int>(RoutingOptions::Ferry));
+static_assert(Routing::Dirty == static_cast<int>(RoutingOptions::Dirty));
+
+std::string_view constexpr kVoiceEnabledSetting = "SailfishVoiceInstructions";
 // Empty for the app language.
-char const kVoiceLanguageSetting[] = "SailfishVoiceLanguage";
-char const kAnnounceStreetsSetting[] = "SailfishVoiceStreetNames";
+std::string_view constexpr kVoiceLanguageSetting = "SailfishVoiceLanguage";
+std::string_view constexpr kAnnounceStreetsSetting = "SailfishVoiceStreetNames";
 
+// Empty for a language without turn notifications.
 QString VoiceLanguageName(std::string const & code)
 {
   for (auto const & [lang, name] : routing::turns::sound::kLanguageList)
     if (lang == code)
-      return QString::fromUtf8(name.data(), static_cast<int>(name.size()));
-  return QString::fromStdString(code);
+      return ToQString(name);
+  return {};
 }
 
 // The step icons of TransitStepType on Android.
@@ -107,17 +121,6 @@ QString TurnIcon(routing::turns::PedestrianDirection turn)
   case PedestrianDirection::ReachedYourDestination: return QStringLiteral("ic_turn_finish.webp");
   default: return QStringLiteral("ic_turn_straight.webp");
   }
-}
-
-QString FormatTime(int seconds)
-{
-  // Like RoutingController.formatRoutingTime on Android.
-  int const minutes = (seconds + 59) / 60;
-  QString const min = QString::number(minutes % 60) + ' ' + Localized(QStringLiteral("minute"));
-  if (minutes < 60)
-    return min;
-  QString const hours = QString::number(minutes / 60) + ' ' + Localized(QStringLiteral("hour"));
-  return minutes % 60 ? hours + ' ' + min : hours;
 }
 }  // namespace
 
@@ -191,8 +194,7 @@ QVariantList Routing::points() const
     QVariantMap item;
     item["type"] = static_cast<int>(point.m_pointType);
     item["isMyPosition"] = point.m_isMyPosition;
-    item["title"] =
-        point.m_isMyPosition ? Localized(QStringLiteral("core_my_position")) : QString::fromStdString(point.m_title);
+    item["title"] = point.m_isMyPosition ? Localized("core_my_position") : QString::fromStdString(point.m_title);
     item["subtitle"] = QString::fromStdString(point.m_subTitle);
     points.append(item);
   }
@@ -208,18 +210,17 @@ QString Routing::missingMapsSize() const
     m_framework.GetStorage().GetNodeAttrs(id.toStdString(), attrs);
     size += static_cast<qint64>(attrs.m_mwmSize);
   }
-  return CountriesModel::formatSize(size);
+  return FormatSize(size);
 }
 
 int Routing::avoidRoads() const
 {
-  return routing::RoutingOptions::LoadCarOptionsFromSettings().GetOptions();
+  return RoutingOptions::LoadCarOptionsFromSettings().GetOptions();
 }
 
 void Routing::setAvoidRoads(int roads)
 {
-  routing::RoutingOptions::SaveCarOptionsToSettings(
-      routing::RoutingOptions(static_cast<routing::RoutingOptions::RoadType>(roads)));
+  RoutingOptions::SaveCarOptionsToSettings(RoutingOptions(static_cast<RoutingOptions::RoadType>(roads)));
   emit optionsChanged();
   // The options only change car routes.
   if (routerType() == Vehicle)
@@ -228,12 +229,12 @@ void Routing::setAvoidRoads(int roads)
 
 bool Routing::routeOptimization() const
 {
-  return routing::RoutingOptions::LoadRouteOptimizationFromSettings();
+  return RoutingOptions::LoadRouteOptimizationFromSettings();
 }
 
 void Routing::setRouteOptimization(bool enabled)
 {
-  routing::RoutingOptions::SaveRouteOptimizationToSettings(enabled);
+  RoutingOptions::SaveRouteOptimizationToSettings(enabled);
   emit optionsChanged();
 }
 
@@ -260,14 +261,20 @@ void Routing::start()
   m_navigating = true;
   // Picks up voices installed since the start.
   m_voice->Refresh();
-  m_framework.GetRoutingManager().EnableTurnNotifications(voiceEnabled());
+  manager.EnableTurnNotifications(voiceEnabled());
   SetNavigationStyle(true);
+  emit navigationChanged();
   UpdateNavigation(-1.0);
 }
 
 void Routing::stopNavigation()
 {
   m_voice->Stop();
+  EndNavigation();
+}
+
+void Routing::EndNavigation()
+{
   m_navigating = false;
   m_navigation.clear();
   SetNavigationStyle(false);
@@ -278,11 +285,7 @@ void Routing::stopNavigation()
 std::string Routing::AppVoiceLanguage() const
 {
   // The app language when there are voice instructions in it, like the system language on Android.
-  auto const has = [](std::string const & code)
-  {
-    auto const & list = routing::turns::sound::kLanguageList;
-    return std::any_of(list.begin(), list.end(), [&code](auto const & lang) { return lang.first == code; });
-  };
+  auto const has = [](std::string const & code) { return !VoiceLanguageName(code).isEmpty(); };
   auto language = languages::GetCurrentTwine();
   if (!has(language))
     language = language.substr(0, language.find('-'));
@@ -341,6 +344,18 @@ void Routing::setVoiceLanguage(QString const & language)
   m_voice->SetPreferredLanguage(code, AppVoiceLanguage());
 }
 
+QString Routing::voiceLanguageName() const
+{
+  return VoiceLanguageName(m_voice->Language());
+}
+
+int Routing::voiceLanguageIndex() const
+{
+  auto const languages = m_voice->Languages();
+  auto const it = std::find(languages.begin(), languages.end(), m_voice->Language());
+  return it == languages.end() ? -1 : static_cast<int>(it - languages.begin());
+}
+
 QVariantList Routing::voiceLanguages() const
 {
   QVariantList languages;
@@ -358,16 +373,21 @@ bool Routing::speechNoteInstalled() const
   return m_voice->IsSpeechNoteInstalled();
 }
 
-bool Routing::speechNoteVoice() const
+std::string Routing::WantedVoiceLanguage() const
 {
-  return m_voice->IsAvailable() && m_voice->HasSpeechNoteVoice(m_voice->Language());
+  std::string preferred;
+  settings::TryGet(kVoiceLanguageSetting, preferred);
+  return preferred.empty() ? AppVoiceLanguage() : preferred;
 }
 
 QString Routing::wantedVoiceLanguageName() const
 {
-  std::string preferred;
-  settings::TryGet(kVoiceLanguageSetting, preferred);
-  return VoiceLanguageName(preferred.empty() ? AppVoiceLanguage() : preferred);
+  return VoiceLanguageName(WantedVoiceLanguage());
+}
+
+bool Routing::wantedHasSpeechNoteVoice() const
+{
+  return m_voice->HasSpeechNoteVoice(WantedVoiceLanguage());
 }
 
 bool Routing::announceStreets() const
@@ -421,11 +441,7 @@ void Routing::SetNavigationStyle(bool enabled)
   if (enabled && routerType() == Vehicle)
     m_framework.SetMapStyle(dark ? MapStyleVehicleDark : MapStyleVehicleLight);
   else if (!enabled && (style == MapStyleVehicleDark || style == MapStyleVehicleLight))
-  {
-    bool const outdoors = Framework::LoadOutdoorsEnabled();
-    m_framework.SetMapStyle(dark ? (outdoors ? MapStyleOutdoorsDark : MapStyleDefaultDark)
-                                 : (outdoors ? MapStyleOutdoorsLight : MapStyleDefaultLight));
-  }
+    m_framework.SetMapStyle(BaseMapStyle(dark, Framework::LoadOutdoorsEnabled()));
 }
 
 void Routing::UpdateNavigation(double speedMps)
@@ -445,12 +461,8 @@ void Routing::UpdateNavigation(double speedMps)
   }
   if (manager.IsRouteFinished())
   {
-    // Lets the arrival be heard.
-    m_navigating = false;
-    m_navigation.clear();
-    SetNavigationStyle(false);
-    close();
-    emit navigationChanged();
+    // Without stopping the voice, so that the arrival is heard.
+    EndNavigation();
     return;
   }
 
@@ -459,8 +471,7 @@ void Routing::UpdateNavigation(double speedMps)
   if (!info.IsValid())
     return;
 
-  measurement_utils::Units units = measurement_utils::Units::Metric;
-  settings::TryGet(settings::kMeasurementUnits, units);
+  auto const units = measurement_utils::GetMeasurementUnits();
   bool const pedestrian = routerType() == Pedestrian;
 
   QVariantMap nav;
@@ -469,21 +480,17 @@ void Routing::UpdateNavigation(double speedMps)
   nav["street"] = QString::fromStdString(info.m_nextStreetName);
   nav["nextTurnIcon"] =
       !pedestrian && info.m_nextTurn != routing::turns::CarDirection::None ? TurnIcon(info.m_nextTurn, 0) : QString();
-  nav["timeLeft"] = FormatTime(info.m_time);
-  nav["distanceLeft"] = QString::fromStdString(info.m_distToTarget.ToString());
   // Number and units apart, as the Android bottom sheet shows them.
   nav["distanceLeftValue"] = QString::fromStdString(info.m_distToTarget.GetDistanceString());
   nav["distanceLeftUnits"] = QString::fromStdString(info.m_distToTarget.GetUnitsString());
   int const minutes = (info.m_time + 59) / 60;
   nav["hoursLeft"] = minutes / 60;
   nav["minutesLeft"] = minutes % 60;
-  nav["hourUnits"] = Localized(QStringLiteral("hour"));
-  nav["minuteUnits"] = Localized(QStringLiteral("minute"));
+  nav["hourUnits"] = Localized("hour");
+  nav["minuteUnits"] = Localized("minute");
   nav["arrival"] = QLocale::system().toString(QTime::currentTime().addSecs(info.m_time), QLocale::ShortFormat);
   nav["speed"] = speedMps >= 0 ? QString::fromStdString(measurement_utils::FormatSpeedNumeric(speedMps, units))
                                : QStringLiteral("0");
-  nav["speedUnits"] = Localized(units == measurement_utils::Units::Imperial ? QStringLiteral("miles_per_hour")
-                                                                            : QStringLiteral("kilometers_per_hour"));
   nav["speedLimit"] = info.m_speedLimitMps > 0
                         ? QString::fromStdString(measurement_utils::FormatSpeedNumeric(info.m_speedLimitMps, units))
                         : QString();
@@ -532,7 +539,7 @@ void Routing::AddPlacePoint(int type)
   point.m_position = info.GetMercator();
 
   auto & manager = m_framework.GetRoutingManager();
-  bool const optimize = type == Intermediate && routing::RoutingOptions::LoadRouteOptimizationFromSettings();
+  bool const optimize = type == Intermediate && RoutingOptions::LoadRouteOptimizationFromSettings();
   manager.AddRoutePoint(std::move(point), optimize);
 
   // The route panel takes the place of the place page.
@@ -578,13 +585,20 @@ void Routing::close()
 {
   m_startWhenBuilt = false;
   m_framework.GetRoutingManager().CloseRouting(true /* removeRoutePoints */);
-  m_building = m_built = false;
+  m_building = false;
+  ClearResult();
+  emit pointsChanged();
+  emit stateChanged();
+}
+
+void Routing::ClearResult()
+{
+  m_built = false;
   m_summary.clear();
   m_walkingDistance.clear();
   m_transitSteps.clear();
   m_missingMaps.clear();
   SetError({}, {});
-  emit pointsChanged();
 }
 
 void Routing::OnPointsChanged()
@@ -601,12 +615,7 @@ void Routing::OnPointsChanged()
 void Routing::Build()
 {
   auto & manager = m_framework.GetRoutingManager();
-  m_built = false;
-  m_summary.clear();
-  m_walkingDistance.clear();
-  m_transitSteps.clear();
-  m_missingMaps.clear();
-  SetError({}, {});
+  ClearResult();
   if (manager.GetRoutePointsCount() < 2)
   {
     m_building = false;
@@ -633,7 +642,6 @@ void Routing::OnRouteBuilt(int code, QStringList const & absentCountries)
     return;
 
   m_building = false;
-  auto const & L = [](char const * key) { return Localized(QString::fromLatin1(key)); };
   switch (result)
   {
   case RouterResultCode::NoError:
@@ -647,7 +655,7 @@ void Routing::OnRouteBuilt(int code, QStringList const & absentCountries)
     {
       // Total time, the walking distance and the legs, as RoutingBottomMenuController.showTransitInfo().
       auto const transit = m_framework.GetRoutingManager().GetTransitRouteInfo();
-      m_summary = FormatTime(transit.m_totalTimeInSec);
+      m_summary = FormatDuration(transit.m_totalTimeInSec);
       if (transit.m_totalPedestrianTimeInSec > 0)
       {
         m_walkingDistance =
@@ -665,43 +673,46 @@ void Routing::OnRouteBuilt(int code, QStringList const & absentCountries)
     }
     else
     {
-      m_summary = routerType() == Ruler ? L("placepage_distance") + ": " + distance
-                                        : FormatTime(info.m_time) + QStringLiteral(" • ") + distance;
+      m_summary = routerType() == Ruler ? Localized("placepage_distance") + ": " + distance
+                                        : FormatDuration(info.m_time) + QStringLiteral(" • ") + distance;
     }
     break;
   }
   // Messages of ResultCodesHelper on Android.
   case RouterResultCode::NoCurrentPosition:
-    SetError(L("dialog_routing_location_turn_on"), L("dialog_routing_location_unknown_turn_on"));
+    SetError(Localized("dialog_routing_location_turn_on"), Localized("dialog_routing_location_unknown_turn_on"));
     break;
   case RouterResultCode::StartPointNotFound:
-    SetError(L("dialog_routing_change_start"), L("dialog_routing_start_not_determined"));
+    SetError(Localized("dialog_routing_change_start"), Localized("dialog_routing_start_not_determined"));
     break;
   case RouterResultCode::EndPointNotFound:
-    SetError(L("dialog_routing_change_end"), L("dialog_routing_end_not_determined"));
+    SetError(Localized("dialog_routing_change_end"), Localized("dialog_routing_end_not_determined"));
     break;
   case RouterResultCode::IntermediatePointNotFound:
-    SetError(L("dialog_routing_change_intermediate"), L("dialog_routing_intermediate_not_determined"));
+    SetError(Localized("dialog_routing_change_intermediate"), Localized("dialog_routing_intermediate_not_determined"));
     break;
-  case RouterResultCode::PointsInDifferentMWM: SetError({}, L("routing_failed_cross_mwm_building")); break;
-  case RouterResultCode::FileTooOld: SetError(L("downloader_update_maps"), L("downloader_mwm_migration_dialog")); break;
-  case RouterResultCode::TransitRouteNotFoundNoNetwork: SetError({}, L("transit_not_found")); break;
+  case RouterResultCode::PointsInDifferentMWM: SetError({}, Localized("routing_failed_cross_mwm_building")); break;
+  case RouterResultCode::FileTooOld:
+    SetError(Localized("downloader_update_maps"), Localized("downloader_mwm_migration_dialog"));
+    break;
+  case RouterResultCode::TransitRouteNotFoundNoNetwork: SetError({}, Localized("transit_not_found")); break;
   case RouterResultCode::TransitRouteNotFoundTooLongPedestrian:
-    SetError(L("dialog_pedestrian_route_is_long_header"), L("dialog_pedestrian_route_is_long_message"));
+    SetError(Localized("dialog_pedestrian_route_is_long_header"), Localized("dialog_pedestrian_route_is_long_message"));
     break;
   case RouterResultCode::NeedMoreMaps:
     m_missingMaps = absentCountries;
-    SetError(L("dialog_routing_download_and_build_cross_route"), L("dialog_routing_download_cross_route"));
+    SetError(Localized("dialog_routing_download_and_build_cross_route"),
+             Localized("dialog_routing_download_cross_route"));
     break;
   case RouterResultCode::RouteNotFound:
   case RouterResultCode::RouteNotFoundRedressRouteError:
     m_missingMaps = absentCountries;
     if (m_missingMaps.isEmpty())
-      SetError(L("dialog_routing_unable_locate_route"), L("dialog_routing_cant_build_route"));
+      SetError(Localized("dialog_routing_unable_locate_route"), Localized("dialog_routing_cant_build_route"));
     else
-      SetError(L("routing_download_maps_along"), L("routing_requires_all_map"));
+      SetError(Localized("routing_download_maps_along"), Localized("routing_requires_all_map"));
     break;
-  default: SetError(L("dialog_routing_system_error"), L("dialog_routing_application_error")); break;
+  default: SetError(Localized("dialog_routing_system_error"), Localized("dialog_routing_application_error")); break;
   }
   emit stateChanged();
   if (std::exchange(m_startWhenBuilt, false) && m_built)

@@ -14,12 +14,12 @@ Page {
     allowedOrientations: Orientation.All
 
     PlaceEditor {
-        id: categories
+        id: editor
     }
 
     // Recent and all categories under their headers, as on Android; search results without them.
     function load(query) {
-        var items = categories.categories(query)
+        var items = editor.categories(query)
         if (items.length === 0 || !items[0].recent)
             return items
         var list = [{ header: appInfo.localized("editor_add_select_category_recent_subtitle") }]
@@ -51,29 +51,17 @@ Page {
             }
         }
 
-        delegate: BackgroundItem {
+        delegate: TextRow {
             readonly property bool isHeader: modelData.header !== undefined
 
             enabled: !isHeader
             height: isHeader ? sectionHeader.height : Theme.itemSizeSmall
+            text: isHeader ? "" : modelData.name
 
             SectionHeader {
                 id: sectionHeader
                 visible: isHeader
                 text: isHeader ? modelData.header : ""
-            }
-            Label {
-                visible: !isHeader
-                anchors {
-                    left: parent.left
-                    leftMargin: Theme.horizontalPageMargin
-                    right: parent.right
-                    rightMargin: Theme.horizontalPageMargin
-                    verticalCenter: parent.verticalCenter
-                }
-                text: isHeader ? "" : modelData.name
-                truncationMode: TruncationMode.Fade
-                color: highlighted ? Theme.highlightColor : Theme.primaryColor
             }
             onClicked: pageStack.replace(Qt.resolvedUrl("EditPlacePage.qml"),
                                          { newPlaceType: modelData.type, lat: page.lat, lon: page.lon })

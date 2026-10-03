@@ -11,10 +11,7 @@ class Framework;
 namespace sailfish
 {
 class VoiceGuide;
-}  // namespace sailfish
 
-namespace sailfish
-{
 // Route planning like the Android RoutingController: route points from the place page, the router
 // type, building and its result. Kept free of map headers, which Qt 5.6 moc can't parse.
 class Routing : public QObject
@@ -45,24 +42,28 @@ class Routing : public QObject
   // START is offered for built car, walking and bicycle routes, as on Android.
   Q_PROPERTY(bool canStart READ canStart NOTIFY stateChanged)
   Q_PROPERTY(bool navigating READ navigating NOTIFY navigationChanged)
-  // The Android navigation panels: turnIcon, distanceToTurn, street, nextTurnIcon, timeLeft, distanceLeft,
-  // arrival, speed, speedUnits, speedLimit and progress (0..1).
+  // The Android navigation panels: turnIcon, distanceToTurn, street, nextTurnIcon, hoursLeft, minutesLeft,
+  // hourUnits, minuteUnits, arrival, distanceLeftValue, distanceLeftUnits, speed, speedLimit and progress (0..1).
   Q_PROPERTY(QVariantMap navigation READ navigation NOTIFY navigationChanged)
   // Voice instructions while navigating, see VoiceGuide: there is a voice for some language.
   Q_PROPERTY(bool voiceAvailable READ voiceAvailable NOTIFY voiceChanged)
   Q_PROPERTY(bool voiceEnabled READ voiceEnabled WRITE setVoiceEnabled NOTIFY voiceChanged)
   // The spoken language, a code of voiceLanguages; setting it chooses it over the app language.
   Q_PROPERTY(QString voiceLanguage READ voiceLanguage WRITE setVoiceLanguage NOTIFY voiceChanged)
+  // Its name and its index in voiceLanguages, -1 without a voice.
+  Q_PROPERTY(QString voiceLanguageName READ voiceLanguageName NOTIFY voiceChanged)
+  Q_PROPERTY(int voiceLanguageIndex READ voiceLanguageIndex NOTIFY voiceChanged)
   // Languages with a voice as {code, name, speechNote}.
   Q_PROPERTY(QVariantList voiceLanguages READ voiceLanguages NOTIFY voiceChanged)
   // Speech Note speaks with natural voices; without a voice for a language it offers to get one.
   Q_PROPERTY(bool speechNoteInstalled READ speechNoteInstalled NOTIFY voiceChanged)
-  Q_PROPERTY(bool speechNoteVoice READ speechNoteVoice NOTIFY voiceChanged)
   // The language voice instructions would ideally be in: the chosen or the app language.
   Q_PROPERTY(QString wantedVoiceLanguageName READ wantedVoiceLanguageName NOTIFY voiceChanged)
+  Q_PROPERTY(bool wantedHasSpeechNoteVoice READ wantedHasSpeechNoteVoice NOTIFY voiceChanged)
   Q_PROPERTY(bool announceStreets READ announceStreets WRITE setAnnounceStreets NOTIFY voiceChanged)
 
 public:
+  // Mirrors routing::RouterType.
   enum RouterType
   {
     Vehicle,
@@ -73,6 +74,7 @@ public:
   };
   Q_ENUM(RouterType)
 
+  // Mirrors RouteMarkType.
   enum PointType
   {
     Start,
@@ -137,10 +139,12 @@ public:
   void setVoiceEnabled(bool enabled);
   QString voiceLanguage() const;
   void setVoiceLanguage(QString const & language);
+  QString voiceLanguageName() const;
+  int voiceLanguageIndex() const;
   QVariantList voiceLanguages() const;
   bool speechNoteInstalled() const;
-  bool speechNoteVoice() const;
   QString wantedVoiceLanguageName() const;
+  bool wantedHasSpeechNoteVoice() const;
   bool announceStreets() const;
   void setAnnounceStreets(bool announce);
   // Looks for voices again, e.g. back from installing Speech Note or a voice.
@@ -156,18 +160,23 @@ signals:
   void optionsChanged();
   void navigationChanged();
   void voiceChanged();
-  // Route building results may come from routing threads; this is delivered queued to the GUI thread.
+  // Delivered queued: the result can arrive inside BuildRoute(), which OnRouteBuilt() may call again.
   void routeBuildingFinished(int code, QStringList absentCountries);
 
 private:
   void AddPlacePoint(int type);
   void OnPointsChanged();
   void Build();
+  // Forgets the built route, its summary and errors.
+  void ClearResult();
   void OnRouteBuilt(int code, QStringList const & absentCountries);
   void SetError(QString const & title, QString const & message);
   void SetNavigationStyle(bool enabled);
+  // Ends navigation and closes the route.
+  void EndNavigation();
   void SetupVoice();
   std::string AppVoiceLanguage() const;
+  std::string WantedVoiceLanguage() const;
 
   Framework & m_framework;
   bool m_building = false;

@@ -1,6 +1,7 @@
 import QtQuick 2.6
 import Sailfish.Silica 1.0
 import app.organicmaps 1.0
+import "navigation.js" as Navigation
 
 // Map downloader like on Android: it opens on the downloaded maps with a map search, and the pull-down
 // menu leads to the maps left to download, grouped by first letter after the ones near the position.
@@ -20,20 +21,20 @@ Page {
     readonly property bool isRoot: countries.parentId === "Countries"
     readonly property bool searching: countries.query !== ""
 
-    function statusText(status, error, progress) {
+    function statusText(status, error, progress, name) {
         switch (status) {
         case CountriesModel.Downloading:
-            return qsTr("Downloading %1%").arg(Math.round(progress * 100))
+            return appInfo.localized("downloader_downloading") + " " + Math.round(progress * 100) + "%"
         case CountriesModel.Applying:
-            return qsTr("Applying update")
+            return appInfo.localized("downloader_applying", [name])
         case CountriesModel.InQueue:
-            return qsTr("Waiting to download")
+            return appInfo.localized("downloader_queued")
         case CountriesModel.Error:
-            return error === 3 ? qsTr("No internet connection")
-                               : error === 2 ? qsTr("Not enough space")
-                                             : qsTr("Download failed")
+            return error === CountriesModel.NoInetConnection ? appInfo.localized("common_check_internet_connection_dialog")
+                 : error === CountriesModel.OutOfMemFailed ? appInfo.localized("downloader_no_space_title")
+                 : appInfo.localized("country_status_download_failed")
         case CountriesModel.OnDiskOutOfDate:
-            return qsTr("Update available")
+            return appInfo.localized("downloader_status_outdated")
         default:
             return ""
         }
@@ -41,7 +42,7 @@ Page {
 
     function showOnMap(countryId) {
         countries.showOnMap(countryId)
-        pageStack.pop(pageStack.find(function (p) { return p.objectName === "mapPage" }))
+        Navigation.popToMap(pageStack)
     }
 
     // Kept outside the list: results reset the model, which would take the focus from a field in its header.
@@ -99,7 +100,7 @@ Page {
             readonly property bool hasLocal: model.status === CountriesModel.OnDisk
                                              || model.status === CountriesModel.OnDiskOutOfDate
                                              || model.status === CountriesModel.Partly
-            readonly property string status: page.statusText(model.status, model.error, model.progress)
+            readonly property string status: page.statusText(model.status, model.error, model.progress, model.name)
 
             contentHeight: Theme.itemSizeMedium
             menu: contextMenu
@@ -191,8 +192,8 @@ Page {
                     verticalCenter: parent.verticalCenter
                 }
                 // The downloaded size in the downloaded list, else the full size.
-                text: countries.formatSize(page.downloadedOnly && !page.searching && !item.busy ? model.localSize
-                                                                                                : model.size)
+                text: appInfo.formatSize(page.downloadedOnly && !page.searching && !item.busy ? model.localSize
+                                                                                              : model.size)
                 font.pixelSize: Theme.fontSizeSmall
                 color: item.highlighted ? Theme.secondaryHighlightColor : Theme.secondaryColor
             }
@@ -201,32 +202,32 @@ Page {
                 id: contextMenu
                 ContextMenu {
                     MenuItem {
-                        text: qsTr("Download")
+                        text: appInfo.localized("download")
                         visible: model.status === CountriesModel.NotDownloaded || model.status === CountriesModel.Partly
                         onClicked: countries.download(model.countryId)
                     }
                     MenuItem {
-                        text: qsTr("Retry")
+                        text: appInfo.localized("downloader_retry")
                         visible: model.status === CountriesModel.Error
                         onClicked: countries.retry(model.countryId)
                     }
                     MenuItem {
-                        text: qsTr("Update")
+                        text: appInfo.localized("downloader_update_map")
                         visible: model.status === CountriesModel.OnDiskOutOfDate
                         onClicked: countries.update(model.countryId)
                     }
                     MenuItem {
-                        text: qsTr("Cancel download")
+                        text: appInfo.localized("cancel_download")
                         visible: item.busy
                         onClicked: countries.cancel(model.countryId)
                     }
                     MenuItem {
-                        text: qsTr("Show on map")
+                        text: appInfo.localized("zoom_to_country")
                         visible: item.hasLocal
                         onClicked: page.showOnMap(model.countryId)
                     }
                     MenuItem {
-                        text: qsTr("Delete")
+                        text: appInfo.localized("delete")
                         visible: item.hasLocal
                         onClicked: {
                             var countryId = model.countryId
@@ -239,8 +240,8 @@ Page {
 
         ViewPlaceholder {
             enabled: list.count === 0 && page.downloadedOnly && !page.searching
-            text: qsTr("No maps downloaded yet")
-            hintText: qsTr("Pull down to download maps")
+            text: appInfo.localized("downloader_no_downloaded_maps_title")
+            hintText: appInfo.localized("downloader_no_downloaded_maps_message")
         }
 
         VerticalScrollDecorator {}

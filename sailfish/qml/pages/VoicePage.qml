@@ -10,15 +10,6 @@ Page {
     property QtObject routing
     property bool testPlayed
 
-    // The wanted language has a Speech Note voice.
-    readonly property bool wantedHasSpeechNoteVoice: {
-        var languages = routing.voiceLanguages
-        for (var i = 0; i < languages.length; ++i)
-            if (languages[i].name === routing.wantedVoiceLanguageName)
-                return languages[i].speechNote
-        return false
-    }
-
     allowedOrientations: Orientation.All
 
     // Back from Speech Note or the store, there may be new voices.
@@ -49,17 +40,10 @@ Page {
                 onClicked: routing.voiceEnabled = !routing.voiceEnabled
             }
             ComboBox {
-                id: languageBox
                 visible: routing.voiceLanguages.length > 0
                 enabled: routing.voiceEnabled
                 label: appInfo.localized("pref_tts_language_title")
-                currentIndex: {
-                    var languages = routing.voiceLanguages
-                    for (var i = 0; i < languages.length; ++i)
-                        if (languages[i].code === routing.voiceLanguage)
-                            return i
-                    return -1
-                }
+                currentIndex: routing.voiceLanguageIndex
                 menu: ContextMenu {
                     Repeater {
                         model: routing.voiceLanguages
@@ -100,13 +84,11 @@ Page {
                 font.pixelSize: Theme.fontSizeSmall
                 text: {
                     if (!routing.speechNoteInstalled)
-                        return qsTr("Speech Note speaks the instructions with natural voices. Install it, then download a voice for %1 in it.")
-                               .arg(routing.wantedVoiceLanguageName)
-                               + (routing.voiceAvailable ? "" : " " + qsTr("eSpeak NG, mimic or flite also work, with plainer voices."))
-                    if (!page.wantedHasSpeechNoteVoice)
-                        return qsTr("Download a voice for %1 in Speech Note to hear the instructions in it.")
-                               .arg(routing.wantedVoiceLanguageName)
-                    return qsTr("The instructions are spoken by Speech Note. It has more voices to download.")
+                        return appInfo.localized("speech_note_install", [routing.wantedVoiceLanguageName])
+                               + (routing.voiceAvailable ? "" : " " + appInfo.localized("speech_note_other_synthesizers"))
+                    if (!routing.wantedHasSpeechNoteVoice)
+                        return appInfo.localized("speech_note_download_voice", [routing.wantedVoiceLanguageName])
+                    return appInfo.localized("speech_note_in_use")
                 }
             }
             Item {
@@ -115,7 +97,8 @@ Page {
             }
             Button {
                 anchors.horizontalCenter: parent.horizontalCenter
-                text: routing.speechNoteInstalled ? qsTr("Open Speech Note") : qsTr("Get Speech Note")
+                text: routing.speechNoteInstalled ? appInfo.localized("speech_note_open")
+                                                  : appInfo.localized("speech_note_get")
                 onClicked: {
                     if (routing.speechNoteInstalled)
                         routing.openSpeechNote()

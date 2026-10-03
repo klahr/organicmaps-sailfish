@@ -208,7 +208,6 @@ private:
   bool m_isCompassAvailable;
 
   bool m_positionIsObsolete;
-  bool m_isLastKnownPositionShown;
   bool m_needBlockAutoZoom;
 
   uint64_t m_routingNotFollowNotifyId;

@@ -4,8 +4,6 @@ import app.organicmaps 1.0
 
 // Bookmark lists, like the Android "Bookmarks and Tracks" screen.
 Page {
-    id: page
-
     allowedOrientations: Orientation.All
 
     BookmarkCategoriesModel {
@@ -21,16 +19,16 @@ Page {
             width: listView.width
 
             PageHeader {
-                title: qsTr("Bookmarks and Tracks")
+                title: appInfo.localized("bookmarks_and_tracks")
             }
             SectionHeader {
-                text: qsTr("Lists")
+                text: appInfo.localized("bookmark_lists")
             }
         }
 
         PullDownMenu {
             MenuItem {
-                text: qsTr("Create a new list")
+                text: appInfo.localized("bookmarks_create_new_group")
                 onClicked: pageStack.push(Qt.resolvedUrl("NewListDialog.qml"), { categories: categories })
             }
         }
@@ -41,10 +39,6 @@ Page {
             contentHeight: Theme.itemSizeMedium
             onClicked: pageStack.push(Qt.resolvedUrl("BookmarkListPage.qml"),
                                       { categoryId: model.categoryId, title: model.name })
-
-            function remove() {
-                remorseDelete(function() { categories.deleteCategory(index) })
-            }
 
             // Shows or hides the list on the map, like the Android eye button.
             IconButton {
@@ -75,10 +69,11 @@ Page {
                 }
                 Label {
                     width: parent.width
+                    // Counts after labels, which need no plural forms.
                     text: {
-                        var s = model.bookmarksCount + " " + (model.bookmarksCount === 1 ? qsTr("bookmark") : qsTr("bookmarks"))
+                        var s = appInfo.localized("bookmarks") + ": " + model.bookmarksCount
                         if (model.tracksCount > 0)
-                            s += " • " + model.tracksCount + " " + (model.tracksCount === 1 ? qsTr("track") : qsTr("tracks"))
+                            s += " • " + appInfo.localized("tracks_title") + ": " + model.tracksCount
                         return s
                     }
                     font.pixelSize: Theme.fontSizeSmall
@@ -88,7 +83,7 @@ Page {
 
             menu: ContextMenu {
                 MenuItem {
-                    text: qsTr("Show on map")
+                    text: appInfo.localized("zoom_to_country")
                     onClicked: {
                         categories.setVisible(index, true)
                         categories.showOnMap(index)
@@ -96,14 +91,14 @@ Page {
                     }
                 }
                 MenuItem {
-                    text: model.isVisible ? qsTr("Hide") : qsTr("Show")
+                    text: model.isVisible ? appInfo.localized("hide") : appInfo.localized("show")
                     onClicked: categories.setVisible(index, !model.isVisible)
                 }
                 MenuItem {
                     // The core keeps at least one list.
                     visible: listView.count > 1
-                    text: qsTr("Delete")
-                    onClicked: item.remove()
+                    text: appInfo.localized("delete")
+                    onClicked: item.remorseDelete(function() { categories.deleteCategory(index) })
                 }
             }
         }

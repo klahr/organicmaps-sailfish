@@ -1,22 +1,28 @@
-#include <ctime>
 #include "platform/localization.hpp"
+
+#include "std/target_os.hpp"
+
+#include <ctime>
 
 namespace platform
 {
-std::string GetLocalizedTypeName(std::string const & type)
-{
-  return type;
-}
-
 std::string GetLocalizedBrandName(std::string const & brand)
 {
   return brand;
+}
+
+// Sailfish OS reads the type names and strings from the shipped twine files, see localization_sailfish.cpp.
+#ifndef OMIM_OS_SAILFISH
+std::string GetLocalizedTypeName(std::string const & type)
+{
+  return type;
 }
 
 std::string GetLocalizedString(std::string const & key)
 {
   return key;
 }
+#endif
 
 std::string GetCurrencySymbol(std::string const & currencyCode)
 {

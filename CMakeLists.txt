@@ -160,7 +160,7 @@ if (PLATFORM_SAILFISH)
   set(CMAKE_POSITION_INDEPENDENT_CODE ON)
   # Sailfish OS ships Qt 5.6 as the system Qt (Silica depends on it).
   set(OMIM_QT Qt5)
-  find_package(Qt5 5.6 COMPONENTS REQUIRED Core Network Positioning)
+  find_package(Qt5 5.6 COMPONENTS REQUIRED Core Network)
   message(STATUS "Found Qt version: ${Qt5Core_VERSION}")
 elseif (NOT PLATFORM_IPHONE AND NOT PLATFORM_ANDROID)
   set(OMIM_QT Qt6)

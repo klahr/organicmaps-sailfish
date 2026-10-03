@@ -7,7 +7,6 @@
 #include "base/string_utils.hpp"
 
 #include <algorithm>
-#include <ctime>
 #include <fstream>
 #include <string>
 #include <unordered_map>
@@ -24,6 +23,26 @@ struct Entry
   std::string m_values[3];
   std::string m_ref;
 };
+
+// Twine values keep line breaks escaped as "\n".
+std::string Unescape(std::string_view value)
+{
+  std::string result;
+  result.reserve(value.size());
+  for (size_t i = 0; i < value.size(); ++i)
+  {
+    if (value[i] == '\\' && i + 1 < value.size() && value[i + 1] == 'n')
+    {
+      result += '\n';
+      ++i;
+    }
+    else
+    {
+      result += value[i];
+    }
+  }
+  return result;
+}
 
 // Reads the twine files shipped in resources, keeping the current language with an English fallback.
 // Plural forms (lang:other) are skipped, they are not used through this API.
@@ -86,7 +105,7 @@ Strings LoadStrings()
       }
       if (e && !e->m_values[value].empty())
       {
-        strings.emplace(key, e->m_values[value]);
+        strings.emplace(key, Unescape(e->m_values[value]));
         break;
       }
     }
@@ -112,26 +131,8 @@ std::string GetLocalizedTypeName(std::string const & type)
   return GetString(key);
 }
 
-std::string GetLocalizedBrandName(std::string const & brand)
-{
-  return brand;
-}
-
 std::string GetLocalizedString(std::string const & key)
 {
   return GetString(key);
-}
-
-std::string GetCurrencySymbol(std::string const & currencyCode)
-{
-  return currencyCode;
-}
-
-std::string GetLocalizedMyPositionBookmarkName()
-{
-  std::time_t t = std::time(nullptr);
-  char buf[100] = {0};
-  (void)std::strftime(buf, sizeof(buf), "%Ec", std::localtime(&t));
-  return buf;
 }
 }  // namespace platform

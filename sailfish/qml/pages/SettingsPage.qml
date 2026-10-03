@@ -1,6 +1,5 @@
 import QtQuick 2.6
 import Sailfish.Silica 1.0
-import app.organicmaps 1.0
 
 // The Android settings that apply to this port, in their Android groups.
 Page {
@@ -133,8 +132,7 @@ Page {
             ValueButton {
                 label: appInfo.localized("pref_tts_enable_title")
                 value: !mapPageRouting.voiceAvailable ? appInfo.localized("pref_tts_unavailable")
-                     : mapPageRouting.voiceEnabled ? mapPageRouting.voiceLanguages.filter(function(language) {
-                           return language.code === mapPageRouting.voiceLanguage })[0].name
+                     : mapPageRouting.voiceEnabled ? mapPageRouting.voiceLanguageName
                      : appInfo.localized("off")
                 onClicked: pageStack.push(Qt.resolvedUrl("VoicePage.qml"), { routing: mapPageRouting })
             }
@@ -160,17 +158,9 @@ Page {
             SectionHeader {
                 text: appInfo.localized("help")
             }
-            BackgroundItem {
-                width: parent.width
-                height: Theme.itemSizeSmall
+            TextRow {
+                text: appInfo.localized("help")
                 onClicked: pageStack.push(Qt.resolvedUrl("HelpPage.qml"))
-
-                Label {
-                    x: Theme.horizontalPageMargin
-                    anchors.verticalCenter: parent.verticalCenter
-                    text: appInfo.localized("help")
-                    color: parent.highlighted ? Theme.highlightColor : Theme.primaryColor
-                }
             }
         }
 

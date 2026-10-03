@@ -2,6 +2,7 @@ import QtQuick 2.6
 import Sailfish.Silica 1.0
 import Sailfish.Share 1.0
 import app.organicmaps 1.0
+import "colors.js" as Colors
 
 // Bottom sheet for the selected place, like the Android place page. Not modal, so the map stays usable.
 MapPanel {
@@ -155,8 +156,8 @@ MapPanel {
                     Label {
                         width: parent.width
                         text: placePage.openTitle !== "" ? placePage.openTitle : placePage.openingHours
-                        color: placePage.openState === PlacePage.Open ? "#4caf50"
-                             : placePage.openState === PlacePage.Closed ? "#f44336" : Theme.primaryColor
+                        color: placePage.openState === PlacePage.Open ? Colors.open
+                             : placePage.openState === PlacePage.Closed ? Colors.closed : Theme.primaryColor
                         wrapMode: Text.Wrap
                     }
                     Label {
@@ -194,7 +195,7 @@ MapPanel {
 
                 MenuRow {
                     icon: "../../icons/placepage/ic_wiki.webp"
-                    text: "Wikipedia"
+                    text: appInfo.localized("read_in_wikipedia")
                     enabled: placePage.wikiUrl !== ""
                     onClicked: Qt.openUrlExternally(placePage.wikiUrl)
                 }
@@ -213,7 +214,7 @@ MapPanel {
                 Label {
                     x: Theme.horizontalPageMargin
                     visible: wikiLabel.truncated || wikiExpanded
-                    text: wikiExpanded ? qsTr("Less") : qsTr("…more")
+                    text: wikiExpanded ? appInfo.localized("less") : appInfo.localized("text_more_button")
                     color: Theme.highlightColor
                     font.pixelSize: Theme.fontSizeSmall
                     bottomPadding: Theme.paddingMedium
@@ -236,49 +237,33 @@ MapPanel {
                 }
             }
             // Tap switches the format like on Android, press and hold offers every format for copying.
-            ListItem {
-                width: parent.width
-                contentHeight: Theme.itemSizeMedium
+            MenuRow {
+                icon: "image://theme/icon-m-whereami"
+                text: placePage.coordinates
                 onClicked: placePage.nextCoordinatesFormat()
-
-                Icon {
-                    id: coordinatesIcon
-                    anchors {
-                        left: parent.left
-                        leftMargin: Theme.horizontalPageMargin
-                        verticalCenter: parent.verticalCenter
-                    }
-                    source: "image://theme/icon-m-whereami"
-                    highlighted: parent.highlighted
-                }
-                Label {
-                    anchors {
-                        left: coordinatesIcon.right
-                        leftMargin: Theme.paddingLarge
-                        right: parent.right
-                        rightMargin: Theme.horizontalPageMargin
-                        verticalCenter: parent.verticalCenter
-                    }
-                    text: placePage.coordinates
-                    truncationMode: TruncationMode.Fade
-                    highlighted: parent.highlighted
-                }
 
                 menu: ContextMenu {
                     Repeater {
                         model: placePage.coordinateValues
 
                         MenuItem {
-                            text: qsTr("Copy %1").arg(modelData)
+                            text: appInfo.localized("copy_value", [modelData])
                             onClicked: Clipboard.text = modelData
                         }
                     }
                 }
             }
+            MenuRow {
+                visible: placePage.isBookmark || placePage.isTrack
+                icon: "image://theme/icon-m-edit"
+                text: appInfo.localized(placePage.isTrack ? "edit_track" : "placepage_edit_bookmark_button")
+                onClicked: pageStack.push(Qt.resolvedUrl("EditBookmarkPage.qml"),
+                                          { itemId: placePage.userMarkId, isTrack: placePage.isTrack })
+            }
             // Hands the geo: link to the default handler, e.g. Pure Maps.
             MenuRow {
                 icon: "../../icons/placepage/ic_open_in.svg"
-                text: qsTr("Open in Another App")
+                text: appInfo.localized("open_in_app")
                 onClicked: Qt.openUrlExternally(placePage.geoUri)
             }
             // Hidden while a route is planned and disabled where the map can't be edited, as on Android.

@@ -19,15 +19,14 @@
 
 #include "coding/string_utf8_multilang.hpp"
 
+#include "geometry/mercator.hpp"
+
 #include "base/assert.hpp"
 #include "base/stl_helpers.hpp"
-
-#include "geometry/mercator.hpp"
 
 #include <QVariantMap>
 
 #include <algorithm>
-#include <optional>
 
 namespace sailfish
 {
@@ -46,11 +45,6 @@ osm::NewFeatureCategories & GetFeatureCategories()
     return c;
   }();
   return categories;
-}
-
-QString FromUtf8View(std::string_view s)
-{
-  return QString::fromUtf8(s.data(), static_cast<int>(s.size()));
 }
 
 struct FieldInfo
@@ -188,7 +182,7 @@ bool PlaceEditor::nameEditable() const
 
 QString PlaceEditor::name() const
 {
-  return FromUtf8View(m_object->GetNameMultilang().Get(StringUtf8Multilang::kDefaultCode));
+  return ToQString(m_object->GetNameMultilang().Get(StringUtf8Multilang::kDefaultCode));
 }
 
 void PlaceEditor::setName(QString const & name)
@@ -205,7 +199,7 @@ QVariantList PlaceEditor::localizedNames() const
     if (name.m_code == StringUtf8Multilang::kDefaultCode)
       continue;
     names.append(QVariantMap{{"code", static_cast<int>(name.m_code)},
-                             {"language", FromUtf8View(name.m_langName)},
+                             {"language", ToQString(name.m_langName)},
                              {"value", QString::fromStdString(name.m_name)}});
   }
   return names;
@@ -225,7 +219,7 @@ QVariantList PlaceEditor::otherLanguages() const
     auto const code = StringUtf8Multilang::GetLangIndex(lang.m_code);
     if (code == StringUtf8Multilang::kDefaultCode || names.Has(code))
       continue;
-    languages.append(QVariantMap{{"code", static_cast<int>(code)}, {"language", FromUtf8View(lang.m_name)}});
+    languages.append(QVariantMap{{"code", static_cast<int>(code)}, {"language", ToQString(lang.m_name)}});
   }
   return languages;
 }
@@ -294,11 +288,11 @@ QVariantList PlaceEditor::fields() const
     {
       // Same as Editor.nativeGetMetadata on Android: a page name, or the full URL of a link.
       auto const v = m_object->GetMetadata(id);
-      value = v.find('/') == std::string_view::npos ? FromUtf8View(v)
-                                                    : QString::fromStdString(osm::socialContactToURL(id, v));
+      value =
+          v.find('/') == std::string_view::npos ? ToQString(v) : QString::fromStdString(osm::socialContactToURL(id, v));
     }
     else
-      value = FromUtf8View(m_object->GetMetadata(id));
+      value = ToQString(m_object->GetMetadata(id));
 
     fields.append(QVariantMap{{"id", static_cast<int>(id)},
                               {"kind", info.m_kind},
@@ -337,11 +331,11 @@ QString PlaceEditor::fieldError(int id, QString const & value) const
   if (v.empty())
     return {};
   if (metaId == Metadata::FMD_OPEN_HOURS)
-    return osmoh::OpeningHours(v).IsValid() ? QString() : tr("Invalid opening hours");
+    return osmoh::OpeningHours(v).IsValid() ? QString() : Localized("editor_correct_mistake");
   if (osm::EditableMapObject::IsValidMetadata(metaId, v))
     return {};
   auto const info = GetFieldInfo(metaId);
-  return info.m_error ? Localized(info.m_error) : tr("Invalid value");
+  return Localized(info.m_error ? info.m_error : "editor_correct_mistake");
 }
 
 QString PlaceEditor::nameError(QString const & name) const
@@ -374,15 +368,8 @@ bool PlaceEditor::save()
 {
   if (!m_valid)
     return false;
-  switch (GetFramework().SaveEditedMapObject(*m_object))
-  {
-  case osm::Editor::SaveResult::NothingWasChanged:
-  case osm::Editor::SaveResult::SavedSuccessfully: return true;
-  case osm::Editor::SaveResult::NoFreeSpaceError:
-  case osm::Editor::SaveResult::NoUnderlyingMapError:
-  case osm::Editor::SaveResult::SavingError: return false;
-  }
-  return false;
+  auto const result = GetFramework().SaveEditedMapObject(*m_object);
+  return result == osm::Editor::SaveResult::NothingWasChanged || result == osm::Editor::SaveResult::SavedSuccessfully;
 }
 
 void PlaceEditor::createNote(QString const & note)

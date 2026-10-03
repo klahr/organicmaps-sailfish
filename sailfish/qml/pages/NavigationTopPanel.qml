@@ -5,8 +5,6 @@ import Sailfish.Silica 1.0
 // arrow over its distance, the street along the top, and the turn after it and the speed limit
 // under the card.
 Item {
-    id: top
-
     property var navigation
 
     height: Math.max(turnColumn.height, streetBar.height)
@@ -16,7 +14,6 @@ Item {
         spacing: Theme.paddingSmall
 
         Rectangle {
-            id: turnCard
             width: Theme.itemSizeExtraLarge
             height: turnContent.height + 2 * Theme.paddingMedium
             radius: Theme.paddingMedium
@@ -60,23 +57,11 @@ Item {
                 color: "white"
             }
         }
-        // Speed limit sign.
-        Rectangle {
+        RoadSign {
             visible: !!navigation.speedLimit
             width: Theme.itemSizeSmall
-            height: width
-            radius: width / 2
-            color: "white"
-            border.color: "#e53935"
-            border.width: width * 0.12
-
-            Label {
-                anchors.centerIn: parent
-                text: navigation.speedLimit || ""
-                color: "black"
-                font.bold: true
-                font.pixelSize: Theme.fontSizeSmall
-            }
+            text: navigation.speedLimit || ""
+            fontSize: Theme.fontSizeSmall
         }
     }
 

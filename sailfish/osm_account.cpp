@@ -191,7 +191,6 @@ void OsmAccount::uploadChanges()
 void OsmAccount::updateEdits()
 {
   auto const stats = osm::Editor::Instance().GetStats();
-  m_uploadedEdits = static_cast<int>(stats.m_uploadedCount);
   m_pendingEdits = static_cast<int>(stats.m_edits.size() - stats.m_uploadedCount);
   m_lastUpload = stats.m_lastUploadTimestamp == base::INVALID_TIME_STAMP
                    ? QDateTime()

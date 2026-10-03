@@ -1,15 +1,15 @@
 import QtQuick 2.6
 import Sailfish.Silica 1.0
 
-// Icon and label entry of the map page menu panel.
-BackgroundItem {
+// Icon and label row, e.g. of the map page menu panel or the place page details; it can have a menu.
+ListItem {
     id: row
 
     property string icon
     property string text
 
     width: parent.width
-    height: Theme.itemSizeMedium
+    contentHeight: Theme.itemSizeMedium
 
     Icon {
         id: rowIcon

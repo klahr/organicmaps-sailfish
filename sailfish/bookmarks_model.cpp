@@ -7,6 +7,8 @@
 
 #include "kml/type_utils.hpp"
 
+#include "platform/distance.hpp"
+
 namespace sailfish
 {
 BookmarksNotifier & BookmarksNotifier::Instance()
@@ -75,8 +77,9 @@ QHash<int, QByteArray> BookmarkCategoriesModel::roleNames() const
 
 void BookmarkCategoriesModel::setVisible(int row, bool visible)
 {
-  if (row >= 0 && row < rowCount())
-    m_framework.GetBookmarkManager().GetEditSession().SetIsVisible(m_ids[static_cast<size_t>(row)], visible);
+  if (row < 0 || row >= rowCount())
+    return;
+  m_framework.GetBookmarkManager().GetEditSession().SetIsVisible(m_ids[static_cast<size_t>(row)], visible);
   // Visibility doesn't trigger the changed callback.
   emit dataChanged(index(row), index(row), {VisibleRole});
 }
@@ -121,19 +124,21 @@ void BookmarksModel::setCategoryId(quint64 id)
 void BookmarksModel::Reset()
 {
   beginResetModel();
-  m_ids.clear();
+  m_items.clear();
   auto const & manager = m_framework.GetBookmarkManager();
   if (manager.HasBmCategory(m_categoryId))
   {
-    auto const & ids = manager.GetUserMarkIds(m_categoryId);
-    m_ids.assign(ids.begin(), ids.end());
+    for (auto const id : manager.GetUserMarkIds(m_categoryId))
+      m_items.push_back({id, false /* isTrack */});
+    for (auto const id : manager.GetTrackIds(m_categoryId))
+      m_items.push_back({id, true /* isTrack */});
   }
   endResetModel();
 }
 
 int BookmarksModel::rowCount(QModelIndex const & parent) const
 {
-  return parent.isValid() ? 0 : static_cast<int>(m_ids.size());
+  return parent.isValid() ? 0 : static_cast<int>(m_items.size());
 }
 
 QVariant BookmarksModel::data(QModelIndex const & index, int role) const
@@ -141,7 +146,30 @@ QVariant BookmarksModel::data(QModelIndex const & index, int role) const
   if (!index.isValid() || index.row() >= rowCount())
     return {};
 
-  auto const * bookmark = m_framework.GetBookmarkManager().GetBookmark(m_ids[static_cast<size_t>(index.row())]);
+  auto const & item = m_items[static_cast<size_t>(index.row())];
+  switch (role)
+  {
+  case IdRole: return QVariant::fromValue<quint64>(item.m_id);
+  case IsTrackRole: return item.m_isTrack;
+  default: break;
+  }
+
+  auto const & manager = m_framework.GetBookmarkManager();
+  if (item.m_isTrack)
+  {
+    auto const * track = manager.GetTrack(item.m_id);
+    if (!track)
+      return {};
+    switch (role)
+    {
+    case NameRole: return QString::fromStdString(track->GetName());
+    case TypeRole:
+      return QString::fromStdString(platform::Distance::CreateFormatted(track->GetLengthMeters()).ToString());
+    default: return {};
+    }
+  }
+
+  auto const * bookmark = manager.GetBookmark(item.m_id);
   if (!bookmark)
     return {};
   switch (role)
@@ -154,18 +182,29 @@ QVariant BookmarksModel::data(QModelIndex const & index, int role) const
 
 QHash<int, QByteArray> BookmarksModel::roleNames() const
 {
-  return {{NameRole, "name"}, {TypeRole, "type"}};
+  return {{IdRole, "itemId"}, {IsTrackRole, "isTrack"}, {NameRole, "name"}, {TypeRole, "type"}};
 }
 
 void BookmarksModel::showOnMap(int row)
 {
-  if (row >= 0 && row < rowCount())
-    m_framework.ShowBookmark(m_ids[static_cast<size_t>(row)]);
+  if (row < 0 || row >= rowCount())
+    return;
+  auto const & item = m_items[static_cast<size_t>(row)];
+  if (item.m_isTrack)
+    m_framework.ShowTrack(item.m_id);
+  else
+    m_framework.ShowBookmark(item.m_id);
 }
 
-void BookmarksModel::deleteBookmark(int row)
+void BookmarksModel::remove(int row)
 {
-  if (row >= 0 && row < rowCount())
-    m_framework.GetBookmarkManager().GetEditSession().DeleteBookmark(m_ids[static_cast<size_t>(row)]);
+  if (row < 0 || row >= rowCount())
+    return;
+  auto const & item = m_items[static_cast<size_t>(row)];
+  auto session = m_framework.GetBookmarkManager().GetEditSession();
+  if (item.m_isTrack)
+    session.DeleteTrack(item.m_id);
+  else
+    session.DeleteBookmark(item.m_id);
 }
 }  // namespace sailfish

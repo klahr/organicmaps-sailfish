@@ -18,9 +18,8 @@ class OsmAccount : public QObject
   Q_PROPERTY(QString historyUrl READ historyUrl NOTIFY changed)
   // A login or upload is in progress.
   Q_PROPERTY(bool busy READ busy NOTIFY busyChanged)
-  // Local edits not uploaded yet, and the uploaded ones.
+  // Local edits not uploaded yet.
   Q_PROPERTY(int pendingEdits READ pendingEdits NOTIFY editsChanged)
-  Q_PROPERTY(int uploadedEdits READ uploadedEdits NOTIFY editsChanged)
   // Invalid before the first upload.
   Q_PROPERTY(QDateTime lastUpload READ lastUpload NOTIFY editsChanged)
   Q_PROPERTY(QString registrationUrl READ registrationUrl CONSTANT)
@@ -35,12 +34,11 @@ public:
   QString historyUrl() const;
   bool busy() const { return m_loggingIn || m_uploading; }
   int pendingEdits() const { return m_pendingEdits; }
-  int uploadedEdits() const { return m_uploadedEdits; }
   QDateTime lastUpload() const { return m_lastUpload; }
   QString registrationUrl() const;
   QString resetPasswordUrl() const;
 
-  // Emits loggedInChanged or loginFailed when done.
+  // Emits changed or loginFailed when done.
   Q_INVOKABLE void login(QString const & user, QString const & password);
   Q_INVOKABLE void logout();
   // Uploads pending edits and notes when logged in.
@@ -61,7 +59,6 @@ private:
   bool m_loggingIn = false;
   bool m_uploading = false;
   int m_pendingEdits = 0;
-  int m_uploadedEdits = 0;
   QDateTime m_lastUpload;
 };
 }  // namespace sailfish

@@ -12,8 +12,6 @@
 
 #include "indexer/map_style.hpp"
 
-#include "platform/settings.hpp"
-
 #include "storage/country_info_getter.hpp"
 #include "storage/storage.hpp"
 #include "storage/storage_helpers.hpp"
@@ -24,7 +22,6 @@
 #include "base/assert.hpp"
 #include "base/logging.hpp"
 #include "base/math.hpp"
-#include "base/string_utils.hpp"
 
 #include <QCompass>
 #include <QGuiApplication>
@@ -35,12 +32,17 @@
 #include <QScreen>
 #include <QTouchEvent>
 
+#include <optional>
+
 namespace sailfish
 {
 namespace
 {
-// "lat lon accuracy timestamp" of the last fix.
-char const kLastLocationSetting[] = "SailfishLastLocation";
+static_assert(MapItem::PendingPosition == static_cast<int>(location::PendingPosition));
+static_assert(MapItem::NotFollowNoPosition == static_cast<int>(location::NotFollowNoPosition));
+static_assert(MapItem::NotFollow == static_cast<int>(location::NotFollow));
+static_assert(MapItem::Follow == static_cast<int>(location::Follow));
+static_assert(MapItem::FollowAndRotate == static_cast<int>(location::FollowAndRotate));
 
 // Drape presents into a power-of-two framebuffer and reports the used part as a normalized
 // rect, so the texture wrapper is recreated whenever the framebuffer or its size changes.
@@ -95,7 +97,6 @@ MapItem::MapItem(QQuickItem * parent)
 
 MapItem::~MapItem()
 {
-  SaveLastLocation();
   m_locationService->Stop();
   if (!m_contextFactory)
     return;
@@ -141,11 +142,6 @@ int MapItem::enabledLayers() const
   return mask;
 }
 
-bool MapItem::darkStyle() const
-{
-  return MapStyleIsDark(m_framework.GetMapStyle());
-}
-
 void MapItem::setLayerEnabled(int layer, bool enabled)
 {
   switch (layer)
@@ -153,11 +149,7 @@ void MapItem::setLayerEnabled(int layer, bool enabled)
   case Outdoors:
   {
     Framework::SaveOutdoorsEnabled(enabled);
-    bool const dark = darkStyle();
-    if (enabled)
-      m_framework.SetMapStyle(dark ? MapStyleOutdoorsDark : MapStyleOutdoorsLight);
-    else
-      m_framework.SetMapStyle(dark ? MapStyleDefaultDark : MapStyleDefaultLight);
+    m_framework.SetMapStyle(BaseMapStyle(MapStyleIsDark(m_framework.GetMapStyle()), enabled));
     break;
   }
   case Isolines:
@@ -180,10 +172,7 @@ void MapItem::OnMyPositionModeChanged(location::EMyPositionMode mode)
 {
   // Drape asks for a position by entering PendingPosition, either on start or from the button.
   if (mode == location::PendingPosition && !m_inBackground)
-  {
     m_locationService->Start();
-    ShowLastLocation();
-  }
 
   if (mode != m_myPositionMode)
   {
@@ -200,7 +189,6 @@ void MapItem::OnLocationError(location::TLocationError errorCode)
 
 void MapItem::OnLocationUpdated(location::GpsInfo const & info)
 {
-  m_lastLocation = info;
   m_framework.OnLocationUpdate(info);
   m_placePage->UpdateDistance();
   m_routing->UpdateNavigation(info.m_speed);
@@ -230,7 +218,7 @@ void MapItem::stopTrackRecording(QString const & saveAsName)
   if (!saveAsName.isEmpty() && !m_framework.IsTrackRecordingEmpty())
     m_framework.SaveTrackRecordingWithName(saveAsName.toStdString());
   m_framework.StopTrackRecording();
-  if (m_inBackground)
+  if (m_inBackground && !m_routing->navigating())
     m_locationService->Stop();
   emit trackRecordingChanged();
 }
@@ -276,37 +264,6 @@ QVariantList MapItem::confirmChosenPosition()
   stopChoosingPosition();
   auto const latLon = mercator::ToLatLon(center);
   return {latLon.m_lat, latLon.m_lon};
-}
-
-void MapItem::SaveLastLocation() const
-{
-  if (!m_lastLocation)
-    return;
-  auto const & l = *m_lastLocation;
-  settings::Set(kLastLocationSetting,
-                strings::to_string_dac(l.m_latitude, 7) + ' ' + strings::to_string_dac(l.m_longitude, 7) + ' ' +
-                    strings::to_string_dac(l.m_horizontalAccuracy, 1) + ' ' + strings::to_string_dac(l.m_timestamp, 0));
-}
-
-void MapItem::ShowLastLocation()
-{
-  // Only once and only before the first fresh fix of this run.
-  if (!m_engineCreated || m_lastLocationShown || m_lastLocation)
-    return;
-  m_lastLocationShown = true;
-
-  std::string saved;
-  if (!settings::Get(kLastLocationSetting, saved))
-    return;
-  auto const values = strings::Tokenize(saved, " ");
-  location::GpsInfo info;
-  if (values.size() != 4 || !strings::to_double(values[0], info.m_latitude) ||
-      !strings::to_double(values[1], info.m_longitude) || !strings::to_double(values[2], info.m_horizontalAccuracy) ||
-      !strings::to_double(values[3], info.m_timestamp))
-  {
-    return;
-  }
-  m_framework.OnLastKnownLocation(info);
 }
 
 void MapItem::OnCurrentCountryChanged(std::string const & countryId)
@@ -367,7 +324,6 @@ void MapItem::OnApplicationStateChanged(Qt::ApplicationState state)
     if (!m_framework.IsTrackRecordingEnabled() && !m_routing->navigating())
       m_locationService->Stop();
     m_compass->stop();
-    SaveLastLocation();
     m_framework.SetRenderingDisabled(false /* destroySurface */);
     m_framework.EnterBackground();
   }
@@ -414,11 +370,8 @@ void MapItem::CreateEngine()
   m_framework.CreateDrapeEngine(make_ref(m_contextFactory), std::move(p));
   m_framework.EnterForeground();
   m_contextFactory->WaitForInitialization(nullptr);
-  m_engineCreated = true;
   UpdateWidgetLayout();
   UpdateVisibleViewport();
-  if (m_myPositionMode == location::PendingPosition)
-    ShowLastLocation();
 
   m_updateTimer.start();
   m_compass->start();
@@ -446,8 +399,7 @@ void MapItem::setViewportBottomInset(qreal inset)
 
 void MapItem::UpdateVisibleViewport()
 {
-  if (!m_engineCreated)
-    return;
+  // Ignored by the framework until the drape engine exists.
   double const bottom = std::max(1.0, height() - m_viewportBottomInset);
   m_framework.SetVisibleViewport(m2::RectD(0, 0, width(), bottom));
 }

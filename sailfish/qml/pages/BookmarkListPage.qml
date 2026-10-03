@@ -1,8 +1,9 @@
 import QtQuick 2.6
 import Sailfish.Silica 1.0
 import app.organicmaps 1.0
+import "navigation.js" as Navigation
 
-// Bookmarks of one list. Choosing one shows it on the map.
+// Bookmarks and tracks of one list. Choosing one shows it on the map.
 Page {
     id: page
 
@@ -30,7 +31,7 @@ Page {
             contentHeight: Theme.itemSizeMedium
             onClicked: {
                 bookmarks.showOnMap(index)
-                pageStack.pop(pageStack.find(function(p) { return p.objectName === "mapPage" }))
+                Navigation.popToMap(pageStack)
             }
 
             Column {
@@ -56,16 +57,21 @@ Page {
 
             menu: ContextMenu {
                 MenuItem {
-                    text: qsTr("Delete")
-                    onClicked: item.remorseDelete(function() { bookmarks.deleteBookmark(index) })
+                    text: appInfo.localized(model.isTrack ? "edit_track" : "placepage_edit_bookmark_button")
+                    onClicked: pageStack.push(Qt.resolvedUrl("EditBookmarkPage.qml"),
+                                              { itemId: model.itemId, isTrack: model.isTrack })
+                }
+                MenuItem {
+                    text: appInfo.localized("delete")
+                    onClicked: item.remorseDelete(function() { bookmarks.remove(index) })
                 }
             }
         }
 
         ViewPlaceholder {
             enabled: listView.count === 0
-            text: qsTr("No bookmarks yet")
-            hintText: qsTr("Tap a place on the map and save it")
+            text: appInfo.localized("bookmarks_empty_list_title")
+            hintText: appInfo.localized("bookmarks_empty_list_message")
         }
 
         VerticalScrollDecorator {}

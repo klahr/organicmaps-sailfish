@@ -3,8 +3,6 @@
 #include "base/logging.hpp"
 
 #include <QBuffer>
-#include <QCoreApplication>
-#include <QEvent>
 #include <QMetaObject>
 
 #include <QNetworkRequest>
@@ -18,20 +16,6 @@ namespace
 #if QT_VERSION < QT_VERSION_CHECK(5, 15, 0)
 // Holds the transfer timeout in milliseconds on the request when setTransferTimeout() is unavailable.
 auto constexpr kTransferTimeoutAttribute = QNetworkRequest::User;
-#endif
-
-#if QT_VERSION < QT_VERSION_CHECK(5, 10, 0)
-// QMetaObject::invokeMethod() with a functor needs Qt 5.10. Qt deletes a posted event on the
-// receiver's thread after delivering it, so the functor runs there from the destructor.
-class FunctorEvent : public QEvent
-{
-public:
-  explicit FunctorEvent(std::function<void()> fn) : QEvent(QEvent::None), m_fn(std::move(fn)) {}
-  ~FunctorEvent() override { m_fn(); }
-
-private:
-  std::function<void()> m_fn;
-};
 #endif
 
 // Dedicated network thread + worker. The NetworkWorker and its QNetworkAccessManager
@@ -99,7 +83,7 @@ QNetworkReply * IssueRequest(QNetworkAccessManager & manager, std::string const 
 #if QT_VERSION >= QT_VERSION_CHECK(5, 8, 0)
   return manager.sendCustomRequest(request, QByteArray::fromStdString(method), body);
 #else
-  // The QByteArray overload needs Qt 5.8; the reply takes ownership of the body buffer.
+  // The QByteArray overload needs Qt 5.8. The buffer is parented to the reply to free it with the reply.
   auto * buffer = new QBuffer;
   buffer->setData(body);
   buffer->open(QIODevice::ReadOnly);
@@ -653,7 +637,10 @@ HttpClient::RequestHandle HttpClient::RunHttpRequestAsync(CompletionHandler hand
 #if QT_VERSION >= QT_VERSION_CHECK(5, 10, 0)
   QMetaObject::invokeMethod(nt.worker, std::move(task), Qt::QueuedConnection);
 #else
-  QCoreApplication::postEvent(nt.worker, new FunctorEvent(std::move(task)));
+  // QMetaObject::invokeMethod() with a functor needs Qt 5.10: queue the task on the destroyed() signal
+  // of a temporary instead. It is dropped if the worker is gone.
+  QObject sender;
+  QObject::connect(&sender, &QObject::destroyed, nt.worker, std::move(task), Qt::QueuedConnection);
 #endif
 
   return handle;

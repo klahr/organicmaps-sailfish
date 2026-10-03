@@ -11,14 +11,12 @@ Dialog {
     Column {
         width: parent.width
 
-        DialogHeader {
-            acceptText: qsTr("Create")
-        }
+        DialogHeader {}
         TextField {
             id: nameField
             width: parent.width
             focus: true
-            label: qsTr("List name")
+            label: appInfo.localized("bookmark_set_name")
             placeholderText: label
             EnterKey.enabled: text.trim() !== ""
             EnterKey.iconSource: "image://theme/icon-m-enter-accept"

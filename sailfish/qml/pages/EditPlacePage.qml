@@ -143,30 +143,21 @@ Dialog {
                 SectionHeader {
                     text: appInfo.localized("editor_edit_place_name_hint")
                 }
-                TextField {
+                ValidatedTextField {
                     id: nameField
-                    readonly property string error: dialog.placeEditor.nameError(text)
-                    width: parent.width
                     text: dialog.placeEditor.name
-                    label: error !== "" ? error : appInfo.localized("place_name")
+                    title: appInfo.localized("place_name")
+                    error: dialog.placeEditor.nameError(text)
                     placeholderText: appInfo.localized("editor_default_language_hint")
-                    errorHighlight: error !== ""
-                    EnterKey.iconSource: "image://theme/icon-m-enter-close"
-                    EnterKey.onClicked: focus = false
                 }
                 Repeater {
                     id: namesRepeater
                     model: dialog.names
 
-                    TextField {
-                        readonly property string error: dialog.placeEditor.nameError(text)
-                        width: parent.width
+                    ValidatedTextField {
                         text: modelData.value
-                        label: error !== "" ? error : modelData.language
-                        placeholderText: modelData.language
-                        errorHighlight: error !== ""
-                        EnterKey.iconSource: "image://theme/icon-m-enter-close"
-                        EnterKey.onClicked: focus = false
+                        title: modelData.language
+                        error: dialog.placeEditor.nameError(text)
                     }
                 }
                 Button {
@@ -217,17 +208,12 @@ Dialog {
                 EditorRow {
                     icon: "../../icons/editor/ic_building.svg"
 
-                    TextField {
+                    ValidatedTextField {
                         id: houseField
-                        readonly property string error: dialog.placeEditor.houseNumberError(text)
-                        width: parent.width
                         text: dialog.placeEditor.houseNumber
-                        label: error !== "" ? error : appInfo.localized("house_number")
-                        placeholderText: appInfo.localized("house_number")
-                        errorHighlight: error !== ""
+                        title: appInfo.localized("house_number")
+                        error: dialog.placeEditor.houseNumberError(text)
                         inputMethodHints: Qt.ImhNoPredictiveText
-                        EnterKey.iconSource: "image://theme/icon-m-enter-close"
-                        EnterKey.onClicked: focus = false
                     }
                 }
                 Repeater {
@@ -305,13 +291,11 @@ Dialog {
     Component {
         id: textField
 
-        TextField {
+        ValidatedTextField {
             readonly property string value: text
-            readonly property string error: dialog.placeEditor.fieldError(parent.field.id, text)
             text: parent.field.value
-            label: error !== "" ? error : parent.field.label
-            placeholderText: parent.field.label
-            errorHighlight: error !== ""
+            title: parent.field.label
+            error: dialog.placeEditor.fieldError(parent.field.id, text)
             inputMethodHints: {
                 switch (parent.field.inputHint) {
                 case "url": return Qt.ImhUrlCharactersOnly | Qt.ImhNoPredictiveText | Qt.ImhNoAutoUppercase
@@ -320,8 +304,6 @@ Dialog {
                 default: return Qt.ImhNone
                 }
             }
-            EnterKey.iconSource: "image://theme/icon-m-enter-close"
-            EnterKey.onClicked: focus = false
         }
     }
     Component {

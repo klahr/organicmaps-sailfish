@@ -20,20 +20,11 @@ Page {
             title: appInfo.localized("choose_language")
         }
 
-        delegate: BackgroundItem {
-            height: Theme.itemSizeSmall
+        delegate: TextRow {
+            text: modelData.language
             onClicked: {
                 page.selected(modelData.code, modelData.language)
                 pageStack.pop()
-            }
-
-            Label {
-                x: Theme.horizontalPageMargin
-                width: parent.width - 2 * x
-                anchors.verticalCenter: parent.verticalCenter
-                text: modelData.language
-                color: parent.highlighted ? Theme.highlightColor : Theme.primaryColor
-                truncationMode: TruncationMode.Fade
             }
         }
 

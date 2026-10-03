@@ -38,7 +38,6 @@
 #define OMIM_OS_LINUX
 #define OMIM_OS_SAILFISH
 #define OMIM_OS_NAME "sailfish"
-#define OMIM_OS_MOBILE
 
 #else
 #define OMIM_OS_LINUX

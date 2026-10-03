@@ -1,20 +1,16 @@
 #include "sailfish/countries_model.hpp"
 
-#include "sailfish/framework_access.hpp"
-
 #include "sailfish/app_info.hpp"
+#include "sailfish/framework_access.hpp"
 
 #include "map/framework.hpp"
 #include "map/search_api.hpp"
 
 #include "storage/country_info_getter.hpp"
 #include "storage/downloader_search_params.hpp"
-
 #include "storage/storage.hpp"
 
 #include <QCollator>
-#include <QGuiApplication>
-#include <QInputMethod>
 #include <QPointer>
 
 #include <algorithm>
@@ -23,6 +19,23 @@ namespace sailfish
 {
 namespace
 {
+using storage::NodeErrorCode;
+using storage::NodeStatus;
+
+static_assert(CountriesModel::Undefined == static_cast<int>(NodeStatus::Undefined));
+static_assert(CountriesModel::Downloading == static_cast<int>(NodeStatus::Downloading));
+static_assert(CountriesModel::Applying == static_cast<int>(NodeStatus::Applying));
+static_assert(CountriesModel::InQueue == static_cast<int>(NodeStatus::InQueue));
+static_assert(CountriesModel::Error == static_cast<int>(NodeStatus::Error));
+static_assert(CountriesModel::OnDiskOutOfDate == static_cast<int>(NodeStatus::OnDiskOutOfDate));
+static_assert(CountriesModel::OnDisk == static_cast<int>(NodeStatus::OnDisk));
+static_assert(CountriesModel::NotDownloaded == static_cast<int>(NodeStatus::NotDownloaded));
+static_assert(CountriesModel::Partly == static_cast<int>(NodeStatus::Partly));
+static_assert(CountriesModel::NoError == static_cast<int>(NodeErrorCode::NoError));
+static_assert(CountriesModel::UnknownError == static_cast<int>(NodeErrorCode::UnknownError));
+static_assert(CountriesModel::OutOfMemFailed == static_cast<int>(NodeErrorCode::OutOfMemFailed));
+static_assert(CountriesModel::NoInetConnection == static_cast<int>(NodeErrorCode::NoInetConnection));
+
 storage::NodeAttrs GetAttrs(storage::Storage const & storage, storage::CountryId const & countryId)
 {
   storage::NodeAttrs attrs;
@@ -88,9 +101,10 @@ void CountriesModel::setDownloadedOnly(bool downloadedOnly)
 
 void CountriesModel::setQuery(QString const & query)
 {
-  if (query == m_query)
+  QString const trimmed = query.trimmed();
+  if (trimmed == m_query)
     return;
-  m_query = query;
+  m_query = trimmed;
   emit queryChanged();
   Reload();
 }
@@ -99,13 +113,12 @@ void CountriesModel::Reload()
 {
   ++m_searchTimestamp;
   m_nearCount = 0;
-  if (!m_query.trimmed().isEmpty())
+  if (!m_query.isEmpty())
   {
     // Same request as the Android downloader search; results arrive on the GUI thread.
-    QString locale = QGuiApplication::inputMethod()->locale().name().replace('_', '-');
     QPointer<CountriesModel> self(this);
     auto const timestamp = m_searchTimestamp;
-    storage::DownloaderSearchParams params{m_query.toStdString(), locale.toStdString(),
+    storage::DownloaderSearchParams params{m_query.toStdString(), GetInputLocale(),
                                            [self, timestamp](storage::DownloaderSearchResults results)
     {
       if (!self || timestamp != self->m_searchTimestamp)
@@ -173,7 +186,7 @@ void CountriesModel::OnCountryChanged(storage::CountryId const & countryId)
 {
   // A map that finished downloading or was deleted moves between the downloaded and available lists.
   auto const status = GetAttrs(m_storage, countryId).m_status;
-  if (m_query.isEmpty() && (status == storage::NodeStatus::OnDisk || status == storage::NodeStatus::NotDownloaded))
+  if (m_query.isEmpty() && (status == NodeStatus::OnDisk || status == NodeStatus::NotDownloaded))
   {
     Reload();
     return;
@@ -222,9 +235,9 @@ QVariant CountriesModel::data(QModelIndex const & index, int role) const
     if (!m_query.isEmpty())
       return QString();
     if (m_downloadedOnly)
-      return Localized(QStringLiteral("downloader_downloaded_subtitle"));
+      return Localized("downloader_downloaded_subtitle");
     if (static_cast<size_t>(index.row()) < m_nearCount)
-      return Localized(QStringLiteral("downloader_near_me_subtitle"));
+      return Localized("downloader_near_me_subtitle");
     return QString::fromStdString(attrs.m_nodeLocalName).left(1).toUpper();
   case FoundNameRole:
     return static_cast<size_t>(index.row()) < m_foundNames.size()
@@ -292,14 +305,5 @@ void CountriesModel::retry(QString const & countryId)
 void CountriesModel::showOnMap(QString const & countryId)
 {
   GetFramework().ShowNode(ToCountryId(countryId));
-}
-
-// static
-QString CountriesModel::formatSize(qint64 bytes)
-{
-  qint64 constexpr kMb = 1024 * 1024;
-  if (bytes >= kMb)
-    return QStringLiteral("%1 MB").arg((bytes + kMb / 2) / kMb);
-  return QStringLiteral("%1 kB").arg((bytes + 1023) / 1024);
 }
 }  // namespace sailfish

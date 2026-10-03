@@ -1,17 +1,19 @@
 #!/usr/bin/env python3
-"""Converts Android vector drawables (map layers, search categories) into SVG icons for the Sailfish app.
+"""Converts Android vector drawables into the SVG icons of the Sailfish app, run by the build:
+  sailfish/tools/android_vector_to_svg.py <output dir>
 
 Only the subset used by those icons is supported: groups with transforms, clip paths, paths with
-fill/stroke colors and alphas, and layer lists of an oval shape under a vector. Run from the repository root:
-  sailfish/tools/android_vector_to_svg.py
+fill/stroke colors and alphas, and layer lists of an oval shape under a vector.
 """
 
 import os
+import sys
 import xml.etree.ElementTree as ET
 
 A = '{http://schemas.android.com/apk/res/android}'
+ROOT = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', '..')
 # The app resources, then the SDK ones.
-RES_DIRS = ['android/app/src/main/res', 'android/sdk/src/main/res']
+RES_DIRS = [os.path.join(ROOT, 'android/app/src/main/res'), os.path.join(ROOT, 'android/sdk/src/main/res')]
 # ic_layers is the monochrome map button icon, the others are the light/night layer previews.
 LAYERS = ['ic_layers', 'ic_layers_outdoors', 'ic_layers_isoline', 'ic_layers_hiking', 'ic_layers_cycling',
           'ic_layers_subway', 'ic_layers_satellite']
@@ -37,12 +39,17 @@ ROUTING = ['ic_ruler_route', 'ic_location_arrow_blue', 'ic_20px_route_planning_t
     'route_point_%02d' % i for i in range(1, 10)]
 # Navigation: roundabout turn arrows; the other turn arrows are bitmaps on Android too.
 NAVIGATION = ['ic_turn_round'] + ['ic_roundabout_exit_%d' % i for i in range(1, 13)]
-WHITE = {'ic_ruler_route', 'ic_download', 'ic_donate', 'ic_settings', 'ic_track_recording_off', 'ic_share', 'ic_track_recording_status'}
-OUTPUTS = [('sailfish/icons/layers', LAYERS), ('sailfish/icons/categories', CATEGORIES),
-           ('sailfish/icons/placepage', PLACE_PAGE), ('sailfish/icons/bookmarks', BOOKMARKS),
-           ('sailfish/icons/myposition', MY_POSITION), ('sailfish/icons/help', HELP),
-           ('sailfish/icons/menu', MENU), ('sailfish/icons/routing', ROUTING),
-           ('sailfish/icons/navigation', NAVIGATION)]
+# Place editor fields, by the names used in sailfish/place_editor.cpp. The social networks only have white
+# variants for the dark theme on Android.
+EDITOR = ['ic_address', 'ic_building', 'ic_email', 'ic_operating_hours', 'ic_operator', 'ic_phone',
+          'ic_self_service', 'ic_street_address', 'ic_website', 'ic_website_menu', 'ic_wifi']
+SOCIAL = {'ic_facebook': 'ic_facebook_white', 'ic_instagram': 'ic_instagram_white', 'ic_line': 'ic_line_white',
+          'ic_twitterx': 'ic_twitterx_white', 'ic_vk': 'ic_vk_white'}
+WHITE = {'ic_ruler_route', 'ic_download', 'ic_donate', 'ic_settings', 'ic_track_recording_off', 'ic_share',
+         'ic_track_recording_status'} | set(EDITOR)
+OUTPUTS = [('layers', LAYERS), ('categories', CATEGORIES), ('placepage', PLACE_PAGE), ('bookmarks', BOOKMARKS),
+           ('myposition', MY_POSITION), ('help', HELP), ('menu', MENU), ('routing', ROUTING),
+           ('navigation', NAVIGATION), ('editor', EDITOR + list(SOCIAL))]
 
 # Android path attribute -> SVG attribute.
 PATH_ATTRS = {
@@ -139,12 +146,17 @@ def to_svg(root):
 
 
 def main():
-    for out_dir, names in OUTPUTS:
+    for subdir, names in OUTPUTS:
+        out_dir = os.path.join(sys.argv[1], subdir)
         os.makedirs(out_dir, exist_ok=True)
         for variant, suffix in (('drawable', ''), ('drawable-night', '_night')):
             for name in names:
-                paths = [os.path.join(res, variant, name + '.xml') for res in RES_DIRS]
+                source = SOCIAL.get(name, name)
+                paths = [os.path.join(res, variant, source + '.xml') for res in RES_DIRS]
                 path = next((p for p in paths if os.path.exists(p)), None)
+                # Every icon has a day variant.
+                if not path and not suffix:
+                    raise FileNotFoundError(source)
                 if path:
                     tree = to_svg(ET.parse(path).getroot())
                     if name in WHITE:

@@ -121,7 +121,7 @@ QtUploadOGLContext::QtUploadOGLContext(QOpenGLContext * rootContext, QOffscreenS
 
 void QtUploadOGLContext::MakeCurrent()
 {
-  CHECK(m_ctx->makeCurrent(m_surface), ());
+  m_ctx->makeCurrent(m_surface);
 }
 
 void QtUploadOGLContext::DoneCurrent()

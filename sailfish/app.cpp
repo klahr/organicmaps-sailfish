@@ -1,5 +1,6 @@
 #include "sailfish/app_info.hpp"
 #include "sailfish/app_settings.hpp"
+#include "sailfish/bookmark_editor.hpp"
 #include "sailfish/bookmarks_model.hpp"
 #include "sailfish/countries_model.hpp"
 #include "sailfish/framework_access.hpp"
@@ -88,6 +89,7 @@ __attribute__((visibility("default"))) int OrganicMapsMain(int argc, char * argv
   qmlRegisterType<sailfish::SearchModel>("app.organicmaps", 1, 0, "SearchModel");
   qmlRegisterType<sailfish::BookmarkCategoriesModel>("app.organicmaps", 1, 0, "BookmarkCategoriesModel");
   qmlRegisterType<sailfish::BookmarksModel>("app.organicmaps", 1, 0, "BookmarksModel");
+  qmlRegisterType<sailfish::BookmarkEditor>("app.organicmaps", 1, 0, "BookmarkEditor");
   qmlRegisterType<sailfish::PlaceEditor>("app.organicmaps", 1, 0, "PlaceEditor");
   qmlRegisterUncreatableType<sailfish::PlacePage>("app.organicmaps", 1, 0, "PlacePage", "Owned by MapItem");
   qmlRegisterUncreatableType<sailfish::Routing>("app.organicmaps", 1, 0, "Routing", "Owned by MapItem");

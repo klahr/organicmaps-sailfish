@@ -16,7 +16,6 @@ Rectangle {
     color: Theme.rgba(Theme.overlayBackgroundColor, Theme.opacityOverlay)
 
     IconButton {
-        id: iconButton
         anchors.centerIn: parent
         icon.source: button.source
         // Theme icons already have this size; SVG files would otherwise render at their nominal size.

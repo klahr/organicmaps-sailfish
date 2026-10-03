@@ -23,8 +23,11 @@
 #include <GLES2/gl2ext.h>
 #include "android/sdk/src/main/cpp/app/organicmaps/sdk/opengl/gl3stub.h"
 #elif defined(OMIM_OS_SAILFISH)
+// clang-format off
+// gl2ext.h needs the GL types from gl3.h.
 #include <GLES3/gl3.h>
 #include <GLES2/gl2ext.h>
+// clang-format on
 #elif defined(OMIM_OS_LINUX)
 #define GL_GLEXT_PROTOTYPES
 #include <GL/gl.h>

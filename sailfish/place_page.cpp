@@ -5,9 +5,9 @@
 #include "map/bookmark_helpers.hpp"
 #include "map/bookmark_manager.hpp"
 #include "map/framework.hpp"
+#include "map/place_page_info.hpp"
 
 #include "ge0/url_generator.hpp"
-#include "map/place_page_info.hpp"
 
 #include "opening_hours/opening_hours.hpp"
 
@@ -27,29 +27,16 @@ namespace sailfish
 {
 namespace
 {
+using feature::Metadata;
+
 // Same setting and default as the desktop place page.
-char const kCoordinatesFormatSetting[] = "CoordinatesFormat";
+std::string_view constexpr kCoordinatesFormatSetting = "CoordinatesFormat";
 
 int32_t SavedCoordinatesFormat()
 {
   auto saved = static_cast<int32_t>(place_page::CoordinatesFormat::LatLonDecimal);
   settings::TryGet(kCoordinatesFormatSetting, saved);
   return saved;
-}
-
-QString ToQString(std::string_view s)
-{
-  return QString::fromUtf8(s.data(), static_cast<int>(s.size()));
-}
-
-// Same wording as PlacePageOpeningHoursFragment.getTimeIntervalString on Android.
-QString TimeInterval(long minutes)
-{
-  QString const min = QString::number(minutes % 60) + ' ' + Localized("minute");
-  if (minutes < 60)
-    return min;
-  QString const hours = QString::number(minutes / 60) + ' ' + Localized("hour");
-  return minutes % 60 ? hours + ' ' + min : hours;
 }
 }  // namespace
 
@@ -137,6 +124,8 @@ void PlacePage::Update()
   }
 
   m_isBookmark = info.IsBookmark();
+  m_isTrack = info.IsTrack();
+  m_userMarkId = m_isTrack ? info.GetTrackId() : info.GetBookmarkId();
   m_canEdit = info.ShouldShowEditPlace();
   m_canAddPlace = info.ShouldShowAddPlace();
   m_editable = info.CanEditPlace();
@@ -145,12 +134,9 @@ void PlacePage::Update()
       ge0::GenerateGeoUri(info.GetLatLon().m_lat, info.GetLatLon().m_lon, m_framework.GetDrawScale(), info.GetTitle()));
   UpdateOpeningHours(info.GetOpeningHours());
   m_wikiDescription = QString::fromStdString(info.GetWikiDescription());
-  m_wikiUrl = QString::fromStdString(
-      feature::Metadata::ToWikiURL(std::string(info.GetMetadata(feature::Metadata::FMD_WIKIPEDIA))));
-  if (info.GetMetadata(feature::Metadata::FMD_WIKIPEDIA).empty())
-    m_wikiUrl.clear();
+  auto const wikipedia = info.GetMetadata(Metadata::FMD_WIKIPEDIA);
+  m_wikiUrl = wikipedia.empty() ? QString() : QString::fromStdString(Metadata::ToWikiURL(std::string(wikipedia)));
 
-  using feature::Metadata;
   m_details.clear();
   auto const add = [this](char const * icon, QString const & text, QString const & url = {})
   {
@@ -221,7 +207,8 @@ void PlacePage::UpdateOpeningHours(std::string_view openingHours)
     if (info.nextTimeClosed <= now)
       return;
     if (minutes < 3 * 60)
-      m_openDescription = Localized("closes_in", {TimeInterval(minutes)}) + " • " + time(info.nextTimeClosed);
+      m_openDescription =
+          Localized("closes_in", {FormatDuration(info.nextTimeClosed - now)}) + " • " + time(info.nextTimeClosed);
     else if (minutes < 24 * 60)
       m_openDescription = Localized("closes_at", {time(info.nextTimeClosed)});
     return;
@@ -234,7 +221,8 @@ void PlacePage::UpdateOpeningHours(std::string_view openingHours)
   long const minutes = (info.nextTimeOpen - now) / 60;
   QDateTime const opens = QDateTime::fromTime_t(static_cast<uint>(info.nextTimeOpen));
   if (minutes < 3 * 60)
-    m_openDescription = Localized("opens_in", {TimeInterval(minutes)}) + " • " + time(info.nextTimeOpen);
+    m_openDescription =
+        Localized("opens_in", {FormatDuration(info.nextTimeOpen - now)}) + " • " + time(info.nextTimeOpen);
   else if (opens.date() == QDate::currentDate())
     m_openDescription = Localized("opens_at", {time(info.nextTimeOpen)});
   else if (minutes < 24 * 60)

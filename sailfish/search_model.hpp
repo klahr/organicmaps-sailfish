@@ -38,8 +38,7 @@ public:
     AddressRole,
     DistanceRole,
     OpenStatusRole,
-    OpenStateRole,
-    IsSuggestRole
+    OpenStateRole
   };
 
   // Opening hours state of a result, colored like on Android.
@@ -87,7 +86,6 @@ private:
   void SetSearching(bool searching);
   // Same moments as on Android: a chosen result, a category, or showing all results on the map.
   void SaveToHistory(QString const & query);
-  static OpenState GetOpenState(search::Result const & result);
 
   Framework & m_framework;
   std::string const m_locale;

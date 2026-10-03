@@ -56,7 +56,7 @@ Page {
                 font.pixelSize: Theme.fontSizeSmall
                 color: Theme.secondaryColor
             }
-            HelpLink {
+            TextRow {
                 text: "OpenStreetMap.org"
                 url: appInfo.localized("osm_wiki_about_url")
             }
@@ -64,43 +64,43 @@ Page {
             SectionHeader {
                 text: appInfo.localized("help")
             }
-            HelpLink {
+            TextRow {
                 text: appInfo.localized("news")
                 url: page.siteUrl + "news/"
             }
-            HelpLink {
+            TextRow {
                 text: appInfo.localized("faq")
                 url: page.siteUrl + "faq/"
             }
-            HelpLink {
+            TextRow {
                 text: appInfo.localized("how_to_support_us")
                 url: page.siteUrl + "support-us/"
             }
-            HelpLink {
+            TextRow {
                 text: appInfo.localized("website")
                 url: page.siteUrl
             }
-            HelpLink {
+            TextRow {
                 text: "GitHub"
                 url: "https://github.com/organicmaps/organicmaps"
             }
-            HelpLink {
+            TextRow {
                 text: "Telegram"
                 url: appInfo.localized("telegram_url")
             }
-            HelpLink {
+            TextRow {
                 text: "Matrix"
                 url: "https://matrix.to/#/%23organicmaps:matrix.org"
             }
-            HelpLink {
+            TextRow {
                 text: "Mastodon"
                 url: "https://fosstodon.org/@organicmaps"
             }
-            HelpLink {
+            TextRow {
                 text: appInfo.localized("privacy_policy")
                 url: page.siteUrl + "privacy/"
             }
-            HelpLink {
+            TextRow {
                 text: appInfo.localized("terms_of_use")
                 url: page.siteUrl + "terms/"
             }

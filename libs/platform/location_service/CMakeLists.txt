@@ -1,6 +1,6 @@
 project(location_service)
 
-if (PLATFORM_SAILFISH OR (NOT SKIP_QT_GUI AND PLATFORM_DESKTOP AND PLATFORM_LINUX))
+if (NOT SKIP_QT_GUI AND PLATFORM_LINUX)
   message("Building with Qt Positioning")
   find_package(${OMIM_QT} REQUIRED COMPONENTS Positioning)
   set(QT_LOCATION_SERVICE true)

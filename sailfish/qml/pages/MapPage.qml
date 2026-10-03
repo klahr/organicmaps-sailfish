@@ -44,6 +44,13 @@ Page {
     readonly property bool navigating: map.routing.navigating
     readonly property bool choosingPosition: map.choosingPosition
 
+    function openSearch() {
+        pageStack.push(Qt.resolvedUrl("SearchPage.qml"), { search: search })
+    }
+    function openBookmarks() {
+        pageStack.push(Qt.resolvedUrl("BookmarksPage.qml"))
+    }
+
     NavigationTopPanel {
         anchors {
             top: parent.top
@@ -58,7 +65,6 @@ Page {
     }
 
     MapButton {
-        id: layersButton
         visible: !page.navigating && !page.choosingPosition
         anchors {
             top: parent.top
@@ -106,21 +112,16 @@ Page {
             width: 1
             height: Theme.dp(64)
         }
-        // Mirrors location::EMyPositionMode, with the Android icons. The core cycles the modes: a tap centers
+        // The Android icons of the MapItem.MyPositionMode values. The core cycles the modes: a tap centers
         // north up, further taps toggle rotating with the heading, panning the map stops following.
         MapButton {
-            readonly property int pendingPosition: 0
-            readonly property int notFollowNoPosition: 1
-            readonly property int notFollow: 2
-            readonly property int follow: 3
-            readonly property int followAndRotate: 4
             readonly property var icons: ["", "ic_location_off", "ic_not_follow", "ic_follow", "ic_follow_and_rotate"]
 
             // While searching only the spinner shows, like the rotating ring on Android.
-            source: map.myPositionMode === pendingPosition
+            source: map.myPositionMode === MapItem.PendingPosition
                     ? "" : Qt.resolvedUrl("../../icons/myposition/" + icons[map.myPositionMode] + ".svg")
-            highlighted: map.myPositionMode === follow || map.myPositionMode === followAndRotate
-            busy: map.myPositionMode === pendingPosition
+            highlighted: map.myPositionMode === MapItem.Follow || map.myPositionMode === MapItem.FollowAndRotate
+            busy: map.myPositionMode === MapItem.PendingPosition
             onClicked: map.switchMyPositionMode()
         }
     }
@@ -146,12 +147,12 @@ Page {
         MapButton {
             radius: Theme.dp(14)
             source: "image://theme/icon-m-search"
-            onClicked: pageStack.push(Qt.resolvedUrl("SearchPage.qml"), { search: search })
+            onClicked: page.openSearch()
         }
         MapButton {
             radius: Theme.dp(14)
             source: Qt.resolvedUrl("../../icons/bookmarks/ic_bookmarks_and_tracks.svg")
-            onClicked: pageStack.push(Qt.resolvedUrl("BookmarksPage.qml"))
+            onClicked: page.openBookmarks()
         }
         MapButton {
             id: menuButton
@@ -221,27 +222,16 @@ Page {
 
         MapButton {
             source: "image://theme/icon-m-search"
-            onClicked: pageStack.push(Qt.resolvedUrl("SearchPage.qml"), { search: search })
+            onClicked: page.openSearch()
         }
         MapButton {
             source: Qt.resolvedUrl("../../icons/bookmarks/ic_bookmarks_and_tracks.svg")
-            onClicked: pageStack.push(Qt.resolvedUrl("BookmarksPage.qml"))
+            onClicked: page.openBookmarks()
         }
-        Rectangle {
+        RoadSign {
             width: Theme.itemSizeMedium * 1.2
-            height: width
-            radius: width / 2
-            color: "white"
-            border.color: "#e53935"
-            border.width: width * 0.1
-
-            Label {
-                anchors.centerIn: parent
-                text: map.routing.navigation.speed || "0"
-                color: "black"
-                font.pixelSize: Theme.fontSizeExtraLarge
-                font.bold: true
-            }
+            text: map.routing.navigation.speed || "0"
+            fontSize: Theme.fontSizeExtraLarge
         }
     }
 
@@ -337,7 +327,8 @@ Page {
         id: routePanel
         routing: map.routing
         placePage: map.placePage
-        searchModel: search
+        onSearchClicked: page.openSearch()
+        onBookmarksClicked: page.openBookmarks()
     }
 
     MapPanel {
@@ -354,7 +345,7 @@ Page {
                     right: closeButton.left
                     verticalCenter: parent.verticalCenter
                 }
-                text: qsTr("Map Styles and Layers")
+                text: appInfo.localized("layers_title")
                 color: Theme.highlightColor
                 font.pixelSize: Theme.fontSizeLarge
                 truncationMode: TruncationMode.Fade
@@ -456,7 +447,8 @@ Page {
         MenuRow {
             icon: "../../icons/menu/ic_share.svg"
             text: appInfo.localized("share_my_location")
-            enabled: map.myPositionMode > 1
+            enabled: map.myPositionMode !== MapItem.PendingPosition
+                     && map.myPositionMode !== MapItem.NotFollowNoPosition
             opacity: enabled ? 1.0 : Theme.opacityLow
             onClicked: {
                 menuPanel.open = false

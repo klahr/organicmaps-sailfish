@@ -10,6 +10,8 @@ set(SRC
   app_info.hpp
   app_settings.cpp
   app_settings.hpp
+  bookmark_editor.cpp
+  bookmark_editor.hpp
   bookmarks_model.cpp
   bookmarks_model.hpp
   countries_model.cpp
@@ -81,7 +83,18 @@ install(FILES "${OMIM_ROOT}/data/strings/types_strings.txt" "${OMIM_ROOT}/data/s
 install(TARGETS ${PROJECT_NAME} DESTINATION bin)
 install(TARGETS ${PROJECT_NAME}_lib LIBRARY DESTINATION share/organicmaps/lib)
 install(DIRECTORY qml DESTINATION share/organicmaps)
-install(DIRECTORY icons/layers icons/categories icons/placepage icons/bookmarks icons/myposition icons/help icons/menu icons/routing icons/navigation icons/editor DESTINATION share/organicmaps/icons)
+# SVG icons converted from the Android vector drawables.
+set(SVG_ICONS_DIR "${CMAKE_CURRENT_BINARY_DIR}/icons")
+add_custom_command(
+  OUTPUT "${SVG_ICONS_DIR}/.stamp"
+  COMMAND ${Python3_EXECUTABLE} "${CMAKE_CURRENT_SOURCE_DIR}/tools/android_vector_to_svg.py" "${SVG_ICONS_DIR}"
+  COMMAND ${CMAKE_COMMAND} -E touch "${SVG_ICONS_DIR}/.stamp"
+  DEPENDS tools/android_vector_to_svg.py
+  COMMENT "Converting Android vector drawables to SVG icons"
+)
+add_custom_target(${PROJECT_NAME}_icons DEPENDS "${SVG_ICONS_DIR}/.stamp")
+add_dependencies(${PROJECT_NAME} ${PROJECT_NAME}_icons)
+install(DIRECTORY "${SVG_ICONS_DIR}/" DESTINATION share/organicmaps/icons PATTERN .stamp EXCLUDE)
 # Bitmaps on Android too, installed from its resources: router and route point buttons.
 set(ANDROID_RES "${OMIM_ROOT}/android/app/src/main/res")
 install(FILES

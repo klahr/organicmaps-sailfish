@@ -128,15 +128,20 @@ void VoiceGuide::SetPreferredLanguage(std::string const & preferred, std::string
 
 void VoiceGuide::Refresh()
 {
+  std::vector<Program> installed;
+  for (auto const & engine : kEngines)
+    if (auto path = QStandardPaths::findExecutable(engine.m_program); !path.isEmpty())
+      installed.push_back({&engine, std::move(path)});
+
   m_programVoices.clear();
   for (auto const & lang : routing::turns::sound::kLanguageList)
   {
     std::string const code(lang.first);
-    for (auto const & engine : kEngines)
+    for (auto const & program : installed)
     {
-      if (!engine.m_voice(code).isEmpty() && !QStandardPaths::findExecutable(engine.m_program).isEmpty())
+      if (!program.m_engine->m_voice(code).isEmpty())
       {
-        m_programVoices.emplace(code, &engine);
+        m_programVoices.emplace(code, program);
         break;
       }
     }
@@ -201,8 +206,8 @@ void VoiceGuide::ChooseLanguage()
   }
   else if (auto const it = m_programVoices.find(language); it != m_programVoices.end())
   {
-    m_engine = it->second;
-    m_program = QStandardPaths::findExecutable(m_engine->m_program);
+    m_engine = it->second.m_engine;
+    m_program = it->second.m_path;
     m_voice = m_engine->m_voice(language);
     LOG(LINFO, ("Voice instructions in", language, "with", m_program.toStdString()));
   }

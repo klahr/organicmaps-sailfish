@@ -6,11 +6,8 @@
 #include <QNetworkAccessManager>
 #include <QNetworkReply>
 #include <QObject>
-#include <QtGlobal>  // QT_VERSION, QT_VERSION_CHECK
-
-#if QT_VERSION < QT_VERSION_CHECK(5, 15, 0)
 #include <QTimer>
-#endif
+#include <QtGlobal>  // QT_VERSION, QT_VERSION_CHECK
 
 #include <cstdint>
 #include <optional>

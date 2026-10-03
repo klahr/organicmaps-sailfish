@@ -40,7 +40,7 @@ Page {
                 x: Theme.horizontalPageMargin
                 width: parent.width - 2 * x
                 visible: !osmAccount.loggedIn
-                text: appInfo.localized("login_osm_presentation").replace(/\\n/g, "\n")
+                text: appInfo.localized("login_osm_presentation")
                 wrapMode: Text.Wrap
                 font.pixelSize: Theme.fontSizeSmall
                 color: Theme.highlightColor
@@ -146,7 +146,7 @@ Page {
                     value: osmAccount.changesets >= 0 ? osmAccount.changesets : "—"
                 }
                 DetailItem {
-                    label: qsTr("Edits waiting for upload")
+                    label: appInfo.localized("editor_pending_edits")
                     value: osmAccount.pendingEdits
                 }
                 DetailItem {

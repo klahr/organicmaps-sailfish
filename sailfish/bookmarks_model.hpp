@@ -56,7 +56,7 @@ private:
   std::vector<uint64_t> m_ids;
 };
 
-// Bookmarks of one list.
+// Bookmarks and then tracks of one list.
 class BookmarksModel : public QAbstractListModel
 {
   Q_OBJECT
@@ -65,7 +65,10 @@ class BookmarksModel : public QAbstractListModel
 public:
   enum Roles
   {
-    NameRole = Qt::UserRole + 1,
+    IdRole = Qt::UserRole + 1,
+    IsTrackRole,
+    NameRole,
+    // The feature type of a bookmark, the length of a track.
     TypeRole
   };
 
@@ -79,16 +82,22 @@ public:
   void setCategoryId(quint64 id);
 
   Q_INVOKABLE void showOnMap(int row);
-  Q_INVOKABLE void deleteBookmark(int row);
+  Q_INVOKABLE void remove(int row);
 
 signals:
   void categoryIdChanged();
 
 private:
+  struct Item
+  {
+    uint64_t m_id;
+    bool m_isTrack;
+  };
+
   void Reset();
 
   Framework & m_framework;
   quint64 m_categoryId = 0;
-  std::vector<uint64_t> m_ids;
+  std::vector<Item> m_items;
 };
 }  // namespace sailfish

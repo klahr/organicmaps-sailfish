@@ -173,9 +173,10 @@ omim_add_library(${PROJECT_NAME} ${SRC})
 target_include_directories(${PROJECT_NAME} PUBLIC ${OMIM_ROOT}/3party/glm)
 
 if (PLATFORM_SAILFISH)
-  find_library(GLESV2_LIBRARY GLESv2 REQUIRED)
+  find_library(DRAPE_GL_LIBRARY GLESv2 REQUIRED)
 elseif (PLATFORM_LINUX OR PLATFORM_WIN)
   find_package(OpenGL)
+  set(DRAPE_GL_LIBRARY OpenGL::GL)
 endif()
 
 if (PLATFORM_MAC)
@@ -196,9 +197,7 @@ set(DRAPE_LINK_LIBRARIES
   expat::expat
   $<$<BOOL:${PLATFORM_MAC}>:-framework\ OpenGL>
   $<$<BOOL:${PLATFORM_MAC}>:-framework\ Metal>
-  $<$<AND:$<BOOL:${PLATFORM_LINUX}>,$<NOT:$<BOOL:${PLATFORM_SAILFISH}>>>:OpenGL::GL>
-  $<$<BOOL:${PLATFORM_SAILFISH}>:${GLESV2_LIBRARY}>
-  $<$<BOOL:${PLATFORM_WIN}>:OpenGL::GL>
+  ${DRAPE_GL_LIBRARY}
 )
 
 target_link_libraries(${PROJECT_NAME} PUBLIC ${DRAPE_LINK_LIBRARIES})

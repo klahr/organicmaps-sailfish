@@ -1,6 +1,7 @@
 import QtQuick 2.6
 import Sailfish.Silica 1.0
 import app.organicmaps 1.0
+import "colors.js" as Colors
 
 Page {
     id: page
@@ -22,7 +23,7 @@ Page {
     SearchField {
         id: searchField
         width: parent.width
-        placeholderText: qsTr("Search")
+        placeholderText: appInfo.localized("search")
         text: search.query
         onTextChanged: search.query = text
         // Typing breaks the text binding, so follow queries set by categories, history and suggestions.
@@ -53,7 +54,7 @@ Page {
             width: categoriesView.width
 
             SectionHeader {
-                text: qsTr("History")
+                text: appInfo.localized("history")
                 visible: appSettings.searchHistory && search.history.length > 0
             }
             Repeater {
@@ -68,43 +69,18 @@ Page {
             MenuRow {
                 visible: appSettings.searchHistory && search.history.length > 0
                 icon: "image://theme/icon-m-cancel"
-                text: qsTr("Clear Search History")
+                text: appInfo.localized("clear_search")
                 onClicked: search.clearHistory()
             }
             SectionHeader {
-                text: qsTr("Categories")
+                text: appInfo.localized("categories")
             }
         }
 
-        delegate: BackgroundItem {
-            width: categoriesView.width
-            height: Theme.itemSizeMedium
-
-            Image {
-                id: categoryIcon
-                anchors {
-                    left: parent.left
-                    leftMargin: Theme.horizontalPageMargin
-                    verticalCenter: parent.verticalCenter
-                }
-                width: Theme.iconSizeMedium
-                height: width
-                sourceSize: Qt.size(width, height)
-                source: Qt.resolvedUrl("../../icons/categories/ic_" + modelData.key
-                                       + (Theme.colorScheme === Theme.LightOnDark ? "_night" : "") + ".svg")
-            }
-            Label {
-                anchors {
-                    left: categoryIcon.right
-                    leftMargin: Theme.paddingLarge
-                    right: parent.right
-                    rightMargin: Theme.horizontalPageMargin
-                    verticalCenter: parent.verticalCenter
-                }
-                text: modelData.name
-                truncationMode: TruncationMode.Fade
-                color: highlighted ? Theme.highlightColor : Theme.primaryColor
-            }
+        delegate: MenuRow {
+            icon: Qt.resolvedUrl("../../icons/categories/ic_" + modelData.key
+                                 + (Theme.colorScheme === Theme.LightOnDark ? "_night" : "") + ".svg")
+            text: modelData.name
             onClicked: search.searchCategory(modelData.name)
         }
 
@@ -137,8 +113,8 @@ Page {
                 ResultLine {
                     text: model.description
                     trailingText: model.openStatus
-                    trailingColor: model.openState === SearchModel.Open ? "#4caf50"
-                                 : model.openState === SearchModel.ClosingSoon ? "#ffc107" : "#f44336"
+                    trailingColor: model.openState === SearchModel.Open ? Colors.open
+                                 : model.openState === SearchModel.ClosingSoon ? Colors.closingSoon : Colors.closed
                 }
                 ResultLine {
                     text: model.address
@@ -156,8 +132,8 @@ Page {
 
         ViewPlaceholder {
             enabled: resultsView.count === 0 && !search.searching
-            text: qsTr("Nothing found")
-            hintText: qsTr("Check the spelling or download the maps of the area")
+            text: appInfo.localized("search_not_found")
+            hintText: appInfo.localized("search_not_found_query")
         }
 
         VerticalScrollDecorator {}

@@ -6,7 +6,6 @@ Page {
     allowedOrientations: Orientation.All
 
     SilicaListView {
-        id: listView
         anchors.fill: parent
         model: appSettings.mapLanguages
 
@@ -14,22 +13,12 @@ Page {
             title: appInfo.localized("change_map_locale")
         }
 
-        delegate: BackgroundItem {
-            readonly property bool current: modelData.code === appSettings.mapLanguage
-
-            height: Theme.itemSizeSmall
+        delegate: TextRow {
+            text: modelData.name
+            current: modelData.code === appSettings.mapLanguage
             onClicked: {
                 appSettings.mapLanguage = modelData.code
                 pageStack.pop()
-            }
-
-            Label {
-                x: Theme.horizontalPageMargin
-                width: parent.width - 2 * x
-                anchors.verticalCenter: parent.verticalCenter
-                text: modelData.name
-                color: current || parent.highlighted ? Theme.highlightColor : Theme.primaryColor
-                truncationMode: TruncationMode.Fade
             }
         }
 

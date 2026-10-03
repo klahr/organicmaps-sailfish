@@ -1,8 +1,10 @@
 Name:       organicmaps
 Summary:    Offline maps and navigation based on OpenStreetMap
-Version:    0.1
-Release:    1
-License:    ASL 2.0
+# The date based version of the other platforms, see tools/unix/version.sh.
+Version:    %(bash tools/unix/version.sh ios_version)
+Release:    %(bash tools/unix/version.sh count)
+# The map data files are under DATA_LICENSE.txt.
+License:    Apache-2.0
 URL:        https://organicmaps.app
 Source0:    %{name}-%{version}.tar.bz2
 
@@ -18,10 +20,9 @@ BuildRequires:  pkgconfig(Qt5Quick)
 BuildRequires:  pkgconfig(Qt5Sensors)
 BuildRequires:  pkgconfig(sailfishapp)
 BuildRequires:  pkgconfig(glesv2)
+# QML modules, the linked Qt libraries are found automatically.
 Requires:       sailfishsilica-qt5
-Requires:       qt5-qtmultimedia
-Requires:       qt5-qtpositioning
-Requires:       qt5-qtsensors
+Requires:       sailfishshare-components
 Requires:       libkeepalive
 
 %description
@@ -35,9 +36,7 @@ cmake -S . -B build -G Ninja \
   -DCMAKE_BUILD_TYPE=Release \
   -DCMAKE_INSTALL_PREFIX=%{_prefix} \
   -DSAILFISH=ON \
-  -DSKIP_QT_GUI=ON \
-  -DBUILD_TESTING=OFF \
-  -DSKIP_TOOLS=ON
+  -DBUILD_TESTING=OFF
 cmake --build build --target organicmaps_sailfish
 
 %install
@@ -45,6 +44,7 @@ cmake --build build --target organicmaps_sailfish
 DESTDIR=%{buildroot} cmake -P build/sailfish/cmake_install.cmake
 
 %files
+%license LICENSE DATA_LICENSE.txt
 %{_bindir}/organicmaps
 %{_datadir}/organicmaps
 %{_datadir}/applications/organicmaps.desktop

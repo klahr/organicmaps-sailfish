@@ -146,7 +146,6 @@ MyPositionController::MyPositionController(Params && params, ref_ptr<DrapeNotifi
   , m_isDirectionAssigned(false)
   , m_isCompassAvailable(false)
   , m_positionIsObsolete(false)
-  , m_isLastKnownPositionShown(false)
   , m_needBlockAutoZoom(false)
   , m_routingNotFollowNotifyId(DrapeNotifier::kInvalidId)
   , m_blockAutoZoomNotifyId(DrapeNotifier::kInvalidId)
@@ -441,25 +440,14 @@ void MyPositionController::OnLocationUpdate(location::GpsInfo const & info, bool
     m_isDirtyViewport = true;
   }
 
-  // Assume that every new position is fresh enough unless the platform says otherwise. We can't make
-  // some straightforward filtering here like comparing system_clock::now().time_since_epoch() and
-  // info.m_timestamp, because can't rely on valid time settings on endpoint device.
-  m_positionIsObsolete = info.m_isObsolete;
-
-  // A last known position is only drawn while waiting for a fix: the mode and the map stay as they are.
-  if (info.m_isObsolete && !m_isPositionAssigned)
-  {
-    m_isLastKnownPositionShown = true;
-    return;
-  }
+  // Assume that every new position is fresh enough. We can't make some straightforward filtering here
+  // like comparing system_clock::now().time_since_epoch() and info.m_timestamp, because can't rely
+  // on valid time settings on endpoint device.
+  m_positionIsObsolete = false;
 
   if (!m_isPositionAssigned)
   {
     location::EMyPositionMode newMode = m_desiredInitMode;
-    // The pending indicator was already replaced by the last known position, so follow the first fix right away.
-    if (m_isLastKnownPositionShown && newMode == location::PendingPosition)
-      newMode = m_isInRouting ? location::FollowAndRotate : location::Follow;
-    m_isLastKnownPositionShown = false;
     ChangeMode(newMode);
 
     if (!m_hints.m_isFirstLaunch || !AnimationSystem::Instance().AnimationExists(Animation::Object::MapPlane))
@@ -580,8 +568,7 @@ void MyPositionController::Render(ref_ptr<dp::GraphicsContext> context, ref_ptr<
 {
   CheckNotFollowRouting();
 
-  if (m_shape != nullptr &&
-      (IsModeHasPosition() || (m_mode == location::PendingPosition && m_isLastKnownPositionShown)))
+  if (m_shape != nullptr && IsModeHasPosition())
   {
     CheckBlockAutoZoom();
     CheckUpdateLocation();

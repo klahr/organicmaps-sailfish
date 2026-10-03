@@ -1,16 +1,18 @@
 import QtQuick 2.6
 import Sailfish.Silica 1.0
 
-// An empty route point slot or the "Add stop" row of the route card.
-BackgroundItem {
+// A row of the route card: a route point, an empty start or finish slot, or the "Add stop" row.
+ListItem {
     id: slot
 
     property string icon
     property alias text: label.text
+    // An empty slot is dimmed, the "Add stop" row is accented.
+    property bool empty
     property bool accent
 
     width: parent.width
-    height: Theme.itemSizeSmall
+    contentHeight: Theme.itemSizeSmall
 
     Icon {
         id: slotIcon
@@ -23,7 +25,7 @@ BackgroundItem {
         height: width
         sourceSize: Qt.size(width, height)
         source: slot.icon
-        opacity: slot.accent ? 1.0 : Theme.opacityHigh
+        opacity: slot.empty ? Theme.opacityHigh : 1.0
         highlighted: slot.accent || slot.highlighted
     }
     Label {
@@ -37,6 +39,7 @@ BackgroundItem {
         }
         font.bold: true
         truncationMode: TruncationMode.Fade
-        color: slot.accent || slot.highlighted ? Theme.highlightColor : Theme.secondaryColor
+        color: slot.accent || slot.highlighted ? Theme.highlightColor
+                                               : slot.empty ? Theme.secondaryColor : Theme.primaryColor
     }
 }

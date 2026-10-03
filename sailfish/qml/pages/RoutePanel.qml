@@ -9,11 +9,14 @@ MapPanel {
 
     // MapItem.routing; the uncreatable C++ type cannot be named as a property type in Qt 5.6.
     property QtObject routing
+    property QtObject placePage
+
+    // Empty slots and stops are picked like any place: from search, bookmarks or the map.
+    signal searchClicked()
+    signal bookmarksClicked()
 
     modal: false
     spacing: 0
-
-    property QtObject placePage
 
     // Shown while a route is planned, giving way to the place page of a tapped place.
     readonly property bool shouldShow: routing.active && !routing.navigating && !placePage.open
@@ -101,19 +104,10 @@ MapPanel {
                 verticalCenter: parent.verticalCenter
             }
 
-            Row {
-                spacing: Theme.paddingMedium
-                visible: routing.building
-
-                BusyIndicator {
-                    size: BusyIndicatorSize.ExtraSmall
-                    running: routing.building
-                    anchors.verticalCenter: parent.verticalCenter
-                }
-                Label {
-                    text: qsTr("Planning…")
-                    color: Theme.secondaryColor
-                }
+            BusyIndicator {
+                visible: running
+                size: BusyIndicatorSize.ExtraSmall
+                running: routing.building
             }
             // "24 min • (walk) 810 m" for transit, like on Android.
             Row {
@@ -232,7 +226,7 @@ MapPanel {
 
     // Route points in a card. Like on Android a missing start or finish shows as an empty slot, and
     // stops can be added once both are set. Press and hold a point to reorder or remove it, in place of
-    // the Android drag handles. Empty slots and stops are picked like any place: search or the map.
+    // the Android drag handles.
     readonly property bool hasStart: routing.points.length > 0 && routing.points[0].type === Routing.Start
     readonly property bool hasFinish: routing.points.length > 0
                                       && routing.points[routing.points.length - 1].type === Routing.Finish
@@ -255,58 +249,31 @@ MapPanel {
 
                 RoutePointSlot {
                     visible: !panel.hasStart
+                    empty: true
                     icon: "../../icons/routing/route_point_start.png"
                     text: appInfo.localized("p2p_from_here")
-                    onClicked: pageStack.push(Qt.resolvedUrl("SearchPage.qml"), { search: searchModel })
+                    onClicked: panel.searchClicked()
                 }
 
                 Repeater {
                     model: routing.points
 
-                    ListItem {
-                        id: pointItem
-
-                        width: pointsColumn.width
-                        contentHeight: Theme.itemSizeSmall
-
-                        Image {
-                            id: pointIcon
-                            anchors {
-                                left: parent.left
-                                leftMargin: Theme.paddingLarge
-                                verticalCenter: parent.verticalCenter
-                            }
-                            width: Theme.iconSizeSmallPlus
-                            height: width
-                            sourceSize: Qt.size(width, height)
-                            source: modelData.isMyPosition ? "../../icons/routing/ic_location_arrow_blue.svg"
-                                  : modelData.type === Routing.Start ? "../../icons/routing/route_point_start.png"
-                                  : modelData.type === Routing.Finish ? "../../icons/routing/route_point_finish.png"
-                                  : "../../icons/routing/route_point_0" + Math.min(index, 9) + ".svg"
-                        }
-                        Label {
-                            anchors {
-                                left: pointIcon.right
-                                leftMargin: Theme.paddingLarge
-                                right: parent.right
-                                rightMargin: Theme.paddingLarge
-                                verticalCenter: parent.verticalCenter
-                            }
-                            text: modelData.title
-                            font.bold: true
-                            truncationMode: TruncationMode.Fade
-                            highlighted: pointItem.highlighted
-                        }
+                    RoutePointSlot {
+                        icon: modelData.isMyPosition ? "../../icons/routing/ic_location_arrow_blue.svg"
+                            : modelData.type === Routing.Start ? "../../icons/routing/route_point_start.png"
+                            : modelData.type === Routing.Finish ? "../../icons/routing/route_point_finish.png"
+                            : "../../icons/routing/route_point_0" + Math.min(index, 9) + ".svg"
+                        text: modelData.title
 
                         menu: ContextMenu {
                             MenuItem {
                                 visible: index > 0
-                                text: qsTr("Move up")
+                                text: appInfo.localized("move_up")
                                 onClicked: routing.movePoint(index, index - 1)
                             }
                             MenuItem {
                                 visible: index < routing.points.length - 1
-                                text: qsTr("Move down")
+                                text: appInfo.localized("move_down")
                                 onClicked: routing.movePoint(index, index + 1)
                             }
                             MenuItem {
@@ -324,16 +291,17 @@ MapPanel {
 
                 RoutePointSlot {
                     visible: !panel.hasFinish
+                    empty: true
                     icon: "../../icons/routing/route_point_finish.png"
                     text: appInfo.localized("p2p_to_here")
-                    onClicked: pageStack.push(Qt.resolvedUrl("SearchPage.qml"), { search: searchModel })
+                    onClicked: panel.searchClicked()
                 }
                 RoutePointSlot {
                     visible: panel.hasStart && panel.hasFinish
                     icon: "image://theme/icon-m-add"
                     text: appInfo.localized("placepage_add_stop")
                     accent: true
-                    onClicked: pageStack.push(Qt.resolvedUrl("SearchPage.qml"), { search: searchModel })
+                    onClicked: panel.searchClicked()
                 }
             }
         }
@@ -347,20 +315,23 @@ MapPanel {
         height: Theme.itemSizeMedium
         spacing: Theme.paddingMedium
 
-        Repeater {
-            model: [
-                { icon: "image://theme/icon-m-search", page: "SearchPage.qml" },
-                { icon: Qt.resolvedUrl("../../icons/bookmarks/ic_bookmarks_and_tracks.svg"), page: "BookmarksPage.qml" },
-                { icon: Qt.resolvedUrl("../../icons/menu/ic_download.svg"), page: "MapsPage.qml" }
-            ]
-
-            MapButton {
-                anchors.verticalCenter: parent.verticalCenter
-                radius: Theme.dp(14)
-                source: modelData.icon
-                onClicked: pageStack.push(Qt.resolvedUrl(modelData.page),
-                                          modelData.page === "SearchPage.qml" ? { search: searchModel } : {})
-            }
+        MapButton {
+            anchors.verticalCenter: parent.verticalCenter
+            radius: Theme.dp(14)
+            source: "image://theme/icon-m-search"
+            onClicked: panel.searchClicked()
+        }
+        MapButton {
+            anchors.verticalCenter: parent.verticalCenter
+            radius: Theme.dp(14)
+            source: Qt.resolvedUrl("../../icons/bookmarks/ic_bookmarks_and_tracks.svg")
+            onClicked: panel.bookmarksClicked()
+        }
+        MapButton {
+            anchors.verticalCenter: parent.verticalCenter
+            radius: Theme.dp(14)
+            source: Qt.resolvedUrl("../../icons/menu/ic_download.svg")
+            onClicked: pageStack.push(Qt.resolvedUrl("MapsPage.qml"))
         }
         // Car, walking and bicycle routes can be navigated, as on Android.
         Button {
@@ -371,7 +342,4 @@ MapPanel {
             onClicked: routing.start()
         }
     }
-
-    // The SearchModel of the map page, for "Add stop".
-    property QtObject searchModel
 }

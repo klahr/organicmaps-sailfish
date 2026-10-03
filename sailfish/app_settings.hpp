@@ -1,5 +1,7 @@
 #pragma once
 
+#include "indexer/map_style.hpp"
+
 #include <QObject>
 #include <QString>
 #include <QVariantList>
@@ -8,6 +10,9 @@ class Framework;
 
 namespace sailfish
 {
+// The default or outdoors map style in its dark or light variant, without the vehicle style of navigation.
+MapStyle BaseMapStyle(bool dark, bool outdoors);
+
 // The Android settings that apply to this port, available to QML as the appSettings context property.
 // Core settings go through the Framework; UI only ones are kept in the same settings file.
 class AppSettings : public QObject

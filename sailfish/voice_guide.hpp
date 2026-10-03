@@ -53,6 +53,13 @@ private slots:
   void OnSpeechNoteFinished(int task);
 
 private:
+  // An installed speech synthesizer program.
+  struct Program
+  {
+    Engine const * m_engine;
+    QString m_path;
+  };
+
   void ChooseLanguage();
   void OnSpeechNoteLanguages(QDBusPendingCallWatcher * watcher);
   void SpeakNextWithSpeechNote();
@@ -69,7 +76,7 @@ private:
   // Core language -> Speech Note language with a voice.
   std::map<std::string, QString> m_speechNoteVoices;
   // Core language -> the first program that speaks it.
-  std::map<std::string, Engine const *> m_programVoices;
+  std::map<std::string, Program> m_programVoices;
 
   // Set when the language is spoken by Speech Note, with the task being spoken.
   QString m_speechNoteLanguage;
