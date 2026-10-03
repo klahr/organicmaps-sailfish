@@ -12,8 +12,9 @@ import xml.etree.ElementTree as ET
 
 A = '{http://schemas.android.com/apk/res/android}'
 ROOT = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', '..')
-# The app resources, then the SDK ones.
-RES_DIRS = [os.path.join(ROOT, 'android/app/src/main/res'), os.path.join(ROOT, 'android/sdk/src/main/res')]
+# The app resources, then the SDK and branding ones.
+RES_DIRS = [os.path.join(ROOT, 'android/app/src/main/res'), os.path.join(ROOT, 'android/sdk/src/main/res'),
+            os.path.join(ROOT, 'android/libs/branding/src/main/res')]
 # ic_layers is the monochrome map button icon, the others are the light/night layer previews.
 LAYERS = ['ic_layers', 'ic_layers_outdoors', 'ic_layers_isoline', 'ic_layers_hiking', 'ic_layers_cycling',
           'ic_layers_subway', 'ic_layers_satellite']
@@ -23,13 +24,15 @@ CATEGORIES = ['ic_category_' + key for key in (
     'nightlife', 'children', 'bank', 'entertainment', 'water', 'hospital', 'pharmacy', 'recycling', 'rv', 'police',
     'toilet', 'post')]
 # Place page row icons missing from the Silica theme.
-PLACE_PAGE = ['ic_wikimedia_commons_white', 'ic_wheelchair_white', 'ic_capacity_white', 'ic_open_in']
+PLACE_PAGE = ['ic_wheelchair_white', 'ic_capacity_white', 'ic_open_in', 'ic_category_bus',
+              'ic_category_tram', 'ic_cuisine', 'ic_network_white', 'ic_drive_through_white', 'ic_outdoor_seating']
 # Bookmarks button and list visibility toggles.
 BOOKMARKS = ['ic_bookmarks_and_tracks', 'ic_show', 'ic_hide']
 # My position button states.
 MY_POSITION = ['ic_location_off', 'ic_not_follow', 'ic_follow', 'ic_follow_and_rotate']
-# Help button.
-HELP = ['ic_question_mark']
+# The logo of the help button and the about page, and the icons of the about page rows, as in about.xml on Android.
+HELP = ['logo', 'ic_question_mark', 'ic_report_a_bug', 'ic_donate', 'ic_news', 'ic_telegram', 'ic_github', 'ic_website',
+        'ic_matrix', 'ic_mastodon', 'ic_facebook_white', 'ic_twitterx', 'ic_instagram', 'ic_openstreetmap']
 # Main menu entries and the recording status button. Android tints the single color ones at runtime, so
 # they are made white (WHITE) for Silica to colorize; ic_track_recording_on keeps its two colors.
 MENU = ['ic_download', 'ic_donate', 'ic_settings', 'ic_track_recording_off', 'ic_track_recording_on', 'ic_share',
@@ -46,15 +49,13 @@ EDITOR = ['ic_address', 'ic_building', 'ic_email', 'ic_operating_hours', 'ic_ope
 SOCIAL = {'ic_facebook': 'ic_facebook_white', 'ic_instagram': 'ic_instagram_white', 'ic_line': 'ic_line_white',
           'ic_twitterx': 'ic_twitterx_white', 'ic_vk': 'ic_vk_white'}
 WHITE = {'ic_ruler_route', 'ic_download', 'ic_donate', 'ic_settings', 'ic_track_recording_off', 'ic_share',
-         'ic_track_recording_status'} | set(EDITOR)
+         'ic_track_recording_status'} | set(EDITOR) | set(HELP)
 OUTPUTS = [('layers', LAYERS), ('categories', CATEGORIES), ('placepage', PLACE_PAGE), ('bookmarks', BOOKMARKS),
            ('myposition', MY_POSITION), ('help', HELP), ('menu', MENU), ('routing', ROUTING),
            ('navigation', NAVIGATION), ('editor', EDITOR + list(SOCIAL))]
 
 # Android path attribute -> SVG attribute.
 PATH_ATTRS = {
-    'fillAlpha': 'fill-opacity',
-    'strokeAlpha': 'stroke-opacity',
     'strokeWidth': 'stroke-width',
     'strokeLineCap': 'stroke-linecap',
     'strokeLineJoin': 'stroke-linejoin',
@@ -105,7 +106,9 @@ def convert(node, out, clip_ids):
                 value = child.get(A + kind + 'Color')
                 rgb, alpha = color(value) if value else ('none', None)
                 attrs[kind] = rgb
-                if alpha is not None and alpha < 1:
+                # Android multiplies the color's alpha by fillAlpha / strokeAlpha.
+                alpha = (1 if alpha is None else alpha) * float(child.get(A + kind + 'Alpha', 1))
+                if alpha < 1:
                     attrs[kind + '-opacity'] = '%.3f' % alpha
             if child.get(A + 'fillType') == 'evenOdd':
                 attrs['fill-rule'] = 'evenodd'

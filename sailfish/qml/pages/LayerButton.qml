@@ -25,14 +25,32 @@ BackgroundItem {
 
             Image {
                 id: preview
+                // The corner radius of the Android previews, which Qt's SVG Tiny renderer drops with their clip path.
+                readonly property real cornerRadius: width * 10 / 54
+
                 anchors.fill: parent
                 anchors.margins: Theme.paddingSmall
                 sourceSize: Qt.size(width, height)
+                layer.enabled: true
+                layer.effect: ShaderEffect {
+                    property real radius: preview.cornerRadius / preview.width
+                    fragmentShader: "
+                        varying highp vec2 qt_TexCoord0;
+                        uniform sampler2D source;
+                        uniform lowp float qt_Opacity;
+                        uniform highp float radius;
+                        void main() {
+                            highp vec2 corner = max(abs(qt_TexCoord0 - 0.5) - (0.5 - radius), 0.0);
+                            lowp float inside = 1.0 - smoothstep(radius - 0.02, radius, length(corner));
+                            gl_FragColor = texture2D(source, qt_TexCoord0) * inside * qt_Opacity;
+                        }"
+                }
             }
 
+            // Around the preview, its corners following the preview's.
             Rectangle {
                 anchors.fill: parent
-                radius: Theme.paddingMedium
+                radius: preview.cornerRadius + Theme.paddingSmall
                 color: "transparent"
                 border.color: Theme.highlightColor
                 border.width: Theme.dp(2)

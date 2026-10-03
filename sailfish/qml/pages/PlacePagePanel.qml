@@ -14,12 +14,20 @@ MapPanel {
     property QtObject routing
 
     signal addPlaceClicked()
+    signal addBusinessClicked()
+    // The close button or a swipe closed the panel, not a tap on the map or another selection.
+    signal closedByUser()
 
     modal: false
     spacing: 0
 
     // Swiping the panel away deselects the place, and a new selection or a tap on the map updates it.
-    onOpenChanged: if (!open && placePage.open) placePage.close()
+    onOpenChanged: {
+        if (!open && placePage.open) {
+            placePage.close()
+            closedByUser()
+        }
+    }
     Connections {
         target: panel.placePage
         onChanged: {
@@ -102,7 +110,10 @@ MapPanel {
                         topMargin: Theme.paddingMedium
                     }
                     icon.source: "image://theme/icon-m-cancel"
-                    onClicked: placePage.close()
+                    onClicked: {
+                        placePage.close()
+                        panel.closedByUser()
+                    }
                 }
                 // Direction and distance to the place, the arrow turning with the compass like on Android.
                 Row {
@@ -134,6 +145,67 @@ MapPanel {
             ElevationProfile {
                 visible: placePage.isTrack
                 placePage: panel.placePage
+            }
+
+            // Routes through a stop, like the Android route row: tap to choose one and show it on the map.
+            ListItem {
+                id: routesRow
+                visible: placePage.routeRefs !== ""
+                // At least the height of the other rows, growing when many routes wrap.
+                contentHeight: Math.max(Theme.itemSizeMedium, routesLabel.height + 2 * Theme.paddingMedium)
+                onClicked: openMenu()
+
+                Icon {
+                    id: routesIcon
+                    x: Theme.horizontalPageMargin
+                    anchors.verticalCenter: routesLabel.verticalCenter
+                    width: Theme.iconSizeMedium
+                    height: width
+                    sourceSize: Qt.size(width, height)
+                    source: "../../icons/placepage/" + (placePage.isTramStop ? "ic_category_tram.svg"
+                                                                             : "ic_category_bus.svg")
+                    highlighted: routesRow.highlighted
+                }
+                Label {
+                    id: routesLabel
+                    anchors {
+                        left: routesIcon.right
+                        leftMargin: Theme.paddingLarge
+                        right: parent.right
+                        rightMargin: Theme.horizontalPageMargin
+                    }
+                    anchors.verticalCenter: parent.verticalCenter
+                    text: placePage.routeRefs
+                    textFormat: Text.StyledText
+                    wrapMode: Text.Wrap
+                    highlighted: routesRow.highlighted
+                }
+
+                menu: ContextMenu {
+                    Repeater {
+                        model: placePage.routes
+
+                        MenuItem {
+                            text: modelData.label
+                            truncationMode: TruncationMode.Fade
+                            onClicked: placePage.showRoute(index)
+
+                            // The line color, when the route has one.
+                            Rectangle {
+                                visible: modelData.color !== ""
+                                anchors {
+                                    left: parent.left
+                                    leftMargin: Theme.paddingMedium
+                                    verticalCenter: parent.verticalCenter
+                                }
+                                width: Theme.paddingSmall
+                                height: parent.height * 0.6
+                                radius: width / 2
+                                color: modelData.color || "transparent"
+                            }
+                        }
+                    }
+                }
             }
 
             // Opening state with the next change, expanding to the full schedule.
@@ -199,7 +271,7 @@ MapPanel {
                 visible: placePage.wikiDescription !== "" || placePage.wikiUrl !== ""
 
                 MenuRow {
-                    icon: "../../icons/placepage/ic_wiki.webp"
+                    icon: "../../icons/placepage/ic_wiki.svg"
                     text: appInfo.localized("read_in_wikipedia")
                     enabled: placePage.wikiUrl !== ""
                     onClicked: Qt.openUrlExternally(placePage.wikiUrl)
@@ -293,6 +365,14 @@ MapPanel {
                 icon: "image://theme/icon-m-add"
                 text: appInfo.localized("placepage_add_place_button")
                 onClicked: panel.addPlaceClicked()
+            }
+            MenuRow {
+                visible: placePage.canAddBusiness && !routing.active
+                enabled: placePage.editable
+                opacity: enabled ? 1.0 : Theme.opacityLow
+                icon: "image://theme/icon-m-add"
+                text: appInfo.localized("placepage_add_business_button")
+                onClicked: panel.addBusinessClicked()
             }
         }
 

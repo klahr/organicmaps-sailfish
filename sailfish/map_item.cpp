@@ -237,7 +237,7 @@ QString MapItem::myPositionShareText() const
   return QString::fromStdString(m_framework.GetShareDataForMyPosition(mercator::ToLatLon(*position)).m_text);
 }
 
-void MapItem::startChoosingPosition()
+void MapItem::startChoosingPosition(bool business)
 {
   // Like Android, the cross starts at the selected place and the map zooms in to it.
   std::optional<m2::PointD> position;
@@ -245,7 +245,7 @@ void MapItem::startChoosingPosition()
     position = m_framework.GetCurrentPlacePageInfo().GetMercator();
   m_placePage->close();
   m_framework.BlockTapEvents(true);
-  m_framework.EnableChoosePositionMode(true, false /* enableBounds */, position ? &*position : nullptr,
+  m_framework.EnableChoosePositionMode(true, business /* enableBounds */, position ? &*position : nullptr,
                                        true /* shouldChangeViewport */);
   m_choosingPosition = true;
   emit choosingPositionChanged();

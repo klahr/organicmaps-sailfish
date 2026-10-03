@@ -7,6 +7,8 @@ Page {
     id: page
 
     property SearchModel search
+    // A result was chosen and is shown in the place page.
+    signal resultActivated()
 
     allowedOrientations: Orientation.All
 
@@ -127,8 +129,10 @@ Page {
             }
 
             onClicked: {
-                if (search.activate(index))
+                if (search.activate(index)) {
+                    page.resultActivated()
                     pageStack.pop()
+                }
             }
         }
 

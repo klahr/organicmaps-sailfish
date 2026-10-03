@@ -46,7 +46,36 @@ Page {
     readonly property bool choosingPosition: map.choosingPosition
 
     function openSearch() {
-        pageStack.push(Qt.resolvedUrl("SearchPage.qml"), { search: search })
+        var searchPage = pageStack.push(Qt.resolvedUrl("SearchPage.qml"), { search: search })
+        searchPage.resultActivated.connect(function() {
+            page.searchResultTitle = ""
+            page.placeFromSearch = true
+        })
+    }
+
+    // The place page shows a search result: closing it returns to the results, like on Android. Another
+    // selection or closing it with a tap on the map forgets it.
+    property bool placeFromSearch
+    property string searchResultTitle
+    Connections {
+        target: map.placePage
+        onChanged: {
+            if (!page.placeFromSearch)
+                return
+            if (!map.placePage.open)
+                forgetSearchResult.restart()
+            else if (page.searchResultTitle === "")
+                page.searchResultTitle = map.placePage.title
+            else if (map.placePage.title !== page.searchResultTitle)
+                page.placeFromSearch = false
+        }
+    }
+    // The close button and swipe report closedByUser right after the place page closes; anything else is a
+    // tap on the map.
+    Timer {
+        id: forgetSearchResult
+        interval: 100
+        onTriggered: page.placeFromSearch = false
     }
     Connections {
         target: urlHandler
@@ -154,7 +183,7 @@ Page {
 
         MapButton {
             radius: Theme.dp(14)
-            source: Qt.resolvedUrl("../../icons/help/ic_question_mark.svg")
+            source: Qt.resolvedUrl("../../icons/help/logo.svg")
             onClicked: pageStack.push(Qt.resolvedUrl("HelpPage.qml"))
         }
         MapButton {
@@ -242,7 +271,7 @@ Page {
             onClicked: page.openBookmarks()
         }
         RoadSign {
-            width: Theme.itemSizeMedium * 1.2
+            width: Theme.itemSizeSmall * 1.2
             text: map.routing.navigation.speed || "0"
             alert: !!map.routing.navigation.speedCamLimitExceeded
             fontSize: Theme.fontSizeExtraLarge
@@ -395,7 +424,15 @@ Page {
         id: placePagePanel
         placePage: map.placePage
         routing: map.routing
-        onAddPlaceClicked: map.startChoosingPosition()
+        onAddPlaceClicked: map.startChoosingPosition(false)
+        onAddBusinessClicked: map.startChoosingPosition(true)
+        onClosedByUser: {
+            if (page.placeFromSearch) {
+                forgetSearchResult.stop()
+                page.placeFromSearch = false
+                page.openSearch()
+            }
+        }
     }
 
     RoutePanel {
@@ -444,11 +481,11 @@ Page {
                 // Order and labels of the Android layers sheet; Satellite once a tile server is set.
                 model: {
                     var layers = [
-                        { layer: MapItem.Outdoors, icon: "ic_layers_outdoors", text: appInfo.localized("button_layer_outdoor") },
+                        { layer: MapItem.Subway, icon: "ic_layers_subway", text: appInfo.localized("button_layer_subway") },
                         { layer: MapItem.Isolines, icon: "ic_layers_isoline", text: appInfo.localized("button_layer_isolines") },
+                        { layer: MapItem.Outdoors, icon: "ic_layers_outdoors", text: appInfo.localized("button_layer_outdoor") },
                         { layer: MapItem.Hiking, icon: "ic_layers_hiking", text: appInfo.localized("button_layer_hiking") },
-                        { layer: MapItem.Cycling, icon: "ic_layers_cycling", text: appInfo.localized("button_layer_cycling") },
-                        { layer: MapItem.Subway, icon: "ic_layers_subway", text: appInfo.localized("button_layer_subway") }
+                        { layer: MapItem.Cycling, icon: "ic_layers_cycling", text: appInfo.localized("button_layer_cycling") }
                     ]
                     if (appSettings.bgTilesUrl !== "")
                         layers.push({ layer: MapItem.Satellite, icon: "ic_layers_satellite",

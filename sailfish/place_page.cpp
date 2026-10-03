@@ -11,6 +11,10 @@
 
 #include "ge0/url_generator.hpp"
 
+#include "indexer/classificator.hpp"
+#include "indexer/feature_utils.hpp"
+#include "indexer/validate_and_format_contacts.hpp"
+
 #include "opening_hours/opening_hours.hpp"
 
 #include "platform/distance.hpp"
@@ -21,8 +25,11 @@
 
 #include "base/math.hpp"
 
+#include <QColor>
 #include <QDateTime>
 #include <QLocale>
+#include <QRegularExpression>
+#include <QUrl>
 #include <QVariantMap>
 
 namespace sailfish
@@ -157,6 +164,7 @@ void PlacePage::Update()
   m_userMarkId = m_isTrack ? info.GetTrackId() : info.GetBookmarkId();
   m_canEdit = info.ShouldShowEditPlace();
   m_canAddPlace = info.ShouldShowAddPlace();
+  m_canAddBusiness = info.ShouldShowAddBusiness();
   m_editable = info.CanEditPlace();
   m_shareText = QString::fromStdString(m_framework.GetShareData(info).m_text);
   m_geoUri = QString::fromStdString(
@@ -167,36 +175,125 @@ void PlacePage::Update()
   m_wikiUrl = wikipedia.empty() ? QString() : QString::fromStdString(Metadata::ToWikiURL(std::string(wikipedia)));
 
   m_details.clear();
-  auto const add = [this](char const * icon, QString const & text, QString const & url = {})
+  auto const add = [this](QString const & icon, QString const & text, QString const & url = {})
   {
     if (!text.isEmpty())
       m_details.append(QVariantMap{{"icon", icon}, {"text", text}, {"url", url}});
   };
+  // The order of place_page_details.xml and place_page_links_fragment.xml on Android.
+  add("../../icons/placepage/ic_cuisine.svg", QString::fromStdString(info.FormatCuisines()));
+  add("../../icons/placepage/ic_entrance.webp", ToQString(info.GetMetadata(Metadata::FMD_FLATS)));
+  add("image://theme/icon-m-person", ToQString(info.GetMetadata(Metadata::FMD_OPERATOR)));
+  if (auto const network = info.GetMetadata(Metadata::FMD_NETWORK); !network.empty())
+    add("../../icons/placepage/ic_network_white.svg", Localized("network", {ToQString(network)}));
+
+  // Websites show without the scheme and the trailing slash, like MapObject.getWebsiteUrl() on Android.
+  auto const addWebsite = [&](char const * icon, Metadata::EType type, QString const & text = {})
+  {
+    QString const url = QUrl::fromPercentEncoding(ToQString(info.GetMetadata(type)).toUtf8());
+    if (url.isEmpty())
+      return;
+    QString shown = url;
+    shown.remove(QRegularExpression(QStringLiteral("^https?://"))).remove(QRegularExpression(QStringLiteral("/$")));
+    add(icon, text.isEmpty() ? shown : text, url.contains("://") ? url : "https://" + url);
+  };
+  addWebsite("image://theme/icon-m-website", Metadata::FMD_WEBSITE);
+  addWebsite("image://theme/icon-m-website", Metadata::FMD_HERITAGE_WEBSITE);
+  addWebsite("../../icons/editor/ic_website_menu.svg", Metadata::FMD_WEBSITE_MENU, Localized("view_menu"));
   // Multiple phone numbers are separated by semicolons.
   for (auto const & phone : ToQString(info.GetMetadata(Metadata::FMD_PHONE_NUMBER)).split(';', QString::SkipEmptyParts))
     add("image://theme/icon-m-phone", phone.trimmed(), "tel:" + phone.trimmed());
-  if (auto const website = ToQString(info.GetMetadata(Metadata::FMD_WEBSITE)); !website.isEmpty())
-    add("image://theme/icon-m-website", website, website.contains("://") ? website : "https://" + website);
   if (auto const email = ToQString(info.GetMetadata(Metadata::FMD_EMAIL)); !email.isEmpty())
     add("image://theme/icon-m-mail", email, "mailto:" + email);
-  if (info.HasWifi())
-    add("image://theme/icon-m-wlan", QStringLiteral("Wi-Fi"));
-  add("image://theme/icon-m-levels", ToQString(info.GetMetadata(Metadata::FMD_LEVEL)));
-  add("image://theme/icon-m-person", ToQString(info.GetMetadata(Metadata::FMD_OPERATOR)));
-  if (auto const capacity = info.GetMetadata(Metadata::FMD_CAPACITY); !capacity.empty())
-    add("../../icons/placepage/ic_capacity_white.svg", Localized("capacity", {ToQString(capacity)}));
+  // Social networks show the contact as tagged and open its page.
+  std::pair<Metadata::EType, char const *> constexpr kSocial[] = {{Metadata::FMD_CONTACT_FACEBOOK, "ic_facebook.svg"},
+                                                                  {Metadata::FMD_CONTACT_INSTAGRAM, "ic_instagram.svg"},
+                                                                  {Metadata::FMD_CONTACT_TWITTER, "ic_twitterx.svg"},
+                                                                  {Metadata::FMD_CONTACT_VK, "ic_vk.svg"},
+                                                                  {Metadata::FMD_CONTACT_LINE, "ic_line.svg"}};
+  for (auto const & [type, icon] : kSocial)
+  {
+    auto const value = info.GetMetadata(type);
+    if (!value.empty())
+      add(QStringLiteral("../../icons/editor/%1").arg(icon), ToQString(value),
+          QString::fromStdString(osm::socialContactToURL(type, value)));
+  }
   if (auto const commons = info.GetMetadata(Metadata::FMD_WIKIMEDIA_COMMONS); !commons.empty())
   {
-    add("../../icons/placepage/ic_wikimedia_commons_white.svg", Localized("wikimedia_commons"),
+    add("../../icons/placepage/ic_wikimedia_commons.svg", Localized("wikimedia_commons"),
         QString::fromStdString(Metadata::ToWikimediaCommonsURL(std::string(commons))));
   }
-  // A classificator type like wheelchair-yes, localized like other types.
+
+  add("image://theme/icon-m-levels", ToQString(info.GetMetadata(Metadata::FMD_LEVEL)));
+  if (auto const capacity = info.GetMetadata(Metadata::FMD_CAPACITY); !capacity.empty())
+    add("../../icons/placepage/ic_capacity_white.svg", Localized("capacity", {ToQString(capacity)}));
+  // Classificator types like wheelchair-yes and self_service-yes, localized like other types.
   if (auto const wheelchair = info.GetMetadata(Metadata::FMD_WHEELCHAIR); !wheelchair.empty())
     add("../../icons/placepage/ic_wheelchair_white.svg",
         QString::fromStdString(platform::GetLocalizedTypeName(std::string(wheelchair))));
+  // Internet access as Yes or No, like on Android.
+  if (auto const internet = info.GetInternet(); internet != feature::Internet::Unknown)
+    add("image://theme/icon-m-wlan", Localized(internet == feature::Internet::No ? "no_available" : "yes_available"));
+  if (info.GetMetadata(Metadata::FMD_DRIVE_THROUGH) == "yes")
+    add("../../icons/placepage/ic_drive_through_white.svg", Localized("drive_through"));
+  if (auto const selfService = info.GetMetadata(Metadata::FMD_SELF_SERVICE); !selfService.empty())
+    add("../../icons/editor/ic_self_service.svg",
+        QString::fromStdString(platform::GetLocalizedTypeName("self_service-" + std::string(selfService))));
+  if (info.GetMetadata(Metadata::FMD_OUTDOOR_SEATING) == "yes")
+    add("../../icons/placepage/ic_outdoor_seating.svg", Localized("outdoor_seating"));
+
+  m_routes.clear();
+  m_routeIds.clear();
+  for (auto const & route : info.GetRoutes())
+  {
+    QString label = QString::fromStdString(route.m_ref);
+    if (!route.m_from.empty() || !route.m_to.empty())
+    {
+      label += ": " + QString::fromStdString(route.m_from);
+      if (!route.m_to.empty())
+        label += " → " + QString::fromStdString(route.m_to);
+    }
+    uint32_t const argb = route.m_color.GetARGB();
+    // No alpha means the relation has no color.
+    QString const color = (argb >> 24) == 0 ? QString() : QColor::fromRgba(argb).name();
+    m_routes.append(QVariantMap{{"label", label}, {"color", color}});
+    m_routeIds.push_back(route.m_relID);
+  }
+  static uint32_t const tramStop = classif().GetTypeByPath({"railway", "tram_stop"});
+  m_isTramStop = info.GetTypes().Has(tramStop);
+  UpdateRouteRefs();
 
   UpdateTrack();
   UpdateDistance();
+  emit changed();
+}
+
+void PlacePage::UpdateRouteRefs()
+{
+  // Each ref once: directions of a line repeat it, like formatRouteRefs() on Android.
+  QStringList seen;
+  QStringList refs;
+  QString const active = QString::fromStdString(m_framework.GetActiveTransitRouteRef());
+  if (m_framework.HasPlacePageInfo())
+  {
+    for (auto const & route : m_framework.GetCurrentPlacePageInfo().GetRoutes())
+    {
+      QString const ref = QString::fromStdString(route.m_ref);
+      if (seen.contains(ref))
+        continue;
+      seen.append(ref);
+      refs.append(ref == active ? "<b><u>" + ref.toHtmlEscaped() + "</u></b>" : ref.toHtmlEscaped());
+    }
+  }
+  m_routeRefs = refs.join(QStringLiteral(" • "));
+}
+
+void PlacePage::showRoute(int index)
+{
+  if (index < 0 || index >= static_cast<int>(m_routeIds.size()))
+    return;
+  m_framework.ShowRouteTransit(m_routeIds[static_cast<size_t>(index)]);
+  UpdateRouteRefs();
   emit changed();
 }
 

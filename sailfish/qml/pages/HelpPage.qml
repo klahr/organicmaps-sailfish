@@ -1,13 +1,21 @@
 import QtQuick 2.6
 import Sailfish.Silica 1.0
 
-// About and help links, like the Android HelpFragment. Texts come from the shared data/strings.
+// About and help links in the order of the Android about.xml. Texts come from the shared data/strings; the
+// FAQ and copyright pages are the bundled ones, opened in the browser.
 Page {
     id: page
 
     allowedOrientations: Orientation.All
 
     readonly property string siteUrl: appInfo.localized("translated_om_site_url")
+
+    function icon(name) {
+        return Qt.resolvedUrl("../../icons/help/" + name)
+    }
+    function bundled(file) {
+        return Qt.resolvedUrl("../../data/" + file)
+    }
 
     SilicaFlickable {
         anchors.fill: parent
@@ -22,6 +30,18 @@ Page {
                 description: appInfo.version
             }
 
+            Icon {
+                anchors.horizontalCenter: parent.horizontalCenter
+                width: Theme.iconSizeExtraLarge
+                height: width
+                sourceSize: Qt.size(width, height)
+                source: page.icon("logo.svg")
+                color: Theme.highlightColor
+            }
+            Item {
+                width: 1
+                height: Theme.paddingLarge
+            }
             Label {
                 x: Theme.horizontalPageMargin
                 width: parent.width - 2 * x
@@ -44,57 +64,72 @@ Page {
                 color: Theme.secondaryHighlightColor
             }
 
-            SectionHeader {
-                text: "OpenStreetMap"
-            }
-            Label {
-                x: Theme.horizontalPageMargin
-                width: parent.width - 2 * x
-                text: appInfo.localized("osm_presentation",
-                                        [Qt.formatDate(appInfo.dataVersion, Locale.ShortFormat)])
-                wrapMode: Text.Wrap
-                font.pixelSize: Theme.fontSizeSmall
-                color: Theme.secondaryColor
-            }
-            TextRow {
-                text: "OpenStreetMap.org"
-                url: appInfo.localized("osm_wiki_about_url")
+            // The donation box of Android, when the server offers a donation page.
+            MenuRow {
+                visible: appSettings.donateUrl !== ""
+                icon: page.icon("ic_donate.svg")
+                text: appInfo.localized("donate")
+                onClicked: Qt.openUrlExternally(appSettings.donateUrl)
             }
 
             SectionHeader {
-                text: appInfo.localized("help")
+                text: "OpenStreetMap"
             }
-            TextRow {
-                text: appInfo.localized("news")
-                url: page.siteUrl + "news/"
+            Row {
+                x: Theme.horizontalPageMargin
+                width: parent.width - 2 * x
+                spacing: Theme.paddingLarge
+
+                Image {
+                    id: osmLogo
+                    width: Theme.iconSizeLarge
+                    height: width
+                    sourceSize: Qt.size(width, height)
+                    source: page.icon("ic_openstreetmap_color.webp")
+                }
+                Label {
+                    width: parent.width - osmLogo.width - parent.spacing
+                    anchors.verticalCenter: parent.verticalCenter
+                    text: appInfo.localized("osm_presentation",
+                                            [Qt.formatDate(appInfo.dataVersion, Locale.ShortFormat)])
+                    wrapMode: Text.Wrap
+                    font.pixelSize: Theme.fontSizeSmall
+                    color: Theme.secondaryColor
+                }
             }
-            TextRow {
-                text: appInfo.localized("faq")
-                url: page.siteUrl + "faq/"
+            Item {
+                width: 1
+                height: Theme.paddingMedium
             }
-            TextRow {
-                text: appInfo.localized("how_to_support_us")
-                url: page.siteUrl + "support-us/"
+
+            Repeater {
+                model: [
+                    { icon: "ic_question_mark.svg", text: appInfo.localized("faq"), url: page.bundled("faq.html") },
+                    { icon: "ic_report_a_bug.svg", text: appInfo.localized("report_a_bug"),
+                      url: "https://github.com/organicmaps/organicmaps/issues" },
+                    { icon: "ic_donate.svg", text: appInfo.localized("how_to_support_us"), url: page.siteUrl + "support-us/" },
+                    { icon: "ic_news.svg", text: appInfo.localized("news"), url: page.siteUrl + "news/" },
+                    { icon: "ic_telegram.svg", text: "Telegram", url: appInfo.localized("telegram_url") },
+                    { icon: "ic_github.svg", text: "GitHub", url: "https://github.com/organicmaps/organicmaps" },
+                    { icon: "ic_website.svg", text: appInfo.localized("website"), url: page.siteUrl },
+                    { icon: "ic_matrix.svg", text: "Matrix", url: "https://matrix.to/#/%23organicmaps:matrix.org" },
+                    { icon: "ic_mastodon.svg", text: "Mastodon", url: "https://fosstodon.org/@organicmaps" },
+                    { icon: "ic_facebook_white.svg", text: "Facebook", url: "https://www.facebook.com/OrganicMaps" },
+                    { icon: "ic_twitterx.svg", text: "X (Twitter)", url: "https://twitter.com/OrganicMapsApp" },
+                    { icon: "ic_instagram.svg", text: "Instagram", url: appInfo.localized("instagram_url") },
+                    { icon: "ic_openstreetmap.svg", text: "OpenStreetMap", url: appInfo.localized("osm_wiki_about_url") }
+                ]
+
+                MenuRow {
+                    icon: page.icon(modelData.icon)
+                    text: modelData.text
+                    onClicked: Qt.openUrlExternally(modelData.url)
+                }
             }
-            TextRow {
-                text: appInfo.localized("website")
-                url: page.siteUrl
-            }
-            TextRow {
-                text: "GitHub"
-                url: "https://github.com/organicmaps/organicmaps"
-            }
-            TextRow {
-                text: "Telegram"
-                url: appInfo.localized("telegram_url")
-            }
-            TextRow {
-                text: "Matrix"
-                url: "https://matrix.to/#/%23organicmaps:matrix.org"
-            }
-            TextRow {
-                text: "Mastodon"
-                url: "https://fosstodon.org/@organicmaps"
+
+            Item {
+                width: 1
+                height: Theme.paddingLarge
             }
             TextRow {
                 text: appInfo.localized("privacy_policy")
@@ -103,6 +138,10 @@ Page {
             TextRow {
                 text: appInfo.localized("terms_of_use")
                 url: page.siteUrl + "terms/"
+            }
+            TextRow {
+                text: appInfo.localized("copyright")
+                url: page.bundled("copyright.html")
             }
         }
 

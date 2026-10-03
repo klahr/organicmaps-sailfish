@@ -6,6 +6,7 @@
 #include <QVariantList>
 
 #include <string_view>
+#include <vector>
 
 class Framework;
 
@@ -34,6 +35,8 @@ class PlacePage : public QObject
   Q_PROPERTY(bool canEdit READ canEdit NOTIFY changed)
   // "Add Place to OpenStreetMap" is offered, e.g. for an area or an empty spot.
   Q_PROPERTY(bool canAddPlace READ canAddPlace NOTIFY changed)
+  // "Add business" is offered for a building, to add a business inside it.
+  Q_PROPERTY(bool canAddBusiness READ canAddBusiness NOTIFY changed)
   // The map here is downloaded and editable; edit and add are disabled otherwise, as on Android.
   Q_PROPERTY(bool editable READ editable NOTIFY changed)
   Q_PROPERTY(QString coordinates READ coordinates NOTIFY changed)
@@ -58,6 +61,11 @@ class PlacePage : public QObject
   // negative when there is none.
   Q_PROPERTY(double elevationActivePoint READ elevationActivePoint NOTIFY elevationPointsChanged)
   Q_PROPERTY(double elevationMyPosition READ elevationMyPosition NOTIFY elevationPointsChanged)
+  // Public transport routes through a stop, like the Android route row: the refs, the one shown on the map in
+  // bold, and the routes as {label, color} ("ref: from → to") to choose from. Empty for other places.
+  Q_PROPERTY(QString routeRefs READ routeRefs NOTIFY changed)
+  Q_PROPERTY(QVariantList routes READ routes NOTIFY changed)
+  Q_PROPERTY(bool isTramStop READ isTramStop NOTIFY changed)
   // Detail rows as {icon, text, url}; url is opened externally when set.
   Q_PROPERTY(QVariantList details READ details NOTIFY changed)
 
@@ -86,6 +94,7 @@ public:
   quint64 userMarkId() const { return m_userMarkId; }
   bool canEdit() const { return m_canEdit; }
   bool canAddPlace() const { return m_canAddPlace; }
+  bool canAddBusiness() const { return m_canAddBusiness; }
   bool editable() const { return m_editable; }
   QString coordinates() const { return m_coordinates; }
   QStringList coordinateValues() const { return m_coordinateValues; }
@@ -96,6 +105,9 @@ public:
   QString openingHours() const { return m_openingHours; }
   QString wikiDescription() const { return m_wikiDescription; }
   QString wikiUrl() const { return m_wikiUrl; }
+  QString routeRefs() const { return m_routeRefs; }
+  QVariantList routes() const { return m_routes; }
+  bool isTramStop() const { return m_isTramStop; }
   QVariantList trackStats() const { return m_trackStats; }
   QVariantList elevationProfile() const { return m_elevationProfile; }
   double trackLength() const { return m_trackLength; }
@@ -111,6 +123,8 @@ public:
   Q_INVOKABLE void toggleBookmark();
   // Marks the point at the distance along the selected track on the map, like a tap on the Android profile.
   Q_INVOKABLE void setElevationActivePoint(double distance);
+  // Shows a route of routes on the map, like choosing it in the Android routes popup.
+  Q_INVOKABLE void showRoute(int index);
 
   // Called on every location update; does nothing without a selected place.
   void UpdateDistance();
@@ -126,6 +140,7 @@ private:
   void Update();
   void UpdateOpeningHours(std::string_view openingHours);
   void UpdateTrack();
+  void UpdateRouteRefs();
 
   Framework & m_framework;
   bool m_open = false;
@@ -142,6 +157,7 @@ private:
   quint64 m_userMarkId = 0;
   bool m_canEdit = false;
   bool m_canAddPlace = false;
+  bool m_canAddBusiness = false;
   bool m_editable = false;
   QString m_coordinates;
   QStringList m_coordinateValues;
@@ -152,6 +168,10 @@ private:
   QString m_openingHours;
   QString m_wikiDescription;
   QString m_wikiUrl;
+  QString m_routeRefs;
+  QVariantList m_routes;
+  std::vector<uint32_t> m_routeIds;
+  bool m_isTramStop = false;
   QVariantList m_trackStats;
   QVariantList m_elevationProfile;
   double m_trackLength = 0;

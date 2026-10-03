@@ -89,8 +89,9 @@ public:
   // Text for "Share My Location", empty without a position.
   Q_INVOKABLE QString myPositionShareText() const;
 
-  // Starts choosing the position of a new place, at the selected place when there is one.
-  Q_INVOKABLE void startChoosingPosition();
+  // Starts choosing the position of a new place, at the selected place when there is one. For a business the
+  // cross stays inside the selected building, like "Add business" on Android.
+  Q_INVOKABLE void startChoosingPosition(bool business = false);
   Q_INVOKABLE void stopChoosingPosition();
   // Ends choosing and returns [lat, lon] of the cross, or an empty list when no map is downloaded there.
   Q_INVOKABLE QVariantList confirmChosenPosition();

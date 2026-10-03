@@ -72,8 +72,8 @@ set_target_properties(${PROJECT_NAME} PROPERTIES
 target_link_libraries(${PROJECT_NAME} PRIVATE ${PROJECT_NAME}_lib)
 
 file(STRINGS "${OMIM_ROOT}/qt/runtime_resources.txt" RUNTIME_RESOURCES)
-# The phrases of the voice instructions, which the desktop app doesn't have.
-list(APPEND RUNTIME_RESOURCES icudt78l.dat sound-strings)
+# The phrases of the voice instructions, and the FAQ of the about page, which the desktop app doesn't have.
+list(APPEND RUNTIME_RESOURCES icudt78l.dat sound-strings faq.html)
 foreach(resource ${RUNTIME_RESOURCES})
   if (IS_DIRECTORY "${OMIM_ROOT}/data/${resource}")
     install(DIRECTORY "${OMIM_ROOT}/data/${resource}" DESTINATION share/organicmaps/data)
@@ -125,9 +125,12 @@ install(FILES ${TURNS}
   "${ANDROID_SDK_RES}/drawable-xxxhdpi/ic_exit_highway_to_left.webp"
   "${ANDROID_SDK_RES}/drawable-xxxhdpi/ic_exit_highway_to_right.webp"
   DESTINATION share/organicmaps/icons/navigation)
-# The Wikipedia logo and the direction arrow are bitmaps on Android too.
-install(FILES "${OMIM_ROOT}/android/app/src/main/res/drawable-xxhdpi/ic_wiki.webp"
-              "${OMIM_ROOT}/android/app/src/main/res/drawable-xxhdpi/ic_direction_pagepreview.webp"
+# The OpenStreetMap logo of the about page is a bitmap on Android too.
+install(FILES "${OMIM_ROOT}/android/app/src/main/res/drawable/ic_openstreetmap_color.webp" DESTINATION share/organicmaps/icons/help)
+# The direction arrow and the entrance are bitmaps on Android too; the Wikipedia logo is traced from the iOS one.
+install(FILES "${OMIM_ROOT}/android/app/src/main/res/drawable-xxhdpi/ic_direction_pagepreview.webp"
+              "${OMIM_ROOT}/android/app/src/main/res/drawable-xxxhdpi/ic_entrance.webp"
+              icons/placepage/ic_wiki.svg icons/placepage/ic_wikimedia_commons.svg
         DESTINATION share/organicmaps/icons/placepage)
 install(FILES organicmaps.desktop DESTINATION share/applications)
 # Starts the app for the launcher's openUrl calls, see organicmaps.desktop.
