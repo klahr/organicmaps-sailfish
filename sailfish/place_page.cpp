@@ -15,6 +15,9 @@
 #include "indexer/feature_utils.hpp"
 #include "indexer/validate_and_format_contacts.hpp"
 
+#include "editor/opening_hours_ui.hpp"
+#include "editor/ui2oh.hpp"
+
 #include "opening_hours/opening_hours.hpp"
 
 #include "platform/distance.hpp"
@@ -43,6 +46,94 @@ std::string_view constexpr kCoordinatesFormatSetting = "CoordinatesFormat";
 
 // Enough points for a phone wide chart.
 size_t constexpr kMaxProfilePoints = 600;
+
+QString FormatHourMinutes(osmoh::HourMinutes const & hm)
+{
+  // Noon and midnight by name on a 12-hour clock, like Timetable.formatOpenShifts() on Android: 12:00 AM and PM
+  // are often misread. A 24-hour clock has no such doubt.
+  auto const hours = hm.GetHoursCount();
+  if (hm.GetMinutesCount() == 0 && !Is24HourClock())
+  {
+    if (hours == 12)
+      return Localized("noon");
+    if (hours == 0 || hours == 24)
+      return Localized("midnight");
+  }
+  // 24:00 closes at the end of the day; QTime can't hold it.
+  if (hours == 24 && hm.GetMinutesCount() == 0)
+    return QStringLiteral("24:00");
+  return FormatTime(QTime(static_cast<int>(hours % 24), static_cast<int>(hm.GetMinutesCount())));
+}
+
+// Opening shifts of a day: the opening time without the closed times, one per line.
+QString FormatShifts(editor::ui::TimeTable const & tt)
+{
+  QStringList shifts;
+  auto const add = [&shifts](osmoh::HourMinutes const & start, osmoh::HourMinutes const & end)
+  {
+    // A start after the end is an overnight shift; only empty ones are dropped.
+    if (start.GetDurationCount() != end.GetDurationCount())
+      shifts.append(FormatHourMinutes(start) + "—" + FormatHourMinutes(end));
+  };
+  auto start = tt.GetOpeningTime().GetStart().GetHourMinutes();
+  for (auto const & closed : tt.GetExcludeTime())
+  {
+    add(start, closed.GetStart().GetHourMinutes());
+    start = closed.GetEnd().GetHourMinutes();
+  }
+  add(start, tt.GetOpeningTime().GetEnd().GetHourMinutes());
+  return shifts.join('\n');
+}
+
+// The week from today, days with the same hours together, like WeekScheduleBuilder on Android.
+QVariantList MakeWeekSchedule(editor::ui::TimeTableSet & tts)
+{
+  std::vector<editor::ui::TimeTable> tables;
+  for (size_t i = 0; i < tts.Size(); ++i)
+    tables.push_back(tts.Get(i));
+  // osmoh::Weekday and the Android Calendar count from Sunday = 1, Qt from Monday = 1.
+  int const today = QDate::currentDate().dayOfWeek() % 7 + 1;
+  std::vector<int> week;
+  for (int i = 0; i < 7; ++i)
+    week.push_back((today - 1 + i) % 7 + 1);
+  auto const find = [&tables](int day) -> editor::ui::TimeTable const *
+  {
+    for (auto const & tt : tables)
+      if (tt.GetOpeningDays().count(static_cast<osmoh::Weekday>(day)))
+        return &tt;
+    return nullptr;
+  };
+  auto const dayName = [](int day) { return QLocale::system().dayName(day == 1 ? 7 : day - 1, QLocale::ShortFormat); };
+
+  QVariantList schedule;
+  for (size_t i = 0; i < week.size(); ++i)
+  {
+    size_t const first = i;
+    auto const * tt = find(week[i]);
+    if (tt)
+    {
+      while (i + 1 < week.size() && tt->GetOpeningDays().count(static_cast<osmoh::Weekday>(week[i + 1])))
+        ++i;
+    }
+    else
+    {
+      // Closed days run until the next open one.
+      while (i + 1 < week.size() && !find(week[i + 1]))
+        ++i;
+    }
+    QString days = dayName(week[first]);
+    if (i != first)
+      days += "-" + dayName(week[i]);
+    QString hours = !tt                     ? Localized("day_off")
+                  : tt->IsTwentyFourHours() ? Localized("editor_time_allday")
+                                            : FormatShifts(*tt);
+    if (hours.isEmpty())
+      hours = Localized("day_off");
+    // The week starts today, so only the first row holds it.
+    schedule.append(QVariantMap{{"days", days}, {"hours", hours}, {"today", first == 0}});
+  }
+  return schedule;
+}
 
 int32_t SavedCoordinatesFormat()
 {
@@ -350,6 +441,7 @@ void PlacePage::UpdateTrack()
 void PlacePage::UpdateOpeningHours(std::string_view openingHours)
 {
   m_openingHours = ToQString(openingHours);
+  m_openingSchedule.clear();
   m_openState = OpenUnknown;
   m_openTitle.clear();
   m_openDescription.clear();
@@ -358,6 +450,11 @@ void PlacePage::UpdateOpeningHours(std::string_view openingHours)
   if (openingHours.empty() || !oh.IsValid())
     return;
 
+  // The weekly table, except for 24/7, like on Android.
+  editor::ui::TimeTableSet tts;
+  if (!oh.IsTwentyFourHours() && editor::MakeTimeTableSet(oh, tts))
+    m_openingSchedule = MakeWeekSchedule(tts);
+
   // Local time without the feature time zone, like on Android.
   time_t const now = std::time(nullptr);
   auto const info = oh.GetInfo(now);
@@ -365,8 +462,7 @@ void PlacePage::UpdateOpeningHours(std::string_view openingHours)
     return;
 
   QLocale const locale = QLocale::system();
-  auto const time = [&locale](time_t t)
-  { return locale.toString(QDateTime::fromTime_t(static_cast<uint>(t)).time(), QLocale::ShortFormat); };
+  auto const time = [](time_t t) { return FormatTime(QDateTime::fromTime_t(static_cast<uint>(t)).time()); };
 
   if (oh.IsTwentyFourHours())
   {

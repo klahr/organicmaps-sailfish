@@ -48,6 +48,9 @@ class PlacePage : public QObject
   Q_PROPERTY(QString openTitle READ openTitle NOTIFY changed)
   Q_PROPERTY(QString openDescription READ openDescription NOTIFY changed)
   Q_PROPERTY(QString openingHours READ openingHours NOTIFY changed)
+  // The week from today as {days, hours, today} rows, like the Android opening hours table; empty when the
+  // schedule can't be shown as one, then openingHours is shown as it is.
+  Q_PROPERTY(QVariantList openingSchedule READ openingSchedule NOTIFY changed)
   Q_PROPERTY(QString wikiDescription READ wikiDescription NOTIFY changed)
   Q_PROPERTY(QString wikiUrl READ wikiUrl NOTIFY changed)
   // A track's statistics as {label, value} rows, like the Android elevation profile header.
@@ -103,6 +106,7 @@ public:
   QString openTitle() const { return m_openTitle; }
   QString openDescription() const { return m_openDescription; }
   QString openingHours() const { return m_openingHours; }
+  QVariantList openingSchedule() const { return m_openingSchedule; }
   QString wikiDescription() const { return m_wikiDescription; }
   QString wikiUrl() const { return m_wikiUrl; }
   QString routeRefs() const { return m_routeRefs; }
@@ -166,6 +170,7 @@ private:
   QString m_openTitle;
   QString m_openDescription;
   QString m_openingHours;
+  QVariantList m_openingSchedule;
   QString m_wikiDescription;
   QString m_wikiUrl;
   QString m_routeRefs;

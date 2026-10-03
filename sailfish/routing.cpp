@@ -540,7 +540,7 @@ void Routing::UpdateNavigation(double speedMps)
   nav["minutesLeft"] = minutes % 60;
   nav["hourUnits"] = Localized("hour");
   nav["minuteUnits"] = Localized("minute");
-  nav["arrival"] = QLocale::system().toString(QTime::currentTime().addSecs(info.m_time), QLocale::ShortFormat);
+  nav["arrival"] = FormatTime(QTime::currentTime().addSecs(info.m_time));
   nav["speed"] = speedMps >= 0 ? QString::fromStdString(measurement_utils::FormatSpeedNumeric(speedMps, units))
                                : QStringLiteral("0");
   nav["speedLimit"] = info.m_speedLimitMps > 0

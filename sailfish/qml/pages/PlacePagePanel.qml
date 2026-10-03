@@ -244,10 +244,39 @@ MapPanel {
                         font.pixelSize: Theme.fontSizeSmall
                         color: Theme.secondaryColor
                     }
+                    // The week from today, today in bold, like the Android opening hours table.
+                    Column {
+                        width: parent.width
+                        visible: hoursExpanded && placePage.openingSchedule.length > 0
+                        topPadding: Theme.paddingSmall
+
+                        Repeater {
+                            model: placePage.openingSchedule
+
+                            Row {
+                                width: parent.width
+
+                                Label {
+                                    width: parent.width * 0.4
+                                    text: modelData.days
+                                    font.pixelSize: Theme.fontSizeSmall
+                                    font.bold: modelData.today
+                                    truncationMode: TruncationMode.Fade
+                                }
+                                Label {
+                                    width: parent.width * 0.6
+                                    text: modelData.hours
+                                    font.pixelSize: Theme.fontSizeSmall
+                                    font.bold: modelData.today
+                                    wrapMode: Text.Wrap
+                                }
+                            }
+                        }
+                    }
+                    // Rules that don't fit a weekly table: the OSM opening_hours value, one rule per line.
                     Label {
                         width: parent.width
-                        visible: hoursExpanded && placePage.openTitle !== ""
-                        // The OSM opening_hours value, one rule per line.
+                        visible: hoursExpanded && placePage.openTitle !== "" && placePage.openingSchedule.length === 0
                         text: placePage.openingHours.split(";").map(function(rule) { return rule.trim() }).join("\n")
                         font.pixelSize: Theme.fontSizeSmall
                         wrapMode: Text.Wrap
@@ -260,7 +289,7 @@ MapPanel {
                         rightMargin: Theme.horizontalPageMargin
                     }
                     y: Theme.paddingMedium
-                    visible: placePage.openTitle !== ""
+                    visible: placePage.openTitle !== "" || placePage.openingSchedule.length > 0
                     source: hoursExpanded ? "image://theme/icon-m-up" : "image://theme/icon-m-down"
                 }
             }

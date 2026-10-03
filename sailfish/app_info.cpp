@@ -17,6 +17,8 @@
 #include <QInputMethod>
 #include <QLocale>
 
+#include <MGConfItem>
+
 #include <algorithm>
 
 namespace sailfish
@@ -42,6 +44,21 @@ QString ToQString(std::string_view s)
 QString FormatDuration(long seconds)
 {
   return QString::fromStdString(platform::Duration(static_cast<unsigned long>(seconds)).GetHoursMinutesString());
+}
+
+bool Is24HourClock()
+{
+  // Never destroyed: dconf may be gone at exit.
+  static auto const * timeFormat = new MGConfItem(QStringLiteral("/sailfish/i18n/lc_timeformat24h"));
+  QString const setting = timeFormat->value().toString();
+  if (setting.isEmpty())
+    return !QLocale::system().timeFormat(QLocale::ShortFormat).contains("ap", Qt::CaseInsensitive);
+  return setting == "24";
+}
+
+QString FormatTime(QTime const & time)
+{
+  return QLocale::system().toString(time, Is24HourClock() ? QStringLiteral("HH:mm") : QStringLiteral("h:mm AP"));
 }
 
 QString FormatSize(qint64 bytes)

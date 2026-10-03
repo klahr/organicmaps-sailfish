@@ -22,7 +22,11 @@ Dialog {
             id: nameField
             width: parent.width
             label: appInfo.localized("placepage_track_name_hint")
-            text: Qt.formatDateTime(new Date(), Locale.ShortFormat)
+            // Silica's formats follow the Sailfish 12 or 24 hour clock setting.
+            text: {
+                var now = new Date()
+                return Format.formatDate(now, Formatter.DateMedium) + " " + Format.formatDate(now, Formatter.TimeValue)
+            }
             EnterKey.enabled: text.trim() !== ""
             EnterKey.iconSource: "image://theme/icon-m-enter-accept"
             EnterKey.onClicked: dialog.accept()

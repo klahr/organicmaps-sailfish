@@ -3,6 +3,8 @@ project(organicmaps_sailfish)
 find_package(Qt5 COMPONENTS REQUIRED DBus Gui Multimedia Network Qml Quick Sensors)
 find_package(PkgConfig REQUIRED)
 pkg_check_modules(SAILFISHAPP REQUIRED sailfishapp)
+# The Sailfish clock format, see FormatTime().
+pkg_check_modules(MLITE REQUIRED mlite5)
 
 set(SRC
   app.cpp
@@ -48,7 +50,7 @@ set_target_properties(${PROJECT_NAME}_lib PROPERTIES OUTPUT_NAME organicmaps AUT
 target_compile_options(${PROJECT_NAME}_lib PRIVATE ${OMIM_WARNING_FLAGS})
 # Keep the bundled 3party libraries (FreeType, ICU, ...) from interposing the system copies Qt uses.
 target_link_options(${PROJECT_NAME}_lib PRIVATE -Wl,--exclude-libs,ALL)
-target_include_directories(${PROJECT_NAME}_lib PRIVATE ${SAILFISHAPP_INCLUDE_DIRS})
+target_include_directories(${PROJECT_NAME}_lib PRIVATE ${SAILFISHAPP_INCLUDE_DIRS} ${MLITE_INCLUDE_DIRS})
 target_link_libraries(${PROJECT_NAME}_lib
   PRIVATE
     Boost::headers
@@ -62,6 +64,7 @@ target_link_libraries(${PROJECT_NAME}_lib
     Qt5::Quick
     Qt5::Sensors
     ${SAILFISHAPP_LIBRARIES}
+    ${MLITE_LIBRARIES}
 )
 
 add_executable(${PROJECT_NAME} main.cpp)
