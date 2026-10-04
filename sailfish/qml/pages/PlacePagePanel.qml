@@ -17,6 +17,8 @@ MapPanel {
     signal addBusinessClicked()
     // The close button or a swipe closed the panel, not a tap on the map or another selection.
     signal closedByUser()
+    // The direction arrow was tapped, to show it fullscreen like on Android.
+    signal directionClicked()
 
     modal: false
     spacing: 0
@@ -116,7 +118,9 @@ MapPanel {
                     }
                 }
                 // Direction and distance to the place, the arrow turning with the compass like on Android.
+                // A tap shows the direction fullscreen.
                 Row {
+                    id: direction
                     anchors {
                         right: parent.right
                         rightMargin: Theme.horizontalPageMargin
@@ -139,6 +143,14 @@ MapPanel {
                         font.pixelSize: Theme.fontSizeSmall
                         color: Theme.highlightColor
                     }
+                }
+                MouseArea {
+                    anchors {
+                        fill: direction
+                        margins: -Theme.paddingSmall
+                    }
+                    enabled: direction.visible
+                    onClicked: panel.directionClicked()
                 }
             }
 

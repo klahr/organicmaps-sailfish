@@ -132,6 +132,7 @@ install(FILES ${TURNS}
 install(FILES "${OMIM_ROOT}/android/app/src/main/res/drawable/ic_openstreetmap_color.webp" DESTINATION share/organicmaps/icons/help)
 # The direction arrow and the entrance are bitmaps on Android too; the Wikipedia logo is traced from the iOS one.
 install(FILES "${OMIM_ROOT}/android/app/src/main/res/drawable-xxhdpi/ic_direction_pagepreview.webp"
+              "${OMIM_ROOT}/android/app/src/main/res/drawable-sw600dp-xxhdpi/ic_direction_fullscreen.png"
               "${OMIM_ROOT}/android/app/src/main/res/drawable-xxxhdpi/ic_entrance.webp"
               icons/placepage/ic_wiki.svg icons/placepage/ic_wikimedia_commons.svg
         DESTINATION share/organicmaps/icons/placepage)

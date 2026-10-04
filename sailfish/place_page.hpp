@@ -24,6 +24,8 @@ class PlacePage : public QObject
   Q_PROPERTY(QString distance READ distance NOTIFY distanceChanged)
   // Direction to the place relative to the device heading in degrees, negative without a position.
   Q_PROPERTY(double azimuth READ azimuth NOTIFY distanceChanged)
+  // Direction to the place from true north, like "123°", for the fullscreen direction view.
+  Q_PROPERTY(QString bearing READ bearing NOTIFY distanceChanged)
   // Same text as the Android share button, and the geo: link of "Open in Another App".
   Q_PROPERTY(QString shareText READ shareText NOTIFY changed)
   Q_PROPERTY(QString geoUri READ geoUri NOTIFY changed)
@@ -90,6 +92,7 @@ public:
   QString address() const { return m_address; }
   QString distance() const { return m_distance; }
   double azimuth() const { return m_azimuth; }
+  QString bearing() const { return m_bearing; }
   QString shareText() const { return m_shareText; }
   QString geoUri() const { return m_geoUri; }
   bool isBookmark() const { return m_isBookmark; }
@@ -153,6 +156,7 @@ private:
   QString m_address;
   QString m_distance;
   double m_azimuth = -1.0;
+  QString m_bearing;
   double m_north = 0.0;
   QString m_shareText;
   QString m_geoUri;

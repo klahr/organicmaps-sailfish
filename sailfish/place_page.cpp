@@ -24,6 +24,7 @@
 #include "platform/localization.hpp"
 #include "platform/settings.hpp"
 
+#include "geometry/angles.hpp"
 #include "geometry/mercator.hpp"
 
 #include "base/math.hpp"
@@ -34,6 +35,8 @@
 #include <QRegularExpression>
 #include <QUrl>
 #include <QVariantMap>
+
+#include <cmath>
 
 namespace sailfish
 {
@@ -516,6 +519,7 @@ void PlacePage::UpdateDistance()
 {
   QString distance;
   double azimuth = -1.0;
+  QString bearing;
   if (m_framework.HasPlacePageInfo())
   {
     if (auto const position = m_framework.GetCurrentPosition())
@@ -529,13 +533,15 @@ void PlacePage::UpdateDistance()
         m_framework.GetDistanceAndAzimut(info.GetMercator(), ll.m_lat, ll.m_lon, m_north, d, azimut);
         distance = QString::fromStdString(d.ToString());
         azimuth = math::RadToDeg(azimut);
+        bearing = QString::number(std::lround(math::RadToDeg(ang::AngleIn2PI(azimut + m_north)))) + "°";
       }
     }
   }
-  if (distance != m_distance || azimuth != m_azimuth)
+  if (distance != m_distance || azimuth != m_azimuth || bearing != m_bearing)
   {
     m_distance = distance;
     m_azimuth = azimuth;
+    m_bearing = bearing;
     emit distanceChanged();
   }
 }

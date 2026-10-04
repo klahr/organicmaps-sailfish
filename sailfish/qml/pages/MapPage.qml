@@ -426,6 +426,7 @@ Page {
         routing: map.routing
         onAddPlaceClicked: map.startChoosingPosition(false)
         onAddBusinessClicked: map.startChoosingPosition(true)
+        onDirectionClicked: directionOverlay.shown = true
         onClosedByUser: {
             if (page.placeFromSearch) {
                 forgetSearchResult.stop()
@@ -569,5 +570,11 @@ Page {
                 shareLocationAction.trigger()
             }
         }
+    }
+
+    // Last, to cover the map and all panels.
+    DirectionOverlay {
+        id: directionOverlay
+        placePage: map.placePage
     }
 }
