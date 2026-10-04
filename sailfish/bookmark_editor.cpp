@@ -1,6 +1,7 @@
 #include "sailfish/bookmark_editor.hpp"
 
 #include "sailfish/app_info.hpp"
+#include "sailfish/bookmarks_model.hpp"
 #include "sailfish/framework_access.hpp"
 
 #include "map/bookmark_manager.hpp"
@@ -63,13 +64,7 @@ void BookmarkEditor::LoadCategories(uint64_t groupId)
 
 QStringList BookmarkEditor::colors() const
 {
-  QStringList colors;
-  for (auto const preset : kml::kOrderedPredefinedColors)
-  {
-    auto const color = kml::ColorFromPredefinedColor(preset);
-    colors.append(QStringLiteral("#%1").arg(color.GetRGBA() >> 8, 6, 16, QLatin1Char('0')));
-  }
-  return colors;
+  return PresetColors();
 }
 
 int BookmarkEditor::categoryIndex() const

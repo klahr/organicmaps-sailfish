@@ -2,6 +2,7 @@ import QtQuick 2.6
 import Sailfish.Silica 1.0
 import app.organicmaps 1.0
 import "colors.js" as Colors
+import "downloads.js" as Downloads
 
 Page {
     id: page
@@ -57,6 +58,49 @@ Page {
         header: Column {
             width: categoriesView.width
 
+            // Without maps there is nothing to find: the map of the position is offered, like on Android.
+            Column {
+                readonly property var map: search.suggestedMap
+                readonly property bool busy: map.status === CountriesModel.Downloading
+                                             || map.status === CountriesModel.InQueue
+                                             || map.status === CountriesModel.Applying
+                width: parent.width
+                visible: search.noMaps
+                spacing: Theme.paddingMedium
+                bottomPadding: Theme.paddingLarge
+
+                Label {
+                    x: Theme.horizontalPageMargin
+                    width: parent.width - 2 * x
+                    text: appInfo.localized("search_without_internet_advertisement")
+                    wrapMode: Text.Wrap
+                    color: Theme.highlightColor
+                }
+                Label {
+                    x: Theme.horizontalPageMargin
+                    width: parent.width - 2 * x
+                    visible: !parent.map.countryId
+                    text: appInfo.localized("unknown_current_position")
+                    wrapMode: Text.Wrap
+                    font.pixelSize: Theme.fontSizeSmall
+                    color: Theme.secondaryHighlightColor
+                }
+                Button {
+                    anchors.horizontalCenter: parent.horizontalCenter
+                    visible: !!parent.map.countryId
+                    enabled: !parent.busy
+                    text: parent.busy ? appInfo.localized("downloader_downloading") + " "
+                                        + Math.round((parent.map.progress || 0) * 100) + "%"
+                                      : appInfo.localized("downloader_download_map") + " (" + parent.map.size + ")"
+                    onClicked: Downloads.start(pageStack, function() { search.downloadSuggestedMap() })
+                }
+                Button {
+                    anchors.horizontalCenter: parent.horizontalCenter
+                    text: appInfo.localized("search_select_map")
+                    onClicked: pageStack.push(Qt.resolvedUrl("MapsPage.qml"), { downloadedOnly: false })
+                }
+            }
+
             SectionHeader {
                 text: appInfo.localized("history")
                 visible: appSettings.searchHistory && search.history.length > 0
@@ -108,11 +152,27 @@ Page {
                 y: Theme.paddingMedium
                 width: parent.width - 2 * x
 
-                Label {
+                // A suggestion completes the query, set apart like the Android suggestion rows.
+                Row {
                     width: parent.width
-                    text: model.name
-                    textFormat: Text.StyledText
-                    truncationMode: TruncationMode.Fade
+                    spacing: Theme.paddingSmall
+
+                    Icon {
+                        id: suggestIcon
+                        visible: model.suggest
+                        anchors.verticalCenter: parent.verticalCenter
+                        width: Theme.iconSizeExtraSmall
+                        height: width
+                        sourceSize: Qt.size(width, height)
+                        source: "image://theme/icon-m-search"
+                    }
+                    Label {
+                        width: parent.width - (suggestIcon.visible ? suggestIcon.width + parent.spacing : 0)
+                        text: model.name
+                        textFormat: Text.StyledText
+                        truncationMode: TruncationMode.Fade
+                        font.italic: model.suggest
+                    }
                 }
                 ResultLine {
                     text: model.description

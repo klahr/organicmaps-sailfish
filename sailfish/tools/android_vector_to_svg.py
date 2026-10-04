@@ -38,14 +38,16 @@ HELP = ['logo', 'ic_question_mark', 'ic_report_a_bug', 'ic_donate', 'ic_news', '
 MENU = ['ic_download', 'ic_donate', 'ic_settings', 'ic_track_recording_off', 'ic_track_recording_on', 'ic_share',
         'ic_track_recording_status']
 # Routing: the ruler router button and the numbered stops of the route panel.
-ROUTING = ['ic_ruler_route', 'ic_location_arrow_blue', 'ic_20px_route_planning_tram', 'ic_20px_route_planning_bus'] + [
+ROUTING = ['ic_ruler_route', 'ic_location_arrow_blue', 'ic_20px_route_planning_tram', 'ic_20px_route_planning_bus',
+           'icon_save', 'ic_route_remove'] + [
     'route_point_%02d' % i for i in range(1, 10)]
 # Navigation: roundabout turn arrows; the other turn arrows are bitmaps on Android too.
 NAVIGATION = ['ic_turn_round'] + ['ic_roundabout_exit_%d' % i for i in range(1, 13)]
 # Place editor fields, by the names used in sailfish/place_editor.cpp. The social networks only have white
 # variants for the dark theme on Android.
-EDITOR = ['ic_address', 'ic_building', 'ic_email', 'ic_operating_hours', 'ic_operator', 'ic_phone',
-          'ic_self_service', 'ic_street_address', 'ic_website', 'ic_website_menu', 'ic_wifi']
+EDITOR = ['ic_address', 'ic_building', 'ic_cuisine', 'ic_drive_through_white', 'ic_email', 'ic_floor',
+          'ic_level_white', 'ic_operating_hours', 'ic_operator', 'ic_outdoor_seating', 'ic_phone', 'ic_self_service',
+          'ic_street_address', 'ic_website', 'ic_website_menu', 'ic_wifi']
 SOCIAL = {'ic_facebook': 'ic_facebook_white', 'ic_instagram': 'ic_instagram_white', 'ic_line': 'ic_line_white',
           'ic_twitterx': 'ic_twitterx_white', 'ic_vk': 'ic_vk_white'}
 WHITE = {'ic_ruler_route', 'ic_download', 'ic_donate', 'ic_settings', 'ic_track_recording_off', 'ic_share',

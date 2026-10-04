@@ -94,7 +94,8 @@ VoiceGuide::VoiceGuide(QObject * parent) : QObject(parent)
   connect(&m_player, static_cast<void (QMediaPlayer::*)(QMediaPlayer::Error)>(&QMediaPlayer::error), this,
           [this] { LOG(LWARNING, ("Speech playback failed:", m_player.errorString().toStdString())); });
   QDBusConnection::sessionBus().connect(kSpeechNoteService, QStringLiteral("/"), kSpeechNoteService,
-                                        QStringLiteral("TtsPlaySpeechFinished"), this, SLOT(OnSpeechNoteFinished(int)));
+                                        QStringLiteral("TtsSpeechToFileFinished"), this,
+                                        SLOT(OnSpeechNoteFileReady(QStringList, int)));
 }
 
 VoiceGuide::~VoiceGuide()
@@ -232,15 +233,14 @@ void VoiceGuide::Speak(QStringList const & texts)
     return;
   Stop();
   m_queue = texts;
-  if (!m_speechNoteLanguage.isEmpty())
-    SpeakNextWithSpeechNote();
-  else
-    SynthesizeNext();
+  SynthesizeNext();
 }
 
 void VoiceGuide::Stop()
 {
   m_queue.clear();
+  ++m_speechNoteRequest;
+  m_speechNotePending = false;
   if (m_speechNoteTask >= 0)
   {
     QDBusConnection::sessionBus().asyncCall(SpeechNoteCall(QStringLiteral("TtsStopSpeech")) << m_speechNoteTask);
@@ -254,40 +254,55 @@ void VoiceGuide::Stop()
   m_player.stop();
 }
 
-void VoiceGuide::SpeakNextWithSpeechNote()
-{
-  if (m_queue.isEmpty() || m_speechNoteTask >= 0)
-    return;
-  auto const watcher = new QDBusPendingCallWatcher(QDBusConnection::sessionBus().asyncCall(
-      SpeechNoteCall(QStringLiteral("TtsPlaySpeech")) << m_queue.takeFirst() << m_speechNoteLanguage));
-  connect(watcher, &QDBusPendingCallWatcher::finished, this, [this](QDBusPendingCallWatcher * call)
-  {
-    call->deleteLater();
-    QDBusPendingReply<int> const reply = *call;
-    if (reply.isError())
-    {
-      LOG(LWARNING, ("Speech Note failed:", reply.error().message().toStdString()));
-      return;
-    }
-    // -1 when Speech Note is busy with something else.
-    m_speechNoteTask = reply.value();
-    if (m_speechNoteTask < 0)
-      LOG(LWARNING, ("Speech Note didn't take the voice instruction"));
-  });
-}
-
-void VoiceGuide::OnSpeechNoteFinished(int task)
+void VoiceGuide::OnSpeechNoteFileReady(QStringList const & files, int task)
 {
   if (task != m_speechNoteTask)
     return;
   m_speechNoteTask = -1;
-  SpeakNextWithSpeechNote();
+  m_speechNotePending = false;
+  if (files.isEmpty())
+  {
+    SynthesizeNext();
+    return;
+  }
+  m_player.setMedia(QUrl::fromLocalFile(files.first()));
+  m_player.play();
 }
 
 void VoiceGuide::SynthesizeNext()
 {
-  if (m_queue.isEmpty() || m_process.state() != QProcess::NotRunning || m_player.state() == QMediaPlayer::PlayingState)
+  if (m_queue.isEmpty() || m_speechNotePending || m_process.state() != QProcess::NotRunning ||
+      m_player.state() == QMediaPlayer::PlayingState)
     return;
+  if (!m_speechNoteLanguage.isEmpty())
+  {
+    m_speechNotePending = true;
+    auto const request = m_speechNoteRequest;
+    auto const watcher = new QDBusPendingCallWatcher(QDBusConnection::sessionBus().asyncCall(
+        SpeechNoteCall(QStringLiteral("TtsSpeechToFile"))
+        << m_queue.takeFirst() << m_speechNoteLanguage << QVariantMap{{"audio_format", "wav"}}));
+    connect(watcher, &QDBusPendingCallWatcher::finished, this, [this, request](QDBusPendingCallWatcher * call)
+    {
+      call->deleteLater();
+      QDBusPendingReply<int> const reply = *call;
+      if (request != m_speechNoteRequest)
+      {
+        if (!reply.isError() && reply.value() >= 0)
+          QDBusConnection::sessionBus().asyncCall(SpeechNoteCall(QStringLiteral("TtsStopSpeech")) << reply.value());
+        return;
+      }
+      // -1 when Speech Note is busy with something else.
+      if (reply.isError() || reply.value() < 0)
+      {
+        LOG(LWARNING, ("Speech Note didn't take the voice instruction:", reply.error().message().toStdString()));
+        m_speechNotePending = false;
+        SynthesizeNext();
+        return;
+      }
+      m_speechNoteTask = reply.value();
+    });
+    return;
+  }
   // Two files take turns, so that a new one never replaces the media being played.
   QString const dir = QStandardPaths::writableLocation(QStandardPaths::CacheLocation);
   QDir().mkpath(dir);

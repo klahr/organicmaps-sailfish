@@ -2,6 +2,7 @@
 
 #include "sailfish/app_info.hpp"
 #include "sailfish/app_settings.hpp"
+#include "sailfish/countries_model.hpp"
 #include "sailfish/framework_access.hpp"
 
 #include "map/everywhere_search_params.hpp"
@@ -11,6 +12,9 @@
 
 #include "search/displayed_categories.hpp"
 #include "search/result.hpp"
+
+#include "storage/country_info_getter.hpp"
+#include "storage/storage.hpp"
 
 #include "platform/distance.hpp"
 
@@ -60,10 +64,14 @@ SearchModel::SearchModel(QObject * parent)
   , m_framework(GetFramework())
   , m_locale(GetInputLocale())
   , m_results(std::make_unique<search::Results>())
-{}
+{
+  m_storageSlot = m_framework.GetStorage().Subscribe([this](storage::CountryId const &)
+  { emit mapsChanged(); }, [this](storage::CountryId const &, downloader::Progress const &) { emit mapsChanged(); });
+}
 
 SearchModel::~SearchModel()
 {
+  m_framework.GetStorage().Unsubscribe(m_storageSlot);
   // Also clears the viewport search marks.
   m_framework.GetSearchAPI().CancelAllSearches();
 }
@@ -114,6 +122,7 @@ QVariant SearchModel::data(QModelIndex const & index, int role) const
     }
     return QString();
   case OpenStateRole: return GetOpenState(result);
+  case SuggestRole: return result.IsSuggest();
   default: return {};
   }
 }
@@ -121,7 +130,8 @@ QVariant SearchModel::data(QModelIndex const & index, int role) const
 QHash<int, QByteArray> SearchModel::roleNames() const
 {
   return {{NameRole, "name"},         {DescriptionRole, "description"}, {AddressRole, "address"},
-          {DistanceRole, "distance"}, {OpenStatusRole, "openStatus"},   {OpenStateRole, "openState"}};
+          {DistanceRole, "distance"}, {OpenStatusRole, "openStatus"},   {OpenStateRole, "openState"},
+          {SuggestRole, "suggest"}};
 }
 
 void SearchModel::setQuery(QString const & query)
@@ -156,12 +166,13 @@ QVariantList SearchModel::categories() const
   return categories;
 }
 
-void SearchModel::searchCategory(QString const & name)
+void SearchModel::searchCategory(QString const & name, bool addToHistory)
 {
   // The trailing space tells the search that the category name is complete.
   m_categoryQuery = name + ' ';
   setQuery(m_categoryQuery);
-  SaveToHistory(name);
+  if (addToHistory)
+    SaveToHistory(name);
 }
 
 bool SearchModel::activate(int row)
@@ -194,6 +205,26 @@ QStringList SearchModel::history() const
   for (auto const & request : m_framework.GetSearchAPI().GetLastSearchQueries())
     history.append(QString::fromStdString(request.second));
   return history;
+}
+
+bool SearchModel::noMaps() const
+{
+  return m_framework.GetStorage().GetDownloadedFilesCount() == 0;
+}
+
+QVariantMap SearchModel::suggestedMap() const
+{
+  auto const position = m_framework.GetCurrentPosition();
+  if (!position)
+    return {};
+  return MissingMapInfo(m_framework.GetStorage(), m_framework.GetCountryInfoGetter().GetRegionCountryId(*position));
+}
+
+void SearchModel::downloadSuggestedMap()
+{
+  auto const id = suggestedMap().value("countryId").toString().toStdString();
+  if (!id.empty())
+    DownloadMap(m_framework.GetStorage(), id);
 }
 
 void SearchModel::clearHistory()

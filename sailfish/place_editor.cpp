@@ -9,6 +9,7 @@
 #include "editor/osm_editor.hpp"
 
 #include "indexer/classificator.hpp"
+#include "indexer/cuisines.hpp"
 #include "indexer/editable_map_object.hpp"
 #include "indexer/validate_and_format_contacts.hpp"
 
@@ -24,6 +25,7 @@
 #include "base/assert.hpp"
 #include "base/stl_helpers.hpp"
 
+#include <QStringList>
 #include <QVariantMap>
 
 #include <algorithm>
@@ -56,28 +58,30 @@ struct FieldInfo
   // A UI string key, or a brand name when not localized.
   char const * m_label;
   bool m_localized;
-  // Sailfish.Silica input method hint: "url", "email", "phone" or "".
+  // Sailfish.Silica input method hint: "url", "email", "phone", "number", "level" or "".
   char const * m_inputHint;
   // Shown for an invalid value.
   char const * m_error;
 };
 
 // The fields of the Android editor in its order, see fragment_editor.xml.
-// TODO: Cuisine needs a picker of the supported values.
-Metadata::EType constexpr kFieldOrder[] = {Metadata::FMD_POSTCODE,
-                                           Metadata::FMD_OPEN_HOURS,
-                                           Metadata::FMD_OPERATOR,
-                                           Metadata::FMD_WEBSITE,
-                                           Metadata::FMD_WEBSITE_MENU,
-                                           Metadata::FMD_PHONE_NUMBER,
-                                           Metadata::FMD_EMAIL,
-                                           Metadata::FMD_INTERNET,
-                                           Metadata::FMD_SELF_SERVICE,
-                                           Metadata::FMD_CONTACT_FACEBOOK,
-                                           Metadata::FMD_CONTACT_INSTAGRAM,
-                                           Metadata::FMD_CONTACT_TWITTER,
-                                           Metadata::FMD_CONTACT_VK,
-                                           Metadata::FMD_CONTACT_LINE};
+// Drive-through, outdoor seating and the levels are from the iOS editor; Android shows the building levels too.
+Metadata::EType constexpr kFieldOrder[] = {
+    Metadata::FMD_POSTCODE,          Metadata::FMD_BUILDING_LEVELS, Metadata::FMD_OPEN_HOURS,
+    Metadata::FMD_CUISINE,           Metadata::FMD_OPERATOR,        Metadata::FMD_WEBSITE,
+    Metadata::FMD_WEBSITE_MENU,      Metadata::FMD_PHONE_NUMBER,    Metadata::FMD_EMAIL,
+    Metadata::FMD_INTERNET,          Metadata::FMD_DRIVE_THROUGH,   Metadata::FMD_SELF_SERVICE,
+    Metadata::FMD_OUTDOOR_SEATING,   Metadata::FMD_LEVEL,           Metadata::FMD_CONTACT_FACEBOOK,
+    Metadata::FMD_CONTACT_INSTAGRAM, Metadata::FMD_CONTACT_TWITTER, Metadata::FMD_CONTACT_VK,
+    Metadata::FMD_CONTACT_LINE};
+
+// The level strings name the most floors that can be entered.
+QStringList TextArgs(Metadata::EType id)
+{
+  if (id == Metadata::FMD_BUILDING_LEVELS || id == Metadata::FMD_LEVEL)
+    return {QString::number(osm::EditableMapObject::kMaximumLevelsEditableByUsers)};
+  return {};
+}
 
 FieldInfo GetFieldInfo(Metadata::EType id)
 {
@@ -88,14 +92,24 @@ FieldInfo GetFieldInfo(Metadata::EType id)
   case Metadata::FMD_POSTCODE:
     return {K::Text, S::Address, "ic_address", "editor_zip_code", true, "", "error_enter_correct_zip_code"};
   case Metadata::FMD_OPEN_HOURS:
-    return {K::Text, S::Details, "ic_operating_hours", "editor_time_title", true, "", nullptr};
+    return {K::OpeningHours, S::Details, "ic_operating_hours", "editor_time_title", true, "", nullptr};
+  case Metadata::FMD_BUILDING_LEVELS:
+    return {
+        K::Text, S::Address, "ic_floor", "editor_storey_number", true, "number", "error_enter_correct_storey_number"};
+  case Metadata::FMD_DRIVE_THROUGH:
+    return {K::YesNo, S::Details, "ic_drive_through_white", "drive_through", true, "", nullptr};
+  case Metadata::FMD_OUTDOOR_SEATING:
+    return {K::YesNo, S::Details, "ic_outdoor_seating", "outdoor_seating", true, "", nullptr};
+  case Metadata::FMD_LEVEL:
+    return {K::Text, S::Details, "ic_level_white", "level", true, "level", "error_enter_correct_storey_number"};
+  case Metadata::FMD_CUISINE: return {K::Cuisine, S::Details, "ic_cuisine", "cuisine", true, "", nullptr};
   case Metadata::FMD_OPERATOR: return {K::Text, S::Details, "ic_operator", "editor_operator", true, "", nullptr};
   case Metadata::FMD_WEBSITE:
     return {K::Text, S::Details, "ic_website", "website", true, "url", "error_enter_correct_web"};
   case Metadata::FMD_WEBSITE_MENU:
     return {K::Text, S::Details, "ic_website_menu", "website_menu", true, "url", "error_enter_correct_web"};
   case Metadata::FMD_PHONE_NUMBER:
-    return {K::Text, S::Details, "ic_phone", "phone", true, "phone", "error_enter_correct_phone"};
+    return {K::Phone, S::Details, "ic_phone", "phone", true, "phone", "error_enter_correct_phone"};
   case Metadata::FMD_EMAIL:
     return {K::Text, S::Details, "ic_email", "email", true, "email", "error_enter_correct_email"};
   case Metadata::FMD_INTERNET: return {K::Wifi, S::Details, "ic_wifi", "category_wifi", true, "", nullptr};
@@ -131,6 +145,7 @@ void PlaceEditor::start()
 bool PlaceEditor::create(QString const & type, double lat, double lon)
 {
   auto const typeName = type.toStdString();
+  m_creating = true;
   m_valid = GetFramework().CreateMapObject(mercator::FromLatLon(lat, lon),
                                            classif().GetTypeByReadableObjectName(typeName), *m_object);
   if (m_valid)
@@ -275,8 +290,10 @@ QVariantList PlaceEditor::fields() const
   auto const editable = m_object->GetEditableProperties();
   for (auto const id : kFieldOrder)
   {
-    // Android shows the postcode with an editable address.
-    bool const shown = id == Metadata::FMD_POSTCODE ? m_object->IsAddressEditable() : base::IsExist(editable, id);
+    // Android shows the postcode with an editable address, and the building levels of building areas.
+    bool shown = id == Metadata::FMD_POSTCODE ? m_object->IsAddressEditable() : base::IsExist(editable, id);
+    if (id == Metadata::FMD_BUILDING_LEVELS)
+      shown = shown && m_object->IsBuilding() && !m_object->IsPointType();
     if (!shown)
       continue;
     auto const info = GetFieldInfo(id);
@@ -284,6 +301,14 @@ QVariantList PlaceEditor::fields() const
     QString value;
     if (id == Metadata::FMD_INTERNET)
       value = m_object->GetInternet() == feature::Internet::Wlan ? "yes" : "";
+    else if (id == Metadata::FMD_CUISINE)
+    {
+      // Cuisines are feature types.
+      QStringList keys;
+      for (auto const & key : m_object->GetCuisines())
+        keys.append(QString::fromStdString(key));
+      value = keys.join(';');
+    }
     else if (osm::isSocialContactTag(id))
     {
       // Same as Editor.nativeGetMetadata on Android: a page name, or the full URL of a link.
@@ -298,7 +323,7 @@ QVariantList PlaceEditor::fields() const
                               {"kind", info.m_kind},
                               {"section", info.m_section},
                               {"icon", QStringLiteral("../../icons/editor/%1.svg").arg(info.m_icon)},
-                              {"label", info.m_localized ? Localized(info.m_label) : info.m_label},
+                              {"label", info.m_localized ? Localized(info.m_label, TextArgs(id)) : info.m_label},
                               {"value", value},
                               {"inputHint", info.m_inputHint}});
   }
@@ -312,6 +337,14 @@ void PlaceEditor::setField(int id, QString const & value)
   switch (metaId)
   {
   case Metadata::FMD_OPEN_HOURS: m_object->SetOpeningHours(std::move(v)); break;
+  case Metadata::FMD_CUISINE:
+  {
+    std::vector<std::string> cuisines;
+    for (auto const & key : value.split(';', QString::SkipEmptyParts))
+      cuisines.push_back(key.trimmed().toStdString());
+    m_object->SetCuisines(cuisines);
+    break;
+  }
   case Metadata::FMD_INTERNET:
   {
     // Keeps other internet values when the switch is not changed, like on Android.
@@ -335,7 +368,7 @@ QString PlaceEditor::fieldError(int id, QString const & value) const
   if (osm::EditableMapObject::IsValidMetadata(metaId, v))
     return {};
   auto const info = GetFieldInfo(metaId);
-  return Localized(info.m_error ? info.m_error : "editor_correct_mistake");
+  return Localized(info.m_error ? info.m_error : "editor_correct_mistake", TextArgs(metaId));
 }
 
 QString PlaceEditor::nameError(QString const & name) const
@@ -349,6 +382,26 @@ QString PlaceEditor::houseNumberError(QString const & houseNumber) const
   return osm::EditableMapObject::ValidateHouseNumber(houseNumber.trimmed().toStdString())
            ? QString()
            : Localized("error_enter_correct_house_number");
+}
+
+QVariantList PlaceEditor::cuisines() const
+{
+  QVariantList result;
+  for (auto const & [key, name] : osm::Cuisines::Instance().AllSupportedCuisines())
+    result.append(QVariantMap{{"key", QString::fromStdString(key)}, {"name", QString::fromStdString(name)}});
+  return result;
+}
+
+QString PlaceEditor::cuisineNames(QString const & value) const
+{
+  QStringList names;
+  for (auto const & key : value.split(';', QString::SkipEmptyParts))
+  {
+    // Values not in the classificator keep their OSM key.
+    auto const & name = osm::Cuisines::Instance().Translate(key.trimmed().toStdString());
+    names.append(name.empty() ? key.trimmed() : QString::fromStdString(name));
+  }
+  return names.join(QStringLiteral(", "));
 }
 
 QVariantList PlaceEditor::selfServiceValues() const
@@ -379,20 +432,34 @@ void PlaceEditor::createNote(QString const & note)
     GetFramework().CreateNote(*m_object, osm::Editor::NoteProblemType::General, text);
 }
 
-bool PlaceEditor::canReset() const
+int PlaceEditor::resetAction() const
 {
-  if (!m_valid)
-    return false;
+  if (!m_valid || m_creating)
+    return NoReset;
+  // Like refreshResetButton() on Android: uploaded edits can only be reported.
   auto const & editor = osm::Editor::Instance();
   auto const & id = m_object->GetID();
-  auto const status = editor.GetFeatureStatus(id);
-  return (status == FeatureStatus::Modified || status == FeatureStatus::Created) &&
-         !editor.IsFeatureUploaded(id.m_mwmId, id.m_index);
+  if (editor.IsFeatureUploaded(id.m_mwmId, id.m_index))
+    return PlaceDoesntExist;
+  switch (editor.GetFeatureStatus(id))
+  {
+  case FeatureStatus::Created: return RemovePlace;
+  case FeatureStatus::Modified: return ResetEdits;
+  case FeatureStatus::Untouched: return PlaceDoesntExist;
+  default: return NoReset;
+  }
 }
 
 void PlaceEditor::reset()
 {
   if (m_valid)
     GetFramework().RollBackChanges(m_object->GetID());
+}
+
+void PlaceEditor::placeDoesntExist(QString const & comment)
+{
+  auto const text = comment.trimmed().toStdString();
+  if (m_valid && !text.empty())
+    GetFramework().CreateNote(*m_object, osm::Editor::NoteProblemType::PlaceDoesNotExist, text);
 }
 }  // namespace sailfish

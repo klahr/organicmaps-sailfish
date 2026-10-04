@@ -9,9 +9,44 @@ import "downloads.js" as Downloads
 Page {
     id: page
 
-    function download(id) { Downloads.start(pageStack, function() { countries.download(id) }) }
-    function retry(id) { Downloads.start(pageStack, function() { countries.retry(id) }) }
-    function update(id) { Downloads.start(pageStack, function() { countries.update(id) }) }
+    // Not enough space is told before starting, like MapManagerHelper on Android.
+    function noSpace() {
+        Notices.show(appInfo.localized("downloader_no_space_title") + ". " + appInfo.localized("downloader_no_space_message"),
+                     Notice.Long, Notice.Center)
+    }
+    function download(id) {
+        if (!countries.hasSpaceToDownload(id))
+            noSpace()
+        else
+            Downloads.start(pageStack, function() { countries.download(id) })
+    }
+    function retry(id) {
+        if (!countries.hasSpaceToDownload(id))
+            noSpace()
+        else
+            Downloads.start(pageStack, function() { countries.retry(id) })
+    }
+    function update(id) {
+        if (!countries.hasSpaceToUpdate(id))
+            noSpace()
+        else
+            Downloads.start(pageStack, function() { countries.update(id) })
+    }
+    // Maps can't be deleted while navigating, and edits not uploaded yet would go with them, as on Android.
+    function remove(item, countryId) {
+        if (countries.navigating()) {
+            Notices.show(appInfo.localized("downloader_delete_map_while_routing_dialog"), Notice.Long, Notice.Center)
+        } else if (countries.hasUnsavedEdits(countryId)) {
+            pageStack.push(Qt.resolvedUrl("MessageDialog.qml"), {
+                title: appInfo.localized("downloader_delete_map"),
+                message: appInfo.localized("downloader_delete_map_dialog"),
+                acceptText: appInfo.localized("delete"),
+                acceptAction: function() { countries.remove(countryId) }
+            })
+        } else {
+            item.remorseDelete(function () { countries.remove(countryId) })
+        }
+    }
 
     property alias parentId: countries.parentId
     property alias downloadedOnly: countries.downloadedOnly
@@ -82,15 +117,37 @@ Page {
         clip: true
         model: countries
 
-        // The Android "+" button.
+        // The Android "+" button and the bottom panel actions: update, download or cancel all.
         PullDownMenu {
-            visible: page.isRoot && page.downloadedOnly
+            visible: cancelAllItem.visible || updateAllItem.visible || downloadMapsItem.visible
+                     || downloadAllItem.visible
             MenuItem {
-                visible: countries.updateCount > 0
-                text: appInfo.localized("downloader_update_all_button") + " (" + countries.updateSize + ")"
-                onClicked: Downloads.start(pageStack, function() { countries.updateAll() })
+                id: cancelAllItem
+                visible: countries.downloadInProgress
+                text: appInfo.localized("downloader_cancel_all")
+                onClicked: countries.cancelAll()
             }
             MenuItem {
+                id: updateAllItem
+                visible: page.isRoot && page.downloadedOnly && countries.updateCount > 0
+                text: appInfo.localized("downloader_update_all_button") + " (" + countries.updateSize + ")"
+                onClicked: {
+                    if (!countries.hasSpaceToUpdate(countries.parentId))
+                        page.noSpace()
+                    else
+                        Downloads.start(pageStack, function() { countries.updateAll() })
+                }
+            }
+            MenuItem {
+                id: downloadAllItem
+                visible: !page.isRoot && !page.searching && (countries.parentStatus === CountriesModel.NotDownloaded
+                                                             || countries.parentStatus === CountriesModel.Partly)
+                text: appInfo.localized("downloader_download_all_button")
+                onClicked: page.download(countries.parentId)
+            }
+            MenuItem {
+                id: downloadMapsItem
+                visible: page.isRoot && page.downloadedOnly
                 text: appInfo.localized("download_maps")
                 onClicked: pageStack.push(Qt.resolvedUrl("MapsPage.qml"), { downloadedOnly: false })
             }
@@ -239,10 +296,7 @@ Page {
                     MenuItem {
                         text: appInfo.localized("delete")
                         visible: item.hasLocal
-                        onClicked: {
-                            var countryId = model.countryId
-                            item.remorseDelete(function () { countries.remove(countryId) })
-                        }
+                        onClicked: page.remove(item, model.countryId)
                     }
                 }
             }

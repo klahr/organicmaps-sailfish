@@ -100,11 +100,18 @@ void UrlHandler::Process(QString const & url)
       m_framework.StopLocationFollow();
       m_framework.SetViewportCenter(mercator::FromLatLon(center), kLinkZoom);
     }
+    if (m_framework.GetApiDataHolder().GetRequestType() == UrlType::Crosshair)
+    {
+      emit crosshairRequested(QString::fromStdString(m_framework.GetParsedAppName()),
+                              QString::fromStdString(m_framework.GetParsedBackUrl()));
+      break;
+    }
     auto const request = m_framework.GetParsedSearchRequest();
     if (!request.m_query.empty())
-      emit searchRequested(QString::fromStdString(request.m_query));
+      emit searchRequested(QString::fromStdString(request.m_query), request.m_isSearchOnMap);
     break;
   }
+  case UrlType::OAuth2: emit oauth2CodeReceived(QString::fromStdString(m_framework.GetParsedOAuth2Code())); break;
   default: LOG(LWARNING, ("Unsupported link", url.toStdString())); break;
   }
 }

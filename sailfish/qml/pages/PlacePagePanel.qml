@@ -3,6 +3,7 @@ import Sailfish.Silica 1.0
 import Sailfish.Share 1.0
 import app.organicmaps 1.0
 import "colors.js" as Colors
+import "downloads.js" as Downloads
 
 // Bottom sheet for the selected place, like the Android place page. Not modal, so the map stays usable.
 MapPanel {
@@ -43,6 +44,12 @@ MapPanel {
     property bool hoursExpanded
     property bool wikiExpanded
 
+    // Press and hold copies texts of the page, like on Android.
+    function copy(text) {
+        Clipboard.text = text
+        Notices.show(appInfo.localized("copied_to_clipboard", [text]), Notice.Short, Notice.Center)
+    }
+
     // Long pages scroll inside the sheet, which takes at most about the lower 60% of the map like the
     // half expanded Android sheet.
     SilicaFlickable {
@@ -70,9 +77,32 @@ MapPanel {
                     }
 
                     Label {
-                        width: parent.width
+                        width: parent.width - (candidatesButton.visible ? candidatesButton.width : 0)
                         text: placePage.title
                         font.pixelSize: Theme.fontSizeLarge
+                        color: Theme.highlightColor
+                        wrapMode: Text.Wrap
+
+                        MouseArea {
+                            anchors.fill: parent
+                            onPressAndHold: panel.copy(placePage.title)
+                        }
+                        // Several tracks under the tap: choose another one, like the Android title chevron.
+                        IconButton {
+                            id: candidatesButton
+                            anchors {
+                                left: parent.right
+                                verticalCenter: parent.verticalCenter
+                            }
+                            visible: placePage.trackCandidates.length > 1
+                            icon.source: "image://theme/icon-m-down"
+                            onClicked: pageStack.push(candidatesPage)
+                        }
+                    }
+                    Label {
+                        width: parent.width
+                        visible: text !== ""
+                        text: placePage.secondaryTitle
                         color: Theme.highlightColor
                         wrapMode: Text.Wrap
                     }
@@ -92,6 +122,11 @@ MapPanel {
                         font.pixelSize: Theme.fontSizeSmall
                         color: Theme.secondaryColor
                         wrapMode: Text.Wrap
+
+                        MouseArea {
+                            anchors.fill: parent
+                            onPressAndHold: panel.copy(placePage.address)
+                        }
                     }
                 }
                 IconButton {
@@ -151,6 +186,114 @@ MapPanel {
                     }
                     enabled: direction.visible
                     onClicked: panel.directionClicked()
+                }
+            }
+
+            // The list of a bookmark or track with its color, like the Android category row: a tap on the color
+            // changes it, a tap on the row moves it to another list.
+            ListItem {
+                id: categoryRow
+                visible: placePage.category !== ""
+                contentHeight: Theme.itemSizeSmall
+                onClicked: pageStack.push(categoryPage)
+
+                Rectangle {
+                    id: colorDot
+                    x: Theme.horizontalPageMargin
+                    anchors.verticalCenter: parent.verticalCenter
+                    width: Theme.iconSizeSmallPlus
+                    height: width
+                    radius: width / 2
+                    color: placePage.color || "transparent"
+
+                    MouseArea {
+                        anchors {
+                            fill: parent
+                            margins: -Theme.paddingMedium
+                        }
+                        onClicked: pageStack.push(Qt.resolvedUrl("ColorPickerPage.qml"), {
+                            title: appInfo.localized("choose_color"),
+                            colors: placePage.colors,
+                            chosen: function(colorIndex) { placePage.setColor(colorIndex) }
+                        })
+                    }
+                }
+                Label {
+                    anchors {
+                        left: colorDot.right
+                        leftMargin: Theme.paddingLarge
+                        right: parent.right
+                        rightMargin: Theme.horizontalPageMargin
+                        verticalCenter: parent.verticalCenter
+                    }
+                    text: placePage.category
+                    truncationMode: TruncationMode.Fade
+                    highlighted: categoryRow.highlighted
+                }
+            }
+            // Notes of a bookmark or track and the OpenStreetMap description.
+            Repeater {
+                model: [placePage.notes, placePage.osmDescription]
+
+                Label {
+                    x: Theme.horizontalPageMargin
+                    width: parent.width - 2 * x
+                    visible: modelData !== ""
+                    text: modelData
+                    textFormat: Text.StyledText
+                    wrapMode: Text.Wrap
+                    font.pixelSize: Theme.fontSizeSmall
+                    color: Theme.secondaryHighlightColor
+                    bottomPadding: Theme.paddingMedium
+                    linkColor: Theme.highlightColor
+                    onLinkActivated: Qt.openUrlExternally(link)
+                }
+            }
+            // The map of the place isn't downloaded, like the Android download button of the place page.
+            ListItem {
+                id: countryRow
+                readonly property var country: placePage.country
+                readonly property bool busy: country.status === CountriesModel.Downloading
+                                             || country.status === CountriesModel.InQueue
+                                             || country.status === CountriesModel.Applying
+                visible: !!country.countryId
+                contentHeight: Theme.itemSizeMedium
+                onClicked: {
+                    if (busy)
+                        placePage.cancelCountry()
+                    else
+                        Downloads.start(pageStack, function() { placePage.downloadCountry() })
+                }
+
+                Icon {
+                    id: countryIcon
+                    x: Theme.horizontalPageMargin
+                    anchors.verticalCenter: parent.verticalCenter
+                    visible: !countryRow.busy
+                    source: "../../icons/menu/ic_download.svg"
+                    sourceSize: Qt.size(Theme.iconSizeMedium, Theme.iconSizeMedium)
+                    highlighted: countryRow.highlighted
+                }
+                ProgressCircle {
+                    anchors.fill: countryIcon
+                    visible: countryRow.busy
+                    value: countryRow.country.progress || 0
+                    progressColor: Theme.highlightColor
+                    backgroundColor: Theme.rgba(Theme.highlightDimmerColor, 0.5)
+                }
+                Label {
+                    anchors {
+                        left: countryIcon.right
+                        leftMargin: Theme.paddingLarge
+                        right: parent.right
+                        rightMargin: Theme.horizontalPageMargin
+                        verticalCenter: parent.verticalCenter
+                    }
+                    text: countryRow.busy ? appInfo.localized("cancel_download") + " • " + (countryRow.country.name || "")
+                        : appInfo.localized("downloader_download_map") + " • " + (countryRow.country.name || "")
+                          + " (" + (countryRow.country.size || "") + ")"
+                    truncationMode: TruncationMode.Fade
+                    highlighted: countryRow.highlighted
                 }
             }
 
@@ -350,8 +493,24 @@ MapPanel {
                 MenuRow {
                     icon: modelData.icon
                     text: modelData.text
-                    enabled: modelData.url !== ""
-                    onClicked: Qt.openUrlExternally(modelData.url)
+                    onClicked: {
+                        if (modelData.url !== "")
+                            Qt.openUrlExternally(modelData.url)
+                        else
+                            openMenu()
+                    }
+
+                    menu: ContextMenu {
+                        MenuItem {
+                            text: appInfo.localized("copy_value", [modelData.text])
+                            onClicked: Clipboard.text = modelData.text
+                        }
+                        MenuItem {
+                            visible: modelData.url !== "" && modelData.url !== modelData.text
+                            text: appInfo.localized("copy_value", [modelData.url])
+                            onClicked: Clipboard.text = modelData.url
+                        }
+                    }
                 }
             }
             // Tap switches the format like on Android, press and hold offers every format for copying.
@@ -421,10 +580,47 @@ MapPanel {
     }
 
     // Fixed actions below the scrolling content, like the Android place page bar:
-    // Route from, Add stop while a route is planned, Save, Route to.
+    // Route from, Add stop while a route is planned, Save, Route to. A road warning on the route offers to avoid
+    // such roads and a route point to be removed instead.
+    readonly property bool specialAction: placePage.roadToAvoid !== 0 || picking || placePage.isRoutePoint
+    // A route slot waits for a place: this one fills it, like the Android pick buttons.
+    readonly property bool picking: routing.pickType >= 0
+
+    PlaceAction {
+        width: parent.width
+        visible: panel.picking && placePage.roadToAvoid === 0
+        icon: routing.pickType === Routing.Start ? "../../icons/routing/ic_route_from.webp"
+            : routing.pickType === Routing.Finish ? "../../icons/routing/ic_route_to.webp"
+            : "../../icons/routing/ic_route_via.webp"
+        text: routing.pickIndex >= 0
+              ? appInfo.localized(routing.pickType === Routing.Start ? "change_start_location"
+                                : routing.pickType === Routing.Finish ? "change_destination" : "placepage_replace_stop")
+              : appInfo.localized(routing.pickType === Routing.Start ? "p2p_from_here"
+                                : routing.pickType === Routing.Finish ? "p2p_to_here" : "placepage_add_stop")
+        onClicked: routing.pickPlace()
+    }
+    PlaceAction {
+        width: parent.width
+        visible: panel.specialAction && !(panel.picking && placePage.roadToAvoid === 0)
+        icon: placePage.roadToAvoid === Routing.Toll ? "../../icons/routing/ic_avoid_tolls.webp"
+            : placePage.roadToAvoid === Routing.Dirty ? "../../icons/routing/ic_avoid_unpaved.webp"
+            : placePage.roadToAvoid === Routing.Ferry ? "../../icons/routing/ic_avoid_ferry.webp"
+            : "../../icons/routing/ic_route_remove.svg"
+        text: placePage.roadToAvoid === Routing.Toll ? appInfo.localized("avoid_tolls")
+            : placePage.roadToAvoid === Routing.Dirty ? appInfo.localized("avoid_unpaved")
+            : placePage.roadToAvoid === Routing.Ferry ? appInfo.localized("avoid_ferry")
+            : appInfo.localized("placepage_remove_stop")
+        onClicked: {
+            if (placePage.roadToAvoid !== 0)
+                routing.avoidRoad(placePage.roadToAvoid)
+            else
+                routing.removePlacePoint()
+        }
+    }
     Row {
         id: actions
         width: parent.width
+        visible: !panel.specialAction
 
         readonly property int count: routing.active ? 4 : 3
 
@@ -444,7 +640,8 @@ MapPanel {
         PlaceAction {
             width: actions.width / actions.count
             icon: placePage.isBookmark ? "image://theme/icon-m-favorite-selected" : "image://theme/icon-m-favorite"
-            text: placePage.isBookmark ? appInfo.localized("delete") : appInfo.localized("save")
+            text: placePage.isBookmark ? appInfo.localized("delete")
+                : appInfo.localized(placePage.canRestoreBookmark ? "restore" : "save")
             onClicked: placePage.toggleBookmark()
         }
         PlaceAction {
@@ -452,6 +649,87 @@ MapPanel {
             icon: "../../icons/routing/ic_route_to.webp"
             text: appInfo.localized("p2p_to_here")
             onClicked: routing.routeToPlace()
+        }
+    }
+
+    // The tracks under the tap.
+    Component {
+        id: candidatesPage
+
+        Page {
+            allowedOrientations: Orientation.All
+
+            SilicaListView {
+                anchors.fill: parent
+                header: PageHeader {
+                    title: appInfo.localized("tracks_title")
+                }
+                model: placePage.trackCandidates
+
+                delegate: ListItem {
+                    highlighted: down || modelData.selected
+                    onClicked: {
+                        placePage.selectTrackCandidate(index)
+                        pageStack.pop()
+                    }
+
+                    Rectangle {
+                        id: candidateColor
+                        x: Theme.horizontalPageMargin
+                        anchors.verticalCenter: parent.verticalCenter
+                        width: Theme.iconSizeSmall
+                        height: width
+                        radius: width / 2
+                        color: modelData.color
+                    }
+                    Label {
+                        anchors {
+                            left: candidateColor.right
+                            leftMargin: Theme.paddingLarge
+                            right: parent.right
+                            rightMargin: Theme.horizontalPageMargin
+                            verticalCenter: parent.verticalCenter
+                        }
+                        text: modelData.title
+                        truncationMode: TruncationMode.Fade
+                        highlighted: parent.highlighted
+                    }
+                }
+            }
+        }
+    }
+
+    // Lists to move the bookmark or track to.
+    Component {
+        id: categoryPage
+
+        Page {
+            allowedOrientations: Orientation.All
+
+            SilicaListView {
+                anchors.fill: parent
+                header: PageHeader {
+                    title: appInfo.localized("select_list")
+                }
+                model: placePage.categories()
+
+                delegate: ListItem {
+                    highlighted: down || modelData.name === placePage.category
+                    onClicked: {
+                        placePage.setCategory(modelData.id)
+                        pageStack.pop()
+                    }
+
+                    Label {
+                        x: Theme.horizontalPageMargin
+                        width: parent.width - 2 * x
+                        anchors.verticalCenter: parent.verticalCenter
+                        text: modelData.name
+                        truncationMode: TruncationMode.Fade
+                        highlighted: parent.highlighted
+                    }
+                }
+            }
         }
     }
 

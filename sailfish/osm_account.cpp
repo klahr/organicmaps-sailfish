@@ -12,8 +12,10 @@
 #include "base/logging.hpp"
 #include "base/timer.hpp"
 
+#include <QDesktopServices>
 #include <QGuiApplication>
 #include <QPointer>
+#include <QUrl>
 
 namespace sailfish
 {
@@ -22,6 +24,7 @@ namespace
 std::string_view constexpr kToken = "SailfishOsmToken";
 std::string_view constexpr kUserName = "SailfishOsmUserName";
 std::string_view constexpr kChangesets = "SailfishOsmChangesets";
+std::string_view constexpr kImageUrl = "SailfishOsmImageUrl";
 
 std::string Token()
 {
@@ -67,6 +70,18 @@ QString OsmAccount::historyUrl() const
   return QString::fromStdString(osm::OsmOAuth::ServerAuth().GetHistoryURL(userName().toStdString()));
 }
 
+QString OsmAccount::notesUrl() const
+{
+  return QString::fromStdString(osm::OsmOAuth::ServerAuth().GetNotesURL(userName().toStdString()));
+}
+
+QString OsmAccount::imageUrl() const
+{
+  std::string url;
+  settings::TryGet(kImageUrl, url);
+  return QString::fromStdString(url);
+}
+
 QString OsmAccount::registrationUrl() const
 {
   return QString::fromStdString(osm::OsmOAuth::ServerAuth().GetRegistrationURL());
@@ -79,22 +94,38 @@ QString OsmAccount::resetPasswordUrl() const
 
 void OsmAccount::login(QString const & user, QString const & password)
 {
+  Authorize([user = user.trimmed().toStdString(), password = password.toStdString()]
+  {
+    auto auth = osm::OsmOAuth::ServerAuth();
+    return auth.AuthorizePassword(user, password) ? auth.GetAuthToken() : std::string();
+  });
+}
+
+void OsmAccount::loginInBrowser()
+{
+  QDesktopServices::openUrl(QUrl(QString::fromStdString(osm::OsmOAuth::ServerAuth().BuildOAuth2Url())));
+}
+
+void OsmAccount::loginWithCode(QString const & code)
+{
+  Authorize([code = code.toStdString()] { return osm::OsmOAuth::ServerAuth().FinishAuthorization(code); });
+}
+
+void OsmAccount::Authorize(std::function<std::string()> getToken)
+{
   if (m_loggingIn)
     return;
   m_loggingIn = true;
   emit busyChanged();
 
   QPointer<OsmAccount> self(this);
-  GetPlatform().RunTask(Platform::Thread::Network,
-                        [self, user = user.trimmed().toStdString(), password = password.toStdString()]
+  GetPlatform().RunTask(Platform::Thread::Network, [self, getToken = std::move(getToken)]
   {
     std::string token;
     std::string error;
     try
     {
-      auto auth = osm::OsmOAuth::ServerAuth();
-      if (auth.AuthorizePassword(user, password))
-        token = auth.GetAuthToken();
+      token = getToken();
     }
     catch (std::exception const & e)
     {
@@ -127,6 +158,7 @@ void OsmAccount::logout()
   settings::Delete(kToken);
   settings::Delete(kUserName);
   settings::Delete(kChangesets);
+  settings::Delete(kImageUrl);
   emit changed();
 }
 
@@ -153,6 +185,7 @@ void OsmAccount::LoadProfile()
         return;
       settings::Set(kUserName, prefs.m_displayName);
       settings::Set(kChangesets, static_cast<int>(prefs.m_changesets));
+      settings::Set(kImageUrl, prefs.m_imageUrl);
       emit self->changed();
     });
   });

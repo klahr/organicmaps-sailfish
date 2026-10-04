@@ -75,7 +75,7 @@ Dialog {
         for (var r = 0; r < fieldRepeaters.length; ++r) {
             for (var i = 0; i < fieldRepeaters[r].count; ++i) {
                 var field = fieldRepeaters[r].itemAt(i)
-                editor.setField(field.fieldId, field.item.value)
+                editor.setField(field.fieldId, field.item.fieldValue)
             }
         }
         if (editor.save()) {
@@ -252,15 +252,32 @@ Dialog {
                 placeholderText: appInfo.localized("editor_note_hint")
             }
 
+            // Reset edits, delete an added place or report a missing one, like the Android reset button.
             Button {
                 anchors.horizontalCenter: parent.horizontalCenter
-                visible: editor.canReset
-                text: appInfo.localized("editor_reset_edits_button")
-                onClicked: Remorse.popupAction(dialog, appInfo.localized("editor_reset_edits_button"), function() {
-                    editor.reset()
-                    osmAccount.updateEdits()
-                    pageStack.pop()
-                })
+                visible: editor.resetAction !== PlaceEditor.NoReset
+                text: {
+                    switch (editor.resetAction) {
+                    case PlaceEditor.RemovePlace: return appInfo.localized("editor_remove_place_button")
+                    case PlaceEditor.PlaceDoesntExist: return appInfo.localized("editor_place_doesnt_exist")
+                    default: return appInfo.localized("editor_reset_edits_button")
+                    }
+                }
+                onClicked: {
+                    if (editor.resetAction === PlaceEditor.PlaceDoesntExist) {
+                        pageStack.push(Qt.resolvedUrl("PlaceDoesntExistDialog.qml"),
+                                       { placeEditor: editor, returnPage: pageStack.previousPage(dialog) })
+                        return
+                    }
+                    var message = editor.resetAction === PlaceEditor.RemovePlace
+                            ? appInfo.localized("editor_remove_place_message")
+                            : appInfo.localized("editor_reset_edits_message")
+                    Remorse.popupAction(dialog, message, function() {
+                        editor.reset()
+                        osmAccount.updateEdits()
+                        pageStack.pop()
+                    })
+                }
             }
         }
 
@@ -281,8 +298,17 @@ Dialog {
                 // The loaded components see the field through their parent, not modelData.
                 readonly property var field: modelData
                 width: parent.width
-                sourceComponent: modelData.kind === PlaceEditor.Wifi ? wifiField
-                               : modelData.kind === PlaceEditor.SelfService ? selfServiceField : textField
+                sourceComponent: {
+                    switch (modelData.kind) {
+                    case PlaceEditor.Wifi: return wifiField
+                    case PlaceEditor.SelfService: return selfServiceField
+                    case PlaceEditor.OpeningHours: return openingHoursField
+                    case PlaceEditor.Cuisine: return cuisineField
+                    case PlaceEditor.Phone: return phoneField
+                    case PlaceEditor.YesNo: return yesNoField
+                    default: return textField
+                    }
+                }
             }
         }
     }
@@ -292,7 +318,7 @@ Dialog {
         id: textField
 
         ValidatedTextField {
-            readonly property string value: text
+            readonly property string fieldValue: text
             text: parent.field.value
             title: parent.field.label
             error: dialog.placeEditor.fieldError(parent.field.id, text)
@@ -301,6 +327,9 @@ Dialog {
                 case "url": return Qt.ImhUrlCharactersOnly | Qt.ImhNoPredictiveText | Qt.ImhNoAutoUppercase
                 case "email": return Qt.ImhEmailCharactersOnly
                 case "phone": return Qt.ImhPreferNumbers | Qt.ImhNoPredictiveText
+                case "number": return Qt.ImhDigitsOnly
+                // Levels can be negative, fractional or lists like "0;1".
+                case "level": return Qt.ImhPreferNumbers | Qt.ImhNoPredictiveText
                 default: return Qt.ImhNone
                 }
             }
@@ -310,7 +339,7 @@ Dialog {
         id: wifiField
 
         TextSwitch {
-            readonly property string value: checked ? "yes" : ""
+            readonly property string fieldValue: checked ? "yes" : ""
             readonly property string error: ""
             text: parent.field.label
             checked: parent.field.value === "yes"
@@ -321,7 +350,7 @@ Dialog {
 
         ComboBox {
             readonly property var values: dialog.placeEditor.selfServiceValues()
-            readonly property string value: currentIndex > 0 ? values[currentIndex - 1].value : ""
+            readonly property string fieldValue: currentIndex > 0 ? values[currentIndex - 1].value : ""
             readonly property string error: ""
             label: parent.field.label
             currentIndex: {
@@ -335,6 +364,111 @@ Dialog {
                 Repeater {
                     model: values
                     MenuItem { text: modelData.name }
+                }
+            }
+        }
+    }
+    Component {
+        id: yesNoField
+
+        ComboBox {
+            readonly property var values: ["", "yes", "no"]
+            readonly property string fieldValue: values[currentIndex]
+            readonly property string error: ""
+            label: parent.field.label
+            currentIndex: Math.max(0, values.indexOf(parent.field.value))
+            menu: ContextMenu {
+                MenuItem { text: "—" }
+                MenuItem { text: appInfo.localized("yes") }
+                MenuItem { text: appInfo.localized("no") }
+            }
+        }
+    }
+    // Schedules on a page of their own, like the Android timetable editor.
+    Component {
+        id: openingHoursField
+
+        ValueButton {
+            id: openingHoursButton
+            property string fieldValue: parent.field.value
+            readonly property string error: dialog.placeEditor.fieldError(parent.field.id, fieldValue)
+            label: parent.field.label
+            value: fieldValue !== "" ? fieldValue.split(";").map(function(rule) { return rule.trim() }).join("\n") : "—"
+            valueColor: error !== "" ? Theme.errorColor : Theme.highlightColor
+            onClicked: {
+                var page = pageStack.push(Qt.resolvedUrl("OpeningHoursPage.qml"), { value: fieldValue })
+                page.accepted.connect(function() { openingHoursButton.fieldValue = page.value })
+            }
+        }
+    }
+    Component {
+        id: cuisineField
+
+        ValueButton {
+            id: cuisineButton
+            property string fieldValue: parent.field.value
+            readonly property string error: ""
+            label: parent.field.label
+            value: fieldValue !== "" ? dialog.placeEditor.cuisineNames(fieldValue) : appInfo.localized("select_cuisine")
+            onClicked: {
+                var page = pageStack.push(Qt.resolvedUrl("CuisinePage.qml"),
+                                          { placeEditor: dialog.placeEditor, value: fieldValue })
+                page.accepted.connect(function() { cuisineButton.fieldValue = page.value })
+            }
+        }
+    }
+    // One field per number, like the Android phone list.
+    Component {
+        id: phoneField
+
+        Column {
+            id: phoneColumn
+            property var phones: parent.field.value !== "" ? parent.field.value.split(";") : [""]
+            readonly property var fieldId: parent.field.id
+            readonly property string fieldValue: phones.map(function(phone) { return phone.trim() })
+                                                       .filter(function(phone) { return phone !== "" }).join(";")
+            readonly property string error: dialog.placeEditor.fieldError(fieldId, fieldValue)
+            readonly property string label: parent.field.label
+
+            width: parent.width
+
+            Repeater {
+                model: phoneColumn.phones.length
+
+                ValidatedTextField {
+                    width: phoneColumn.width - (removeButton.visible ? removeButton.width : 0)
+                    text: phoneColumn.phones[index]
+                    title: phoneColumn.label
+                    error: dialog.placeEditor.fieldError(phoneColumn.fieldId, text)
+                    inputMethodHints: Qt.ImhDialableCharactersOnly | Qt.ImhNoPredictiveText
+                    onTextChanged: {
+                        var phones = phoneColumn.phones.slice()
+                        phones[index] = text
+                        phoneColumn.phones = phones
+                    }
+
+                    IconButton {
+                        id: removeButton
+                        anchors.left: parent.right
+                        visible: phoneColumn.phones.length > 1
+                        icon.source: "image://theme/icon-m-remove"
+                        onClicked: {
+                            var phones = phoneColumn.phones.slice()
+                            phones.splice(index, 1)
+                            phoneColumn.phones = phones
+                        }
+                    }
+                }
+            }
+            BackgroundItem {
+                width: parent.width
+                height: Theme.itemSizeSmall
+                onClicked: phoneColumn.phones = phoneColumn.phones.concat([""])
+
+                Label {
+                    anchors.verticalCenter: parent.verticalCenter
+                    text: appInfo.localized("editor_add_phone")
+                    color: parent.highlighted ? Theme.highlightColor : Theme.primaryColor
                 }
             }
         }

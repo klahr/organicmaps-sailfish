@@ -41,6 +41,11 @@ Page {
                 onClicked: categories.setAllVisible(!categories.allVisible)
             }
             MenuItem {
+                visible: categories.recentlyDeletedCount > 0
+                text: appInfo.localized("bookmarks_recently_deleted")
+                onClicked: pageStack.push(Qt.resolvedUrl("RecentlyDeletedPage.qml"), { categories: categories })
+            }
+            MenuItem {
                 text: appInfo.localized("bookmarks_create_new_group")
                 onClicked: pageStack.push(Qt.resolvedUrl("NewListDialog.qml"), { categories: categories })
             }

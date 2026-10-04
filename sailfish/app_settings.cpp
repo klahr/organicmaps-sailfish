@@ -1,6 +1,7 @@
 #include "sailfish/app_settings.hpp"
 
 #include "sailfish/app_info.hpp"
+#include "sailfish/file_log.hpp"
 
 #include "map/framework.hpp"
 
@@ -9,8 +10,10 @@
 #include "platform/measurement_utils.hpp"
 #include "platform/settings.hpp"
 
+#include <QFileInfo>
 #include <QNetworkConfiguration>
 #include <QNetworkConfigurationManager>
+#include <QUrl>
 #include <QVariantMap>
 
 namespace sailfish
@@ -21,6 +24,9 @@ namespace
 std::string_view constexpr kMapAppearance = "SailfishMapAppearance";
 std::string_view constexpr kZoomButtons = "SailfishZoomButtons";
 std::string_view constexpr kKeepScreenOn = "SailfishKeepScreenOn";
+std::string_view constexpr kLogging = "SailfishFileLogging";
+// Same setting as on Android.
+std::string_view constexpr kAutoNightInNavigation = "AutoDarkNavigation";
 std::string_view constexpr kSearchHistory = "SailfishSearchHistory";
 std::string_view constexpr kAutoDownload = "SailfishAutoDownload";
 std::string_view constexpr kMobileData = "SailfishMobileData";
@@ -53,10 +59,8 @@ void AppSettings::setMapAppearance(int appearance)
   emit changed();
 }
 
-void AppSettings::applyMapAppearance(bool isAmbienceDark)
+void AppSettings::applyMapAppearance(bool dark)
 {
-  int const appearance = mapAppearance();
-  bool const dark = appearance == AppearanceAuto ? isAmbienceDark : appearance == AppearanceDark;
   MapStyle const current = m_framework.GetMapStyle();
   MapStyle const style = dark ? GetDarkMapStyleVariant(current) : GetLightMapStyleVariant(current);
   if (style != current)
@@ -209,6 +213,44 @@ void AppSettings::setPerspectiveView(bool enabled)
   Framework::Load3dMode(allow3d, buildings);
   Framework::Save3dMode(enabled, buildings);
   m_framework.Allow3dMode(enabled, buildings);
+  emit changed();
+}
+
+bool AppSettings::logging() const
+{
+  return file_log::IsEnabled();
+}
+
+void AppSettings::setLogging(bool enabled)
+{
+  settings::Set(kLogging, enabled);
+  file_log::Enable(enabled);
+  emit changed();
+}
+
+QString AppSettings::logUrl() const
+{
+  return QUrl::fromLocalFile(file_log::Path()).toString();
+}
+
+qint64 AppSettings::logSize() const
+{
+  return QFileInfo(file_log::Path()).size();
+}
+
+void AppSettings::InitLogging()
+{
+  file_log::Enable(Load(kLogging, false));
+}
+
+bool AppSettings::autoNightInNavigation() const
+{
+  return Load(kAutoNightInNavigation, false);
+}
+
+void AppSettings::setAutoNightInNavigation(bool enabled)
+{
+  settings::Set(kAutoNightInNavigation, enabled);
   emit changed();
 }
 

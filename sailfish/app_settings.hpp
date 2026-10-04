@@ -40,6 +40,11 @@ class AppSettings : public QObject
   // Navigation group: the tilted map and zooming by speed while navigating.
   Q_PROPERTY(bool perspectiveView READ perspectiveView WRITE setPerspectiveView NOTIFY changed)
   Q_PROPERTY(bool autoZoom READ autoZoom WRITE setAutoZoom NOTIFY changed)
+  // A dark map while navigating between sunset and sunrise, see Routing::darkOutside.
+  // Debug logs in a file, which "Report a bug" shares, at logUrl.
+  Q_PROPERTY(bool logging READ logging WRITE setLogging NOTIFY changed)
+  Q_PROPERTY(QString logUrl READ logUrl CONSTANT)
+  Q_PROPERTY(bool autoNightInNavigation READ autoNightInNavigation WRITE setAutoNightInNavigation NOTIFY changed)
   // power_management::Scheme: Normal (never), EconomyMaximum (always) or Auto (low battery).
   Q_PROPERTY(int powerScheme READ powerScheme WRITE setPowerScheme NOTIFY changed)
   // routing::SpeedCameraManagerMode: Auto, Always or Never.
@@ -108,6 +113,15 @@ public:
   void setPerspectiveView(bool enabled);
   bool autoZoom() const;
   void setAutoZoom(bool enabled);
+  bool logging() const;
+  void setLogging(bool enabled);
+  QString logUrl() const;
+  // Bytes in the log file, shown with the setting like on iOS.
+  Q_INVOKABLE qint64 logSize() const;
+  // Starts the file log when the setting is on; called once at start.
+  static void InitLogging();
+  bool autoNightInNavigation() const;
+  void setAutoNightInNavigation(bool enabled);
   void setAutoDownload(bool enabled);
   int mobileData() const;
   void setMobileData(int mobileData);
@@ -128,8 +142,8 @@ public:
   Q_INVOKABLE void setBackgroundTiles(bool enabled, QString const & url, int cacheSizeMb, int opacityPct);
   Q_INVOKABLE bool isWellFormedTilesUrl(QString const & url) const;
 
-  // Applies the appearance to the map style; isAmbienceDark is used for Auto.
-  Q_INVOKABLE void applyMapAppearance(bool isAmbienceDark);
+  // Switches the map style to its dark or light variant.
+  Q_INVOKABLE void applyMapAppearance(bool dark);
 
   // UI only setting read by other C++ code.
   static bool IsSearchHistoryEnabled();

@@ -13,5 +13,6 @@ X-Maemo-Method=app.organicmaps.organicmaps.openUrl
 [X-Sailjail]
 OrganizationName=app.organicmaps
 ApplicationName=organicmaps
-# UserDirs and RemovableMedia: imported files, backups and maps on a memory card.
-Permissions=Audio;Internet;Location;Sharing;UserDirs;RemovableMedia
+# UserDirs and RemovableMedia: imported files, backups and maps on a memory card. Notifications: downloads
+# and track recording.
+Permissions=Audio;Internet;Location;Notifications;Sharing;UserDirs;RemovableMedia

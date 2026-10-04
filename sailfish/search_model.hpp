@@ -4,6 +4,7 @@
 #include <QColor>
 #include <QStringList>
 #include <QVariantList>
+#include <QVariantMap>
 
 #include <cstdint>
 #include <memory>
@@ -29,6 +30,10 @@ class SearchModel : public QAbstractListModel
   Q_PROPERTY(QStringList history READ history NOTIFY historyChanged)
   // Color of the matched parts of result names, which are returned as styled text.
   Q_PROPERTY(QColor highlightColor MEMBER m_highlightColor)
+  // No map is downloaded yet: search offers the map of the position, like CountrySuggestFragment on Android.
+  Q_PROPERTY(bool noMaps READ noMaps NOTIFY mapsChanged)
+  // That map, see MissingMapInfo(); empty without a position.
+  Q_PROPERTY(QVariantMap suggestedMap READ suggestedMap NOTIFY mapsChanged)
 
 public:
   enum Roles
@@ -38,7 +43,9 @@ public:
     AddressRole,
     DistanceRole,
     OpenStatusRole,
-    OpenStateRole
+    OpenStateRole,
+    // A completion of the query rather than a place.
+    SuggestRole
   };
 
   // Opening hours state of a result, colored like on Android.
@@ -63,20 +70,25 @@ public:
   void setQuery(QString const & query);
   bool searching() const { return m_searching; }
   QStringList history() const;
+  bool noMaps() const;
+  QVariantMap suggestedMap() const;
 
   // Displayed search categories as {key, name} in the search language.
   Q_INVOKABLE QVariantList categories() const;
-  Q_INVOKABLE void searchCategory(QString const & name);
+  // The navigation quick search leaves the history alone, like on Android.
+  Q_INVOKABLE void searchCategory(QString const & name, bool addToHistory = true);
   // Returns false for a suggestion, which replaces the query instead of selecting a place.
   Q_INVOKABLE bool activate(int row);
   // Fits the viewport to the results, like the search key on Android.
   Q_INVOKABLE void showOnMap();
   Q_INVOKABLE void clearHistory();
+  Q_INVOKABLE void downloadSuggestedMap();
 
 signals:
   void queryChanged();
   void searchingChanged();
   void historyChanged();
+  void mapsChanged();
 
 private:
   void Run();
@@ -95,5 +107,6 @@ private:
   uint64_t m_timestamp = 0;
   bool m_searching = false;
   QColor m_highlightColor;
+  int m_storageSlot = 0;
 };
 }  // namespace sailfish

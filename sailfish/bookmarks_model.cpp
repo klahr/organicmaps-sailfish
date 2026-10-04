@@ -2,15 +2,23 @@
 
 #include "sailfish/framework_access.hpp"
 
+#include "map/bookmark_helpers.hpp"
 #include "map/bookmark_manager.hpp"
 #include "map/framework.hpp"
 
 #include "kml/type_utils.hpp"
+#include "kml/types.hpp"
+
+#include "geometry/mercator.hpp"
 
 #include "platform/distance.hpp"
+#include "platform/platform.hpp"
 
+#include <QDateTime>
 #include <QPointer>
+#include <QVariantMap>
 
+#include <algorithm>
 #include <utility>
 
 namespace sailfish
@@ -21,7 +29,25 @@ static_assert(BookmarksModel::ByType == static_cast<int>(BookmarkManager::Sortin
 static_assert(BookmarksModel::ByDistance == static_cast<int>(BookmarkManager::SortingType::ByDistance));
 static_assert(BookmarksModel::ByTime == static_cast<int>(BookmarkManager::SortingType::ByTime));
 static_assert(BookmarksModel::ByName == static_cast<int>(BookmarkManager::SortingType::ByName));
+
+QString ColorName(dp::Color const & color)
+{
+  return QStringLiteral("#%1").arg(color.GetRGBA() >> 8, 6, 16, QLatin1Char('0'));
+}
+
+dp::Color PresetColor(int index)
+{
+  return kml::ColorFromPredefinedColor(kml::kOrderedPredefinedColors[static_cast<size_t>(index)]);
+}
 }  // namespace
+
+QStringList PresetColors()
+{
+  QStringList colors;
+  for (auto const preset : kml::kOrderedPredefinedColors)
+    colors.append(ColorName(kml::ColorFromPredefinedColor(preset)));
+  return colors;
+}
 
 BookmarksNotifier & BookmarksNotifier::Instance()
 {
@@ -62,6 +88,7 @@ void BookmarkCategoriesModel::Reset()
   m_ids.assign(ids.begin(), ids.end());
   endResetModel();
   emit allVisibleChanged();
+  emit recentlyDeletedChanged();
 }
 
 bool BookmarkCategoriesModel::allVisible() const
@@ -130,9 +157,52 @@ void BookmarkCategoriesModel::deleteCategory(int row)
 {
   if (row < 0 || row >= rowCount())
     return;
+  // To the trash, like on iOS.
   m_framework.GetBookmarkManager().GetEditSession().DeleteBmCategory(m_ids[static_cast<size_t>(row)],
-                                                                     true /* permanently */);
+                                                                     false /* permanently */);
   Reset();
+}
+
+int BookmarkCategoriesModel::recentlyDeletedCount() const
+{
+  return static_cast<int>(m_framework.GetBookmarkManager().GetRecentlyDeletedCategoriesCount());
+}
+
+QVariantList BookmarkCategoriesModel::recentlyDeleted() const
+{
+  QVariantList result;
+  auto const collection = m_framework.GetBookmarkManager().GetRecentlyDeletedCategories();
+  for (auto const & [path, data] : *collection)
+  {
+    // The file was created when the list was moved to the trash.
+    auto const time = Platform::GetFileCreationTime(path);
+    result.append(QVariantMap{{"name", QString::fromStdString(GetPreferredBookmarkStr(data->m_categoryData.m_name))},
+                              {"path", QString::fromStdString(path)},
+                              {"date", time > 0 ? QDateTime::fromTime_t(static_cast<uint>(time)) : QDateTime()}});
+  }
+  // Newest first.
+  std::sort(result.begin(), result.end(), [](QVariant const & a, QVariant const & b)
+  { return a.toMap()["date"].toDateTime() > b.toMap()["date"].toDateTime(); });
+  return result;
+}
+
+void BookmarkCategoriesModel::recoverDeleted(QStringList const & paths)
+{
+  std::vector<std::string> files;
+  for (auto const & path : paths)
+    files.push_back(path.toStdString());
+  // The recovered lists load in the background; the changed callback follows.
+  m_framework.GetBookmarkManager().RecoverRecentlyDeletedCategoriesAtPaths(files);
+  emit recentlyDeletedChanged();
+}
+
+void BookmarkCategoriesModel::deleteForever(QStringList const & paths)
+{
+  std::vector<std::string> files;
+  for (auto const & path : paths)
+    files.push_back(path.toStdString());
+  m_framework.GetBookmarkManager().DeleteRecentlyDeletedCategoriesAtPaths(files);
+  emit recentlyDeletedChanged();
 }
 
 void BookmarkCategoriesModel::showOnMap(int row)
@@ -342,6 +412,8 @@ QVariant BookmarksModel::data(QModelIndex const & index, int role) const
     {
     case TypeRole:
       return QString::fromStdString(platform::Distance::CreateFormatted(track->GetLengthMeters()).ToString());
+    case ColorRole: return ColorName(track->GetColor(0));
+    case VisibleRole: return track->IsVisible();
     default: return {};
     }
   }
@@ -352,13 +424,23 @@ QVariant BookmarksModel::data(QModelIndex const & index, int role) const
   switch (role)
   {
   case TypeRole: return QString::fromStdString(kml::GetLocalizedFeatureType(bookmark->GetData().m_featureTypes));
+  case ColorRole: return ColorName(bookmark->GetColorForRendering());
+  case DistanceRole:
+  {
+    auto const position = m_framework.GetCurrentPosition();
+    if (!position)
+      return QString();
+    auto const meters = mercator::DistanceOnEarth(*position, bookmark->GetPivot());
+    return QString::fromStdString(platform::Distance::CreateFormatted(meters).ToString());
+  }
   default: return {};
   }
 }
 
 QHash<int, QByteArray> BookmarksModel::roleNames() const
 {
-  return {{IdRole, "itemId"}, {IsTrackRole, "isTrack"}, {NameRole, "name"}, {TypeRole, "type"}, {BlockRole, "block"}};
+  return {{IdRole, "itemId"},   {IsTrackRole, "isTrack"}, {NameRole, "name"},         {TypeRole, "type"},
+          {BlockRole, "block"}, {ColorRole, "color"},     {DistanceRole, "distance"}, {VisibleRole, "isVisible"}};
 }
 
 void BookmarksModel::showOnMap(int row)
@@ -372,6 +454,13 @@ void BookmarksModel::showOnMap(int row)
     m_framework.ShowBookmark(item.m_id);
 }
 
+QString BookmarksModel::shareText(int row) const
+{
+  if (row < 0 || row >= rowCount() || m_items[static_cast<size_t>(row)].m_isTrack)
+    return {};
+  return QString::fromStdString(m_framework.GetShareDataForBookmark(m_items[static_cast<size_t>(row)].m_id).m_text);
+}
+
 void BookmarksModel::remove(int row)
 {
   if (row < 0 || row >= rowCount())
@@ -382,5 +471,84 @@ void BookmarksModel::remove(int row)
     session.DeleteTrack(item.m_id);
   else
     session.DeleteBookmark(item.m_id);
+}
+QVariantList BookmarksModel::categories() const
+{
+  QVariantList result;
+  auto const & manager = m_framework.GetBookmarkManager();
+  for (auto const id : manager.GetSortedBmGroupIdList())
+    result.append(QVariantMap{{"id", QVariant::fromValue<quint64>(id)},
+                              {"name", QString::fromStdString(manager.GetCategoryName(id))}});
+  return result;
+}
+
+void BookmarksModel::setTrackVisible(int row, bool visible)
+{
+  if (row < 0 || row >= rowCount() || !m_items[static_cast<size_t>(row)].m_isTrack)
+    return;
+  m_framework.SetTrackVisibility(m_items[static_cast<size_t>(row)].m_id, visible);
+  // Visibility doesn't trigger the changed callback.
+  emit dataChanged(index(row), index(row), {VisibleRole});
+}
+
+void BookmarksModel::CollectIds(QVariantList const & rows, std::vector<uint64_t> & marks,
+                                std::vector<uint64_t> & tracks) const
+{
+  for (auto const & row : rows)
+  {
+    auto const r = row.toInt();
+    if (r < 0 || r >= rowCount())
+      continue;
+    auto const & item = m_items[static_cast<size_t>(r)];
+    (item.m_isTrack ? tracks : marks).push_back(item.m_id);
+  }
+}
+
+void BookmarksModel::removeRows(QVariantList const & rows)
+{
+  kml::MarkIdCollection marks;
+  kml::TrackIdCollection tracks;
+  CollectIds(rows, marks, tracks);
+  // Also closes a place page showing a deleted item.
+  m_framework.DeleteBookmarksAndTracks(marks, tracks);
+}
+
+void BookmarksModel::moveRows(QVariantList const & rows, quint64 categoryId)
+{
+  kml::MarkIdCollection marks;
+  kml::TrackIdCollection tracks;
+  CollectIds(rows, marks, tracks);
+  m_framework.GetBookmarkManager().GetEditSession().MoveBookmarksAndTracks(marks, tracks, categoryId);
+}
+
+void BookmarksModel::setRowsColor(QVariantList const & rows, int colorIndex)
+{
+  if (colorIndex < 0 || colorIndex >= static_cast<int>(kml::kOrderedPredefinedColors.size()))
+    return;
+  kml::MarkIdCollection marks;
+  kml::TrackIdCollection tracks;
+  CollectIds(rows, marks, tracks);
+  m_framework.GetBookmarkManager().GetEditSession().SetBookmarksAndTracksColor(marks, tracks, PresetColor(colorIndex));
+}
+
+void BookmarksModel::setAllColor(bool tracks, int colorIndex)
+{
+  if (colorIndex < 0 || colorIndex >= static_cast<int>(kml::kOrderedPredefinedColors.size()))
+    return;
+  auto const & manager = m_framework.GetBookmarkManager();
+  kml::MarkIdCollection marks;
+  kml::TrackIdCollection trackIds;
+  if (tracks)
+  {
+    auto const & ids = manager.GetTrackIds(m_categoryId);
+    trackIds.assign(ids.begin(), ids.end());
+  }
+  else
+  {
+    auto const & ids = manager.GetUserMarkIds(m_categoryId);
+    marks.assign(ids.begin(), ids.end());
+  }
+  m_framework.GetBookmarkManager().GetEditSession().SetBookmarksAndTracksColor(marks, trackIds,
+                                                                               PresetColor(colorIndex));
 }
 }  // namespace sailfish

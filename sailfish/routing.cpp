@@ -4,9 +4,11 @@
 #include "sailfish/app_settings.hpp"
 #include "sailfish/voice_guide.hpp"
 
+#include "map/elevation_info.hpp"
 #include "map/framework.hpp"
 #include "map/place_page_info.hpp"
 #include "map/routing_manager.hpp"
+#include "map/routing_mark.hpp"
 #include "map/transit/transit_display.hpp"
 
 #include "routing/following_info.hpp"
@@ -16,6 +18,9 @@
 #include "routing/routing_options.hpp"
 #include "routing/turns.hpp"
 
+#include "drape_frontend/drape_engine.hpp"
+
+#include "platform/distance.hpp"
 #include "platform/get_text_by_id.hpp"
 #include "platform/languages.hpp"
 #include "platform/measurement_utils.hpp"
@@ -26,10 +31,13 @@
 
 #include "geometry/mercator.hpp"
 
+#include "base/sunrise_sunset.hpp"
+
 #include <sailfishapp.h>
 
 #include <QColor>
 #include <QDateTime>
+#include <QGuiApplication>
 #include <QLocale>
 #include <QUrl>
 #include <QVariantMap>
@@ -62,6 +70,15 @@ std::string_view constexpr kVoiceEnabledSetting = "SailfishVoiceInstructions";
 // Empty for the app language.
 std::string_view constexpr kVoiceLanguageSetting = "SailfishVoiceLanguage";
 std::string_view constexpr kAnnounceStreetsSetting = "SailfishVoiceStreetNames";
+// 0..1, the setting of Android.
+std::string_view constexpr kVoiceVolumeSetting = "TtsVolume";
+// The setting of Android.
+std::string_view constexpr kDisclaimerSetting = "IsDisclaimerApproved";
+
+qint64 constexpr kDarkOutsideCheckIntervalMs = 60 * 1000;
+
+// Enough points for a phone wide chart, as on the track place page.
+size_t constexpr kMaxElevationPoints = 600;
 
 // Empty for a language without turn notifications.
 QString VoiceLanguageName(std::string const & code)
@@ -137,6 +154,70 @@ QString LaneIcon(routing::turns::lanes::LaneWay way)
   }
 }
 
+// The street as parts {text} and road shields {shield, text, color, textColor}, like RoadShieldUtils on Android.
+// The shields replace their "[ref]" text, which the core places by code points.
+QVariantList StreetParts(std::string const & street, routing::FollowingInfo::RoadShieldInfo const & info)
+{
+  auto const text = QString::fromStdString(street).toUcs4();
+  auto const part = [&text](int from, int to)
+  { return QString::fromUcs4(text.constData() + from, std::max(0, to - from)); };
+  auto const & shields = info.m_targetRoadShields;
+  int const start = std::min<int>(info.m_targetRoadShieldsPosition.first, text.size());
+  int const end = std::min<int>(info.m_targetRoadShieldsPosition.second, text.size());
+  QVariantList parts;
+  if (shields.empty() || start >= end)
+  {
+    parts.append(QVariantMap{{"text", QString::fromStdString(street)}});
+    return parts;
+  }
+  if (start > 0)
+    parts.append(QVariantMap{{"text", part(0, start).trimmed()}});
+  using ftypes::RoadShieldType;
+  for (auto const & shield : shields)
+  {
+    // Colors of RoadShieldDrawable on Android, from the map styles.
+    QString color = QStringLiteral("#ffffff"), textColor = QStringLiteral("#000000");
+    switch (shield.m_type)
+    {
+    case RoadShieldType::Hidden: continue;
+    case RoadShieldType::Generic_Green:
+      color = "#309302";
+      textColor = "#ffffff";
+      break;
+    case RoadShieldType::Generic_Blue:
+      color = "#1a5ec1";
+      textColor = "#ffffff";
+      break;
+    case RoadShieldType::Generic_Red:
+      color = "#e63534";
+      textColor = "#ffffff";
+      break;
+    case RoadShieldType::Generic_Orange: color = "#ffbe00"; break;
+    case RoadShieldType::US_Interstate:
+      color = "#1a5ec1";
+      textColor = "#ffffff";
+      break;
+    case RoadShieldType::UK_Highway:
+      color = "#309302";
+      textColor = "#ffd400";
+      break;
+    default: break;
+    }
+    parts.append(QVariantMap{
+        {"shield", true}, {"text", QString::fromStdString(shield.m_name)}, {"color", color}, {"textColor", textColor}});
+  }
+  if (end < text.size())
+  {
+    // Drops the " : " that joins the shields and the name.
+    auto rest = part(end, text.size()).trimmed();
+    if (rest.startsWith(':'))
+      rest = rest.mid(1).trimmed();
+    if (!rest.isEmpty())
+      parts.append(QVariantMap{{"text", rest}});
+  }
+  return parts;
+}
+
 // Lanes as {icon, active}: the recommended way of an active lane, else its first way, like LanesDrawable.
 QVariantList Lanes(routing::turns::lanes::LanesInfo const & lanes)
 {
@@ -204,10 +285,17 @@ Routing::Routing(Framework & framework, QObject * parent)
     }
     Build();
   }, [](storage::CountryId const &, downloader::Progress const &) {});
+
+  connect(qApp, &QGuiApplication::applicationStateChanged, this, [this](Qt::ApplicationState state)
+  {
+    if (state != Qt::ApplicationActive)
+      SaveRouteForRestart();
+  });
 }
 
 Routing::~Routing()
 {
+  SaveRouteForRestart();
   m_framework.GetStorage().Unsubscribe(m_storageSlot);
   // RoutingManager requires a listener.
   m_framework.GetRoutingManager().SetRouteBuildingListener([](RouterResultCode, storage::CountriesSet const &) {});
@@ -293,21 +381,84 @@ bool Routing::canStart() const
   return m_built && type != Ruler && type != Transit;
 }
 
+bool Routing::startIsMyPosition() const
+{
+  auto const points = m_framework.GetRoutingManager().GetRoutePoints();
+  return !points.empty() && points.front().m_isMyPosition;
+}
+
+bool Routing::disclaimerAccepted() const
+{
+  bool accepted = false;
+  settings::TryGet(kDisclaimerSetting, accepted);
+  return accepted;
+}
+
+void Routing::acceptDisclaimer()
+{
+  settings::Set(kDisclaimerSetting, true);
+  emit disclaimerChanged();
+}
+
+bool Routing::canAddStop() const
+{
+  return m_framework.GetRoutingManager().GetRoutePointsCount() < RoutePointsLayout::kMaxRoutePointsCount;
+}
+
+void Routing::SaveRouteForRestart()
+{
+  auto & manager = m_framework.GetRoutingManager();
+  if (m_navigating || (active() && m_built))
+    manager.SaveRoutePoints();
+  else if (active())
+    // A restart must not bring back an earlier route of this planning.
+    manager.DeleteSavedRoutePoints();
+}
+
+void Routing::restoreSavedRoute()
+{
+  auto & manager = m_framework.GetRoutingManager();
+  if (active() || !manager.HasSavedRoutePoints())
+    return;
+  manager.LoadRoutePoints([this](bool success)
+  {
+    if (success)
+      OnPointsChanged();
+  });
+}
+
 void Routing::start()
 {
   if (!canStart())
     return;
   auto & manager = m_framework.GetRoutingManager();
-  // Navigation follows the position; Android asks to move the start there first.
-  auto const points = manager.GetRoutePoints();
+  // Navigation follows the position: the route starts there, after the confirmation of START. A finish at the
+  // position swaps with the start, like on Android.
+  auto points = manager.GetRoutePoints();
   if (!points.empty() && !points.front().m_isMyPosition)
   {
     m_startWhenBuilt = true;
-    setStartToMyPosition();
+    if (points.back().m_isMyPosition && points.back().m_pointType == RouteMarkType::Finish)
+    {
+      auto start = points.front();
+      auto finish = points.back();
+      start.m_pointType = RouteMarkType::Finish;
+      finish.m_pointType = RouteMarkType::Start;
+      manager.AddRoutePoint(std::move(finish), false /* optimize */);
+      manager.AddRoutePoint(std::move(start), false /* optimize */);
+      OnPointsChanged();
+    }
+    else
+    {
+      setStartToMyPosition();
+    }
     return;
   }
+  ClearElevationActivePoint();
+  cancelPick();
   manager.FollowRoute();
   m_navigating = true;
+  m_darkOutsideCheckMs = 0;
   // Picks up voices installed since the start.
   m_voice->Refresh();
   manager.EnableTurnNotifications(voiceEnabled());
@@ -327,6 +478,8 @@ void Routing::EndNavigation()
   m_navigating = false;
   m_navigation.clear();
   SetNavigationStyle(false);
+  if (std::exchange(m_darkOutside, false))
+    emit darkOutsideChanged();
   close();
   emit navigationChanged();
 }
@@ -356,6 +509,7 @@ void Routing::SetupVoice()
   std::string preferred;
   settings::TryGet(kVoiceLanguageSetting, preferred);
   m_voice->SetPreferredLanguage(preferred, AppVoiceLanguage());
+  m_voice->SetVolume(voiceVolume());
   m_voice->Refresh();
 }
 
@@ -452,6 +606,22 @@ void Routing::setAnnounceStreets(bool announce)
   emit voiceChanged();
 }
 
+int Routing::voiceVolume() const
+{
+  double volume = 1.0;
+  settings::TryGet(kVoiceVolumeSetting, volume);
+  return qRound(std::clamp(volume, 0.0, 1.0) * 100);
+}
+
+void Routing::setVoiceVolume(int volume)
+{
+  if (volume == voiceVolume())
+    return;
+  settings::Set(kVoiceVolumeSetting, volume / 100.0);
+  m_voice->SetVolume(volume);
+  emit voiceChanged();
+}
+
 void Routing::refreshVoice()
 {
   m_voice->Refresh();
@@ -493,10 +663,27 @@ void Routing::SetNavigationStyle(bool enabled)
     m_framework.SetMapStyle(BaseMapStyle(dark, Framework::LoadOutdoorsEnabled()));
 }
 
+void Routing::UpdateDarkOutside()
+{
+  auto const nowMs = QDateTime::currentMSecsSinceEpoch();
+  if (m_darkOutsideCheckMs != 0 && nowMs - m_darkOutsideCheckMs < kDarkOutsideCheckIntervalMs)
+    return;
+  auto const position = m_framework.GetCurrentPosition();
+  if (!position)
+    return;
+  m_darkOutsideCheckMs = nowMs;
+  auto const latLon = mercator::ToLatLon(*position);
+  auto const dayTime = GetDayTime(static_cast<time_t>(nowMs / 1000), latLon.m_lat, latLon.m_lon);
+  bool const dark = dayTime == DayTimeType::Night || dayTime == DayTimeType::PolarNight;
+  if (dark != std::exchange(m_darkOutside, dark))
+    emit darkOutsideChanged();
+}
+
 void Routing::UpdateNavigation(double speedMps)
 {
   if (!m_navigating)
     return;
+  UpdateDarkOutside();
   auto & manager = m_framework.GetRoutingManager();
   // Before the finish check, so that the arrival is announced, like on Android.
   if (voiceEnabled())
@@ -530,6 +717,7 @@ void Routing::UpdateNavigation(double speedMps)
   nav["turnIcon"] = pedestrian ? TurnIcon(info.m_pedestrianTurn) : TurnIcon(info.m_turn, info.m_exitNum);
   nav["distanceToTurn"] = QString::fromStdString(info.m_distToTurn.ToString());
   nav["street"] = QString::fromStdString(info.m_nextStreetName);
+  nav["streetParts"] = StreetParts(info.m_nextStreetName, info.m_nextStreetShields);
   nav["nextTurnIcon"] =
       !pedestrian && info.m_nextTurn != routing::turns::CarDirection::None ? TurnIcon(info.m_nextTurn, 0) : QString();
   // Number and units apart, as the Android bottom sheet shows them.
@@ -565,6 +753,11 @@ void Routing::routeToPlace()
 
 void Routing::addStopFromPlace()
 {
+  if (!canAddStop())
+  {
+    emit message(Localized("routing_max_stops_reached"));
+    return;
+  }
   AddPlacePoint(Intermediate);
 }
 
@@ -591,22 +784,108 @@ void Routing::AddPlacePoint(int type)
   point.m_subTitle = info.GetSubtitle();
   point.m_isMyPosition = info.IsMyPosition();
   point.m_position = info.GetMercator();
-
-  auto & manager = m_framework.GetRoutingManager();
-  bool const optimize = type == Intermediate && RoutingOptions::LoadRouteOptimizationFromSettings();
-  manager.AddRoutePoint(std::move(point), optimize);
-
   // The route panel takes the place of the place page.
   m_framework.DeactivateMapSelection();
+  AddPoint(std::move(point));
+}
+
+void Routing::AddPoint(RouteMarkData && point)
+{
+  auto & manager = m_framework.GetRoutingManager();
+  auto const type = point.m_pointType;
+  bool const optimize = type == RouteMarkType::Intermediate && RoutingOptions::LoadRouteOptimizationFromSettings();
+  manager.AddRoutePoint(std::move(point), optimize);
 
   // A route to a place starts from the current position unless a start was chosen, as on Android.
   bool hasStart = false;
   for (auto const & p : manager.GetRoutePoints())
     hasStart |= p.m_pointType == RouteMarkType::Start;
-  if (!hasStart && type == Finish)
+  if (!hasStart && type == RouteMarkType::Finish)
     setStartToMyPosition();
   else
     OnPointsChanged();
+}
+
+void Routing::startPick(int type, int index)
+{
+  m_pickType = type;
+  m_pickIndex = index;
+  emit pickChanged();
+}
+
+void Routing::cancelPick()
+{
+  if (m_pickType < 0)
+    return;
+  m_pickType = -1;
+  m_pickIndex = -1;
+  emit pickChanged();
+}
+
+void Routing::PickPoint(RouteMarkData && point)
+{
+  if (m_pickType < 0)
+    return;
+  auto & manager = m_framework.GetRoutingManager();
+  auto const points = manager.GetRoutePoints();
+  auto const index = m_pickIndex;
+  point.m_pointType = static_cast<RouteMarkType>(m_pickType);
+  cancelPick();
+
+  // A replaced stop keeps its place in the route.
+  if (point.m_pointType == RouteMarkType::Intermediate && index >= 0 && index < static_cast<int>(points.size()))
+  {
+    auto const & old = points[static_cast<size_t>(index)];
+    manager.RemoveRoutePoint(old.m_pointType, old.m_intermediateIndex);
+    manager.AddRoutePoint(std::move(point), false /* optimize */);
+    auto const count = static_cast<int>(manager.GetRoutePointsCount());
+    // The new stop is the last one, before the finish.
+    int const added = count - (manager.GetRoutePoints().back().m_pointType == RouteMarkType::Finish ? 2 : 1);
+    if (added != index)
+      manager.MoveRoutePoint(static_cast<size_t>(added), static_cast<size_t>(index));
+    OnPointsChanged();
+    return;
+  }
+  if (point.m_pointType == RouteMarkType::Intermediate && !canAddStop())
+  {
+    emit message(Localized("routing_max_stops_reached"));
+    return;
+  }
+  AddPoint(std::move(point));
+}
+
+void Routing::pickPlace()
+{
+  if (!m_framework.HasPlacePageInfo())
+    return;
+  auto const & info = m_framework.GetCurrentPlacePageInfo();
+  RouteMarkData point;
+  point.m_title = info.GetTitle();
+  point.m_subTitle = info.GetSubtitle();
+  point.m_isMyPosition = info.IsMyPosition();
+  point.m_position = info.GetMercator();
+  m_framework.DeactivateMapSelection();
+  PickPoint(std::move(point));
+}
+
+void Routing::pickPosition(double lat, double lon)
+{
+  RouteMarkData point;
+  point.m_position = mercator::FromLatLon(lat, lon);
+  // Named by the address there, else by the coordinates.
+  point.m_title = m_framework.GetAddressAtPoint(point.m_position).FormatAddress();
+  if (point.m_title.empty())
+    point.m_title = QStringLiteral("%1, %2").arg(lat, 0, 'f', 5).arg(lon, 0, 'f', 5).toStdString();
+  PickPoint(std::move(point));
+}
+
+void Routing::pickMyPosition()
+{
+  RouteMarkData point;
+  point.m_isMyPosition = true;
+  if (auto const position = m_framework.GetCurrentPosition())
+    point.m_position = *position;
+  PickPoint(std::move(point));
 }
 
 void Routing::planRoute(int routerType, QVariantList const & points)
@@ -647,6 +926,22 @@ void Routing::removePoint(int index)
   OnPointsChanged();
 }
 
+void Routing::removePlacePoint()
+{
+  if (!m_framework.HasPlacePageInfo() || !m_framework.GetCurrentPlacePageInfo().IsRoutePoint())
+    return;
+  auto const & info = m_framework.GetCurrentPlacePageInfo();
+  m_framework.GetRoutingManager().RemoveRoutePoint(info.GetRouteMarkType(), info.GetIntermediateIndex());
+  m_framework.DeactivateMapSelection();
+  OnPointsChanged();
+}
+
+void Routing::avoidRoad(int road)
+{
+  m_framework.DeactivateMapSelection();
+  setAvoidRoads(avoidRoads() | road);
+}
+
 void Routing::movePoint(int from, int to)
 {
   auto & manager = m_framework.GetRoutingManager();
@@ -663,10 +958,77 @@ void Routing::downloadMissingMaps()
     m_framework.GetStorage().DownloadNode(id.toStdString());
 }
 
+void Routing::saveRoute()
+{
+  if (!m_built || m_routeSaved)
+    return;
+  // The chart mark would stay on the saved track.
+  ClearElevationActivePoint();
+  m_framework.SaveRoute();
+  m_routeSaved = true;
+  emit stateChanged();
+}
+
+void Routing::setElevationActivePoint(double distance)
+{
+  auto const point = m_framework.GetRoutingManager().GetRoutePointAtDistance(distance);
+  auto engine = m_framework.GetDrapeEngine();
+  if (!point || !engine)
+    return;
+  // Marks the point like the selection of a track point, as nativeRouteSetElevationActivePoint on Android.
+  engine->SelectObject(df::SelectionShape::ESelectedObject::OBJECT_TRACK, *point, FeatureID(), false /* isAnim */,
+                       false /* isGeometrySelectionAllowed */, true /* isSelectionShapeVisible */);
+  m_elevationActivePoint = distance;
+  emit elevationActivePointChanged();
+}
+
+void Routing::ClearElevationActivePoint()
+{
+  if (m_elevationActivePoint < 0)
+    return;
+  // A place tapped since owns the selection now.
+  if (auto engine = m_framework.GetDrapeEngine(); engine && !m_framework.HasPlacePageInfo())
+    engine->DeselectObject(false /* restoreViewport */);
+  m_elevationActivePoint = -1;
+  emit elevationActivePointChanged();
+}
+
+void Routing::LoadElevation()
+{
+  // Car routes have no altitudes; the ruler has no roads, as on Android.
+  auto const type = routerType();
+  ElevationInfo elevation;
+  if (type == Vehicle || type == Ruler || !m_framework.GetRoutingManager().GetRouteElevationInfo(elevation) ||
+      elevation.GetSize() < 2)
+    return;
+
+  auto const info = elevation.CalculateAltitudesInfo(ElevationInfo::kDefThresholdMWM);
+  m_minElevation = QString::fromStdString(platform::Distance::FormatAltitude(info.m_minAltitude));
+  m_maxElevation = QString::fromStdString(platform::Distance::FormatAltitude(info.m_maxAltitude));
+  // route_ascent_descent_format_ltr on Android.
+  m_ascentDescent = QStringLiteral("↗\u00A0%1 ↘\u00A0%2")
+                        .arg(QString::fromStdString(platform::Distance::FormatAltitude(info.GetTotalAscent())),
+                             QString::fromStdString(platform::Distance::FormatAltitude(info.GetTotalDescent())));
+
+  size_t const count = elevation.GetSize();
+  size_t const step = count / kMaxElevationPoints + 1;
+  size_t i = 0;
+  elevation.ForEachPoint([&](double distance, geometry::Altitude altitude)
+  {
+    // Keeps the last point, so that the profile ends with the route.
+    if (i % step == 0 || i + 1 == count)
+      m_elevationProfile << distance << altitude;
+    ++i;
+    m_elevationLength = distance;
+  });
+}
+
 void Routing::close()
 {
+  cancelPick();
   m_startWhenBuilt = false;
   m_framework.GetRoutingManager().CloseRouting(true /* removeRoutePoints */);
+  m_framework.GetRoutingManager().DeleteSavedRoutePoints();
   m_building = false;
   ClearResult();
   emit pointsChanged();
@@ -676,10 +1038,18 @@ void Routing::close()
 void Routing::ClearResult()
 {
   m_built = false;
+  m_routeSaved = false;
+  m_optionsError = false;
   m_summary.clear();
   m_walkingDistance.clear();
   m_transitSteps.clear();
   m_missingMaps.clear();
+  m_elevationProfile.clear();
+  m_elevationLength = 0;
+  m_minElevation.clear();
+  m_maxElevation.clear();
+  m_ascentDescent.clear();
+  ClearElevationActivePoint();
   SetError({}, {});
 }
 
@@ -757,6 +1127,7 @@ void Routing::OnRouteBuilt(int code, QStringList const & absentCountries)
     {
       m_summary = routerType() == Ruler ? Localized("placepage_distance") + ": " + distance
                                         : FormatDuration(info.m_time) + QStringLiteral(" • ") + distance;
+      LoadElevation();
     }
     break;
   }
@@ -795,6 +1166,13 @@ void Routing::OnRouteBuilt(int code, QStringList const & absentCountries)
       SetError(Localized("routing_download_maps_along"), Localized("routing_requires_all_map"));
     break;
   default: SetError(Localized("dialog_routing_system_error"), Localized("dialog_routing_application_error")); break;
+  }
+  // Like isDrivingOptionsBuildError() on Android: avoided roads explain a failed car route best.
+  if (!m_built && result != RouterResultCode::NeedMoreMaps && m_missingMaps.isEmpty() && routerType() == Vehicle &&
+      avoidRoads() != 0)
+  {
+    m_optionsError = true;
+    SetError(Localized("unable_to_calc_alert_title"), Localized("unable_to_calc_alert_subtitle"));
   }
   emit stateChanged();
   if (std::exchange(m_startWhenBuilt, false) && m_built)

@@ -35,7 +35,8 @@ class PlaceEditor : public QObject
   // Section and setField().
   Q_PROPERTY(QVariantList fields READ fields NOTIFY changed)
   // Local changes or a created place that are not uploaded yet, which can be discarded.
-  Q_PROPERTY(bool canReset READ canReset NOTIFY changed)
+  // The ResetAction at the bottom of the editor, as on Android.
+  Q_PROPERTY(int resetAction READ resetAction NOTIFY changed)
 
 public:
   enum Kind
@@ -44,9 +45,27 @@ public:
     // A switch, value "yes" or "".
     Wifi,
     // A choice of selfServiceValues().
-    SelfService
+    SelfService,
+    // An opening_hours value, edited by OpeningHoursEditor.
+    OpeningHours,
+    // Keys of cuisines() separated by ';'.
+    Cuisine,
+    // Phone numbers separated by ';', one field each like on Android.
+    Phone,
+    // "yes", "no" or "" for unknown, like the iOS segmented fields.
+    YesNo
   };
   Q_ENUM(Kind)
+
+  enum ResetAction
+  {
+    // A new place.
+    NoReset,
+    ResetEdits,
+    RemovePlace,
+    PlaceDoesntExist
+  };
+  Q_ENUM(ResetAction)
 
   // The cards of the Android editor that hold fields.
   enum Section
@@ -73,7 +92,7 @@ public:
   QString houseNumber() const;
   void setHouseNumber(QString const & houseNumber);
   QVariantList fields() const;
-  bool canReset() const;
+  int resetAction() const;
 
   // Loads the place shown in the place page.
   Q_INVOKABLE void start();
@@ -93,12 +112,18 @@ public:
   Q_INVOKABLE QString houseNumberError(QString const & houseNumber) const;
   // OSM values with their names for the SelfService field.
   Q_INVOKABLE QVariantList selfServiceValues() const;
+  // Supported cuisines as {key, name}, by name; and the names of the ';' separated keys of a value.
+  Q_INVOKABLE QVariantList cuisines() const;
+  Q_INVOKABLE QString cuisineNames(QString const & value) const;
   // Saves the changes locally, false on error. The place page shows the edited place.
   Q_INVOKABLE bool save();
   // A note to OpenStreetMap volunteers about the saved place, uploaded with the edits.
   Q_INVOKABLE void createNote(QString const & note);
   // Discards the local changes of the place, or deletes a created place.
+  // Discards the local edits, or removes a place added here.
   Q_INVOKABLE void reset();
+  // Reports the place as gone with a note, which needs a comment.
+  Q_INVOKABLE void placeDoesntExist(QString const & comment);
 
 signals:
   void changed();
@@ -106,5 +131,7 @@ signals:
 private:
   std::unique_ptr<osm::EditableMapObject> m_object;
   bool m_valid = false;
+  // A new place, from create().
+  bool m_creating = false;
 };
 }  // namespace sailfish

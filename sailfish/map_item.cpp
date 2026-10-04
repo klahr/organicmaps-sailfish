@@ -2,6 +2,7 @@
 
 #include "sailfish/app_info.hpp"
 #include "sailfish/app_settings.hpp"
+#include "sailfish/countries_model.hpp"
 #include "sailfish/framework_access.hpp"
 #include "sailfish/place_page.hpp"
 #include "sailfish/routing.hpp"
@@ -17,6 +18,11 @@
 #include "storage/storage.hpp"
 #include "storage/storage_helpers.hpp"
 
+#include "platform/distance.hpp"
+#include "platform/localization.hpp"
+#include "platform/measurement_utils.hpp"
+#include "platform/platform.hpp"
+
 #include "geometry/angles.hpp"
 #include "geometry/mercator.hpp"
 
@@ -25,6 +31,7 @@
 #include "base/math.hpp"
 
 #include <QCompass>
+#include <QDateTime>
 #include <QGuiApplication>
 #include <QNetworkConfigurationManager>
 #include <QOpenGLContext>
@@ -34,6 +41,7 @@
 #include <QTouchEvent>
 
 #include <optional>
+#include <utility>
 
 namespace sailfish
 {
@@ -102,6 +110,8 @@ MapItem::MapItem(QQuickItem * parent)
 
 MapItem::~MapItem()
 {
+  m_framework.SetTrackRecordingUpdateHandler(nullptr);
+  m_framework.GetIsolinesManager().SetStateListener({});
   m_framework.GetStorage().Unsubscribe(m_storageSlot);
   m_locationService->Stop();
   if (!m_contextFactory)
@@ -191,12 +201,25 @@ void MapItem::OnLocationError(location::TLocationError errorCode)
 {
   LOG(LWARNING, ("Location error:", errorCode));
   m_framework.OnLocationError(errorCode);
+  // Timeouts just mean no fix yet, e.g. indoors.
+  bool const disabled =
+      errorCode == location::EDenied || errorCode == location::EGPSIsOff || errorCode == location::ENotSupported;
+  if (disabled && !std::exchange(m_locationErrorShown, true))
+    emit notice(Localized("enable_location_services") + ". " + Localized("location_is_disabled_long_text"));
 }
 
 void MapItem::OnLocationUpdated(location::GpsInfo const & info)
 {
+  m_locationErrorShown = false;
+  m_hasAltitude = info.HasAltitude();
+  m_altitude = info.m_altitude;
+  m_speed = info.m_speed;
+  // The cover shows it while the app is put aside; the address lookup needn't follow every fix.
+  if (m_inBackground && QDateTime::currentMSecsSinceEpoch() - m_positionInfoMs > 10000)
+    UpdatePositionInfo();
   m_framework.OnLocationUpdate(info);
   m_placePage->UpdateDistance();
+  m_placePage->UpdateMyPosition(info.HasAltitude(), info.m_altitude, info.m_speed);
   m_routing->UpdateNavigation(info.m_speed);
 }
 
@@ -210,6 +233,7 @@ void MapItem::startTrackRecording()
   m_framework.StartTrackRecording();
   // Recording needs fixes even when the my position button is off.
   m_locationService->Start();
+  WatchRecording();
   emit trackRecordingChanged();
 }
 
@@ -220,6 +244,7 @@ bool MapItem::isTrackRecordingEmpty() const
 
 void MapItem::stopTrackRecording(QString const & saveAsName)
 {
+  m_framework.SetTrackRecordingUpdateHandler(nullptr);
   // The same order as the Android track recording place page: save first, then stop.
   if (!saveAsName.isEmpty() && !m_framework.IsTrackRecordingEmpty())
     m_framework.SaveTrackRecordingWithName(saveAsName.toStdString());
@@ -227,6 +252,44 @@ void MapItem::stopTrackRecording(QString const & saveAsName)
   if (m_inBackground && !m_routing->navigating())
     m_locationService->Stop();
   emit trackRecordingChanged();
+}
+
+void MapItem::saveAndStopTrackRecording()
+{
+  if (!m_framework.IsTrackRecordingEmpty())
+    m_framework.SaveTrackRecordingWithName({});
+  stopTrackRecording({});
+}
+
+void MapItem::WatchRecording()
+{
+  if (!m_framework.IsTrackRecordingEnabled())
+    return;
+  // Called on the GUI thread with every recorded point, and right away.
+  m_framework.SetTrackRecordingUpdateHandler([this](TrackStatistics const & stats)
+  {
+    m_recordingSummary = QString::fromStdString(stats.GetFormattedLength()) + QStringLiteral(" • ") +
+                         FormatDuration(static_cast<long>(stats.m_duration));
+    m_recordingProfile.clear();
+    m_recordingLength = stats.m_length;
+    m_recordingMinElevation = QString::fromStdString(stats.GetFormattedMinElevation());
+    m_recordingMaxElevation = QString::fromStdString(stats.GetFormattedMaxElevation());
+    if (!m_framework.IsTrackRecordingEmpty())
+    {
+      auto const & elevation = Framework::GetTrackRecordingElevationInfo();
+      // Enough points for a phone wide chart, as on the track place page.
+      size_t const count = elevation.GetSize();
+      size_t const step = count / 600 + 1;
+      size_t i = 0;
+      elevation.ForEachPoint([&](double distance, geometry::Altitude altitude)
+      {
+        if (i % step == 0 || i + 1 == count)
+          m_recordingProfile << distance << altitude;
+        ++i;
+      });
+    }
+    emit recordingStatsChanged();
+  });
 }
 
 QString MapItem::myPositionShareText() const
@@ -261,11 +324,12 @@ void MapItem::stopChoosingPosition()
   emit choosingPositionChanged();
 }
 
-QVariantList MapItem::confirmChosenPosition()
+QVariantList MapItem::confirmChosenPosition(bool requireMaps)
 {
   // Taken now: the viewport can still move while the category is picked.
   auto const center = m_framework.GetViewportCenter();
-  if (!storage::IsPointCoveredByDownloadedMaps(center, m_framework.GetStorage(), m_framework.GetCountryInfoGetter()))
+  if (requireMaps &&
+      !storage::IsPointCoveredByDownloadedMaps(center, m_framework.GetStorage(), m_framework.GetCountryInfoGetter()))
     return {};
   stopChoosingPosition();
   auto const latLon = mercator::ToLatLon(center);
@@ -294,34 +358,34 @@ void MapItem::OnCurrentCountryChanged(std::string const & countryId)
     storage.DownloadNode(countryId);
 }
 
-void MapItem::UpdateCurrentCountry()
+void MapItem::UpdatePositionInfo()
 {
-  QVariantMap country;
-  if (!m_currentCountryId.empty())
+  m_positionInfoMs = QDateTime::currentMSecsSinceEpoch();
+  QVariantMap info;
+  if (auto const position = m_framework.GetCurrentPosition())
   {
-    storage::NodeAttrs attrs;
-    m_framework.GetStorage().GetNodeAttrs(m_currentCountryId, attrs);
-    using storage::NodeStatus;
-    switch (attrs.m_status)
+    auto const latLon = mercator::ToLatLon(*position);
+    info["address"] = QString::fromStdString(m_framework.GetAddressAtPoint(*position).FormatAddress());
+    info["coordinates"] = QStringLiteral("%1, %2").arg(latLon.m_lat, 0, 'f', 5).arg(latLon.m_lon, 0, 'f', 5);
+    if (m_hasAltitude)
+      info["altitude"] = QStringLiteral("▲") + QString::fromStdString(platform::Distance::FormatAltitude(m_altitude));
+    if (m_speed > 0.5)
     {
-    case NodeStatus::NotDownloaded:
-    case NodeStatus::Downloading:
-    case NodeStatus::Applying:
-    case NodeStatus::InQueue:
-    case NodeStatus::Error:
-    {
-      auto const & progress = attrs.m_downloadingProgress;
-      country["countryId"] = QString::fromStdString(m_currentCountryId);
-      country["name"] = QString::fromStdString(attrs.m_nodeLocalName);
-      country["size"] = FormatSize(static_cast<qint64>(attrs.m_mwmSize));
-      country["status"] = static_cast<int>(attrs.m_status);
-      country["progress"] =
-          progress.m_bytesTotal > 0 ? static_cast<double>(progress.m_bytesDownloaded) / progress.m_bytesTotal : 0.0;
-      break;
-    }
-    default: break;
+      auto const units = measurement_utils::GetMeasurementUnits();
+      info["speed"] = QString::fromStdString(measurement_utils::FormatSpeedNumeric(m_speed, units) + " " +
+                                             platform::GetLocalizedSpeedUnits(units));
     }
   }
+  if (info != m_positionInfo)
+  {
+    m_positionInfo = info;
+    emit positionInfoChanged();
+  }
+}
+
+void MapItem::UpdateCurrentCountry()
+{
+  auto const country = MissingMapInfo(m_framework.GetStorage(), m_currentCountryId);
   if (country != m_currentCountry)
   {
     m_currentCountry = country;
@@ -331,15 +395,8 @@ void MapItem::UpdateCurrentCountry()
 
 void MapItem::downloadCurrentCountry()
 {
-  if (m_currentCountryId.empty())
-    return;
-  auto & storage = m_framework.GetStorage();
-  storage::NodeStatuses statuses;
-  storage.GetNodeStatuses(m_currentCountryId, statuses);
-  if (statuses.m_status == storage::NodeStatus::Error)
-    storage.RetryDownloadNode(m_currentCountryId);
-  else
-    storage.DownloadNode(m_currentCountryId);
+  if (!m_currentCountryId.empty())
+    DownloadMap(m_framework.GetStorage(), m_currentCountryId);
 }
 
 void MapItem::cancelCurrentCountry()
@@ -362,6 +419,12 @@ void MapItem::OnCompassReading()
   info.m_bearing = ang::AngleIn2PI(math::DegToRad(static_cast<double>(reading->azimuth() + rotation)));
   m_framework.OnCompassUpdate(info);
   m_placePage->SetNorth(info.m_bearing);
+
+  // A badly calibrated compass is told once per session, like the Android sensor accuracy toasts. Zero is what
+  // sensors without a calibration level report.
+  auto const calibration = reading->calibrationLevel();
+  if (calibration > 0 && calibration < 0.67 && !std::exchange(m_calibrationShown, true))
+    emit notice(Localized(calibration < 0.34 ? "compass_calibration_required" : "compass_calibration_recommended"));
 }
 
 void MapItem::OnWindowChanged(QQuickWindow * window)
@@ -382,6 +445,7 @@ void MapItem::OnApplicationStateChanged(Qt::ApplicationState state)
   LOG(LINFO, (inBackground ? "Entering background" : "Entering foreground"));
   if (inBackground)
   {
+    UpdatePositionInfo();
     m_updateTimer.stop();
     // Track recording and navigation keep going in the background, like the Android foreground service.
     if (!m_framework.IsTrackRecordingEnabled() && !m_routing->navigating())
@@ -428,9 +492,22 @@ void MapItem::CreateEngine()
 
   m_framework.SetMyPositionModeListener([this](location::EMyPositionMode mode, bool /* routingActive */)
   { OnMyPositionModeChanged(mode); });
+  // Like onIsolinesStateChanged() on Android.
+  m_framework.GetIsolinesManager().SetStateListener([this](IsolinesManager::IsolinesState state)
+  {
+    GetPlatform().RunTask(Platform::Thread::Gui, [this, state]
+    {
+      if (state == IsolinesManager::IsolinesState::NoData)
+        emit notice(Localized("isolines_location_error_dialog"));
+      else if (state == IsolinesManager::IsolinesState::ExpiredData)
+        emit isolinesNeedMaps();
+    });
+  });
   m_framework.SetCurrentCountryChangedListener([this](storage::CountryId const & countryId)
   { OnCurrentCountryChanged(countryId); });
   m_framework.CreateDrapeEngine(make_ref(m_contextFactory), std::move(p));
+  // A recording goes on after a restart.
+  WatchRecording();
   m_framework.EnterForeground();
   m_contextFactory->WaitForInitialization(nullptr);
   UpdateWidgetLayout();

@@ -63,6 +63,23 @@ Page {
                 checked: routing.announceStreets
                 onClicked: routing.announceStreets = !routing.announceStreets
             }
+            // Applied when released, and heard in a test.
+            Slider {
+                width: parent.width
+                enabled: routing.voiceEnabled
+                label: appInfo.localized("volume")
+                minimumValue: 0
+                maximumValue: 100
+                stepSize: 5
+                value: routing.voiceVolume
+                valueText: Math.round(value)
+                onDownChanged: {
+                    if (down)
+                        return
+                    routing.voiceVolume = Math.round(value)
+                    routing.testVoice()
+                }
+            }
             ValueButton {
                 enabled: routing.voiceEnabled
                 label: appInfo.localized("pref_tts_test_voice_title")

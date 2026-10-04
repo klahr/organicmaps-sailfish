@@ -5,6 +5,10 @@
 dbus-user.talk org.mkiol.Speech
 # Opens Speech Note to download voices.
 dbus-user.talk org.mkiol.dsnote
+# It writes the speech there, to be played at the voice volume.
+mkdir ${HOME}/.cache/org.mkiol/dsnote
+whitelist ${HOME}/.cache/org.mkiol/dsnote
+read-only ${HOME}/.cache/org.mkiol/dsnote
 
 # Otherwise speech synthesizers, used when one is installed. Sailfish OS has none of its own.
 private-bin espeak-ng,espeak,mimic,flite,pico2wave

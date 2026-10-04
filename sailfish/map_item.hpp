@@ -39,6 +39,15 @@ class MapItem
   Q_PROPERTY(
       qreal viewportBottomInset READ viewportBottomInset WRITE setViewportBottomInset NOTIFY viewportBottomInsetChanged)
   Q_PROPERTY(bool trackRecording READ trackRecording NOTIFY trackRecordingChanged)
+  // The recording so far, like the Android track recording place page: "1.2 km •
+  // 15 min", and the elevation profile as distance and altitude pairs with its length and altitude range.
+  Q_PROPERTY(QString recordingSummary READ recordingSummary NOTIFY recordingStatsChanged)
+  Q_PROPERTY(QVariantList recordingProfile READ recordingProfile NOTIFY recordingStatsChanged)
+  Q_PROPERTY(double recordingLength READ recordingLength NOTIFY recordingStatsChanged)
+  Q_PROPERTY(QString recordingMinElevation READ recordingMinElevation NOTIFY recordingStatsChanged)
+  Q_PROPERTY(QString recordingMaxElevation READ recordingMaxElevation NOTIFY recordingStatsChanged)
+  // The last known position for the app cover as {address, coordinates, altitude, speed}; empty without one.
+  Q_PROPERTY(QVariantMap positionInfo READ positionInfo NOTIFY positionInfoChanged)
   // The map shows the cross for "Add Place to OpenStreetMap", taps don't select places.
   Q_PROPERTY(bool choosingPosition READ choosingPosition NOTIFY choosingPositionChanged)
   // The region in the middle of the map while its map isn't downloaded, like the Android on-map downloader:
@@ -86,6 +95,8 @@ public:
   Q_INVOKABLE bool isTrackRecordingEmpty() const;
   // Saves the recorded track, or discards it with an empty name.
   Q_INVOKABLE void stopTrackRecording(QString const & saveAsName);
+  // Saves under the default name and stops, like "Stop and save" in the Android recording notification.
+  Q_INVOKABLE void saveAndStopTrackRecording();
   // Text for "Share My Location", empty without a position.
   Q_INVOKABLE QString myPositionShareText() const;
 
@@ -94,7 +105,8 @@ public:
   Q_INVOKABLE void startChoosingPosition(bool business = false);
   Q_INVOKABLE void stopChoosingPosition();
   // Ends choosing and returns [lat, lon] of the cross, or an empty list when no map is downloaded there.
-  Q_INVOKABLE QVariantList confirmChosenPosition();
+  // [lat, lon] of the cross, empty outside downloaded maps when they are required (for a new place).
+  Q_INVOKABLE QVariantList confirmChosenPosition(bool requireMaps = true);
 
   // Downloads or retries the map of currentCountry, or cancels its download.
   Q_INVOKABLE void downloadCurrentCountry();
@@ -105,6 +117,12 @@ public:
   Routing * routing() const { return m_routing.get(); }
   qreal viewportBottomInset() const { return m_viewportBottomInset; }
   void setViewportBottomInset(qreal inset);
+  QString recordingSummary() const { return m_recordingSummary; }
+  QVariantMap positionInfo() const { return m_positionInfo; }
+  QVariantList recordingProfile() const { return m_recordingProfile; }
+  double recordingLength() const { return m_recordingLength; }
+  QString recordingMinElevation() const { return m_recordingMinElevation; }
+  QString recordingMaxElevation() const { return m_recordingMaxElevation; }
   bool trackRecording() const;
   bool choosingPosition() const { return m_choosingPosition; }
   qreal bottomWidgetsOffset() const { return m_bottomWidgetsOffset; }
@@ -117,6 +135,12 @@ signals:
   void layersChanged();
   void bottomWidgetsOffsetChanged();
   void trackRecordingChanged();
+  void recordingStatsChanged();
+  void positionInfoChanged();
+  // A short message for the user, like the Android toasts: location off, compass calibration, contour lines.
+  void notice(QString const & message);
+  // Contour lines need newer maps here, which Android offers to download.
+  void isolinesNeedMaps();
   void choosingPositionChanged();
   void viewportBottomInsetChanged();
   void currentCountryChanged();
@@ -141,6 +165,9 @@ private:
   void OnCompassReading();
   // Downloads the map of the region shown when the user is in it, like auto-download on Android.
   void OnCurrentCountryChanged(std::string const & countryId);
+  // Statistics follow a running recording, for its panel and the cover.
+  void WatchRecording();
+  void UpdatePositionInfo();
   void UpdateCurrentCountry();
 
   // location::LocationObserver
@@ -162,6 +189,19 @@ private:
   qreal m_bottomWidgetsOffset = 0;
   qreal m_viewportBottomInset = 0;
   bool m_inBackground = false;
+  bool m_locationErrorShown = false;
+  QVariantMap m_positionInfo;
+  // The last fix, for the cover, and when positionInfo was worked out.
+  bool m_hasAltitude = false;
+  double m_altitude = 0;
+  double m_speed = -1;
+  qint64 m_positionInfoMs = 0;
+  bool m_calibrationShown = false;
+  QString m_recordingSummary;
+  QVariantList m_recordingProfile;
+  double m_recordingLength = 0;
+  QString m_recordingMinElevation;
+  QString m_recordingMaxElevation;
   std::string m_currentCountryId;
   QVariantMap m_currentCountry;
   int m_storageSlot = 0;

@@ -147,6 +147,11 @@ Page {
                 text: appInfo.localized("prefs_group_route")
             }
             TextSwitch {
+                text: appInfo.localized("pref_auto_night_in_navigation_title")
+                checked: appSettings.autoNightInNavigation
+                onCheckedChanged: appSettings.autoNightInNavigation = checked
+            }
+            TextSwitch {
                 text: appInfo.localized("pref_map_3d_title")
                 checked: appSettings.perspectiveView
                 onCheckedChanged: appSettings.perspectiveView = checked
@@ -193,6 +198,14 @@ Page {
             TextRow {
                 text: appInfo.localized("help")
                 onClicked: pageStack.push(Qt.resolvedUrl("HelpPage.qml"))
+            }
+            TextSwitch {
+                text: appInfo.localized("enable_logging")
+                description: appInfo.localized("enable_logging_warning_message")
+                             + (checked ? "\n" + appInfo.localized("log_file_size",
+                                                                     [appInfo.formatSize(appSettings.logSize())]) : "")
+                checked: appSettings.logging
+                onCheckedChanged: appSettings.logging = checked
             }
         }
 

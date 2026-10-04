@@ -7,6 +7,7 @@
 #include "sailfish/framework_access.hpp"
 #include "sailfish/map_item.hpp"
 #include "sailfish/maps_storage.hpp"
+#include "sailfish/opening_hours_editor.hpp"
 #include "sailfish/osm_account.hpp"
 #include "sailfish/place_editor.hpp"
 #include "sailfish/place_page.hpp"
@@ -82,6 +83,7 @@ __attribute__((visibility("default"))) int OrganicMapsMain(int argc, char * argv
   SetEnvIfUnset("MWM_WRITABLE_DIR", writableDir);
 
   Platform & platform = GetPlatform();
+  sailfish::AppSettings::InitLogging();
   LOG(LINFO, ("Resources:", platform.ResourcesDir(), "Writable:", platform.WritableDir(),
               "Settings:", platform.SettingsDir()));
 
@@ -98,6 +100,7 @@ __attribute__((visibility("default"))) int OrganicMapsMain(int argc, char * argv
   qmlRegisterType<sailfish::BookmarksModel>("app.organicmaps", 1, 0, "BookmarksModel");
   qmlRegisterType<sailfish::BookmarkEditor>("app.organicmaps", 1, 0, "BookmarkEditor");
   qmlRegisterType<sailfish::PlaceEditor>("app.organicmaps", 1, 0, "PlaceEditor");
+  qmlRegisterType<sailfish::OpeningHoursEditor>("app.organicmaps", 1, 0, "OpeningHoursEditor");
   qmlRegisterUncreatableType<sailfish::PlacePage>("app.organicmaps", 1, 0, "PlacePage", "Owned by MapItem");
   qmlRegisterUncreatableType<sailfish::Routing>("app.organicmaps", 1, 0, "Routing", "Owned by MapItem");
 
@@ -109,6 +112,9 @@ __attribute__((visibility("default"))) int OrganicMapsMain(int argc, char * argv
   sailfish::MapsStorage mapsStorage(framework);
   sailfish::UrlHandler urlHandler(framework, bookmarksIO);
   QStringList const urls = app->arguments().mid(1);
+  // The OpenStreetMap login in the browser returns by an om:// link.
+  QObject::connect(&urlHandler, &sailfish::UrlHandler::oauth2CodeReceived, &osmAccount,
+                   &sailfish::OsmAccount::loginWithCode);
   if (!urlHandler.RegisterOnDBus() && !urls.isEmpty())
   {
     // Another instance runs: hand it the files and links, like the launcher does.

@@ -74,17 +74,49 @@ Item {
             leftMargin: Theme.paddingMedium
             right: parent.right
         }
-        height: streetLabel.height + 2 * Theme.paddingMedium
+        height: streetRow.height + 2 * Theme.paddingMedium
         radius: Theme.paddingMedium
         color: Theme.rgba(Theme.overlayBackgroundColor, 0.85)
+        clip: true
 
-        Label {
-            id: streetLabel
+        // Road numbers as shields, like on Android.
+        Row {
+            id: streetRow
             anchors.centerIn: parent
-            width: parent.width - 2 * Theme.paddingMedium
-            horizontalAlignment: Text.AlignHCenter
-            text: navigation.street || ""
-            truncationMode: TruncationMode.Fade
+            width: Math.min(implicitWidth, parent.width - 2 * Theme.paddingMedium)
+            spacing: Theme.paddingSmall
+
+            Repeater {
+                model: navigation.streetParts || []
+
+                Item {
+                    readonly property bool shield: !!modelData.shield
+                    width: shield ? shieldRect.width : Math.min(partLabel.implicitWidth,
+                                                                streetBar.width - 2 * Theme.paddingMedium)
+                    height: partLabel.height
+
+                    Rectangle {
+                        id: shieldRect
+                        visible: parent.shield
+                        anchors.verticalCenter: parent.verticalCenter
+                        width: partLabel.implicitWidth + 2 * Theme.paddingSmall
+                        height: partLabel.height
+                        radius: Theme.paddingSmall / 2
+                        color: modelData.color || "transparent"
+                        border.width: Theme.dp(1)
+                        border.color: modelData.textColor || "transparent"
+                    }
+                    Label {
+                        id: partLabel
+                        x: parent.shield ? Theme.paddingSmall : 0
+                        width: parent.shield ? implicitWidth : parent.width
+                        text: modelData.text
+                        font.bold: parent.shield
+                        color: parent.shield ? modelData.textColor : Theme.primaryColor
+                        truncationMode: TruncationMode.Fade
+                    }
+                }
+            }
         }
     }
 

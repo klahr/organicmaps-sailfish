@@ -4,6 +4,9 @@
 #include <QObject>
 #include <QString>
 
+#include <functional>
+#include <string>
+
 namespace sailfish
 {
 // The OpenStreetMap login and the upload of map edits, available to QML as the osmAccount context
@@ -16,6 +19,9 @@ class OsmAccount : public QObject
   // Changesets of the account on the server, -1 until loaded.
   Q_PROPERTY(int changesets READ changesets NOTIFY changed)
   Q_PROPERTY(QString historyUrl READ historyUrl NOTIFY changed)
+  // The notes of the user and the profile picture, like the Android OSM profile.
+  Q_PROPERTY(QString notesUrl READ notesUrl NOTIFY changed)
+  Q_PROPERTY(QString imageUrl READ imageUrl NOTIFY changed)
   // A login or upload is in progress.
   Q_PROPERTY(bool busy READ busy NOTIFY busyChanged)
   // Local edits not uploaded yet.
@@ -32,6 +38,8 @@ public:
   QString userName() const;
   int changesets() const;
   QString historyUrl() const;
+  QString notesUrl() const;
+  QString imageUrl() const;
   bool busy() const { return m_loggingIn || m_uploading; }
   int pendingEdits() const { return m_pendingEdits; }
   QDateTime lastUpload() const { return m_lastUpload; }
@@ -40,6 +48,10 @@ public:
 
   // Emits changed or loginFailed when done.
   Q_INVOKABLE void login(QString const & user, QString const & password);
+  // Logs in on the OpenStreetMap website, like the Android OAuth2 login: the browser comes back with a code by an
+  // om:// link, for loginWithCode().
+  Q_INVOKABLE void loginInBrowser();
+  void loginWithCode(QString const & code);
   Q_INVOKABLE void logout();
   // Uploads pending edits and notes when logged in.
   Q_INVOKABLE void uploadChanges();
@@ -55,6 +67,8 @@ signals:
 private:
   // Loads the display name and the changesets count of the logged in account.
   void LoadProfile();
+  // Gets a token on the network thread and keeps it.
+  void Authorize(std::function<std::string()> getToken);
 
   bool m_loggingIn = false;
   bool m_uploading = false;

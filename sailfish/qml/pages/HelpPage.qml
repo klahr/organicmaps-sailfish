@@ -1,5 +1,6 @@
 import QtQuick 2.6
 import Sailfish.Silica 1.0
+import Sailfish.Share 1.0
 
 // About and help links in the order of the Android about.xml. Texts come from the shared data/strings; the
 // FAQ and copyright pages are the bundled ones, opened in the browser.
@@ -15,6 +16,12 @@ Page {
     }
     function bundled(file) {
         return Qt.resolvedUrl("../../data/" + file)
+    }
+
+    ShareAction {
+        id: logShare
+        mimeType: "text/plain"
+        resources: [appSettings.logUrl]
     }
 
     SilicaFlickable {
@@ -123,7 +130,13 @@ Page {
                 MenuRow {
                     icon: page.icon(modelData.icon)
                     text: modelData.text
-                    onClicked: Qt.openUrlExternally(modelData.url)
+                    // With logging on, a bug report gets the log, as Android attaches it to its bug report mail.
+                    onClicked: {
+                        if (modelData.icon === "ic_report_a_bug.svg" && appSettings.logging)
+                            logShare.trigger()
+                        else
+                            Qt.openUrlExternally(modelData.url)
+                    }
                 }
             }
 

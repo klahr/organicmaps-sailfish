@@ -37,6 +37,37 @@ Dialog {
                 placeholderText: label
                 text: bookmarks.description
             }
+            // Applied right away, like the Android list settings.
+            Repeater {
+                model: [{ tracks: false, text: appInfo.localized("change_all_bookmarks_color"),
+                          done: appInfo.localized("toast_bookmarks_color_changed") },
+                        { tracks: true, text: appInfo.localized("change_all_tracks_color"),
+                          done: appInfo.localized("toast_tracks_color_changed") }]
+
+                BackgroundItem {
+                    width: column.width
+                    onClicked: {
+                        var option = modelData
+                        pageStack.push(Qt.resolvedUrl("ColorPickerPage.qml"), {
+                            title: option.text,
+                            colors: bookmarks.colors,
+                            chosen: function(colorIndex) {
+                                bookmarks.setAllColor(option.tracks, colorIndex)
+                                Notices.show(option.done, Notice.Short, Notice.Center)
+                            }
+                        })
+                    }
+
+                    Label {
+                        x: Theme.horizontalPageMargin
+                        width: parent.width - 2 * x
+                        anchors.verticalCenter: parent.verticalCenter
+                        text: modelData.text
+                        truncationMode: TruncationMode.Fade
+                        color: parent.highlighted ? Theme.highlightColor : Theme.primaryColor
+                    }
+                }
+            }
         }
 
         VerticalScrollDecorator {}

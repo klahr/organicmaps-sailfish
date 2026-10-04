@@ -54,6 +54,17 @@ Page {
                 font.pixelSize: Theme.fontSizeSmall
                 color: Theme.secondaryHighlightColor
             }
+            // On the OpenStreetMap website, like the Android login; the browser returns to the app when done.
+            Button {
+                anchors.horizontalCenter: parent.horizontalCenter
+                visible: !osmAccount.loggedIn
+                enabled: !osmAccount.busy
+                text: appInfo.localized("login_osm")
+                onClicked: {
+                    errorLabel.text = ""
+                    osmAccount.loginInBrowser()
+                }
+            }
             TextField {
                 id: userField
                 width: parent.width
@@ -133,6 +144,16 @@ Page {
                 width: parent.width
                 visible: osmAccount.loggedIn
 
+                // The OpenStreetMap profile picture, like on Android.
+                Image {
+                    anchors.horizontalCenter: parent.horizontalCenter
+                    visible: status === Image.Ready
+                    width: Theme.iconSizeExtraLarge
+                    height: width
+                    sourceSize: Qt.size(width, height)
+                    fillMode: Image.PreserveAspectCrop
+                    source: osmAccount.imageUrl
+                }
                 Label {
                     x: Theme.horizontalPageMargin
                     width: parent.width - 2 * x
@@ -165,6 +186,17 @@ Page {
                     icon: "image://theme/icon-m-website"
                     text: appInfo.localized("editor_osm_history")
                     onClicked: Qt.openUrlExternally(osmAccount.historyUrl)
+                }
+                MenuRow {
+                    visible: osmAccount.userName !== ""
+                    icon: "image://theme/icon-m-note"
+                    text: appInfo.localized("editor_osm_notes")
+                    onClicked: Qt.openUrlExternally(osmAccount.notesUrl)
+                }
+                MenuRow {
+                    icon: "../../icons/help/ic_openstreetmap.svg"
+                    text: appInfo.localized("editor_more_about_osm")
+                    onClicked: Qt.openUrlExternally(appInfo.localized("osm_wiki_about_url"))
                 }
             }
         }

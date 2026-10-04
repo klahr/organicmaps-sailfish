@@ -2,8 +2,10 @@ import QtQuick 2.6
 import Sailfish.Silica 1.0
 import Sailfish.Share 1.0
 import Nemo.KeepAlive 1.2
+import Nemo.Notifications 1.0
 import app.organicmaps 1.0
 import "downloads.js" as Downloads
+import "notifications.js" as Notifications
 
 Page {
     id: page
@@ -12,11 +14,20 @@ Page {
     backNavigation: false
 
     // Light or dark map following the appearance setting; Auto follows the Sailfish ambience.
-    readonly property bool mapIsDark: appSettings.mapAppearance === AppSettings.AppearanceAuto
-                                      ? Theme.colorScheme === Theme.LightOnDark
-                                      : appSettings.mapAppearance === AppSettings.AppearanceDark
-    onMapIsDarkChanged: appSettings.applyMapAppearance(Theme.colorScheme === Theme.LightOnDark)
-    Component.onCompleted: appSettings.applyMapAppearance(Theme.colorScheme === Theme.LightOnDark)
+    // Navigating in the dark can switch to the night style, like on Android.
+    readonly property bool mapIsDark: (appSettings.mapAppearance === AppSettings.AppearanceAuto
+                                       ? Theme.colorScheme === Theme.LightOnDark
+                                       : appSettings.mapAppearance === AppSettings.AppearanceDark)
+                                      || (appSettings.autoNightInNavigation && map.routing.darkOutside)
+    onMapIsDarkChanged: appSettings.applyMapAppearance(mapIsDark)
+    Component.onCompleted: {
+        appSettings.applyMapAppearance(mapIsDark)
+        // The route of the last session comes back, like on Android.
+        map.routing.restoreSavedRoute()
+        // A recording goes on after a restart.
+        if (map.trackRecording)
+            recordingNotification.publish()
+    }
 
     // A recording keeps the device awake like the Android foreground service; keep screen on is a setting.
     KeepAlive {
@@ -43,7 +54,54 @@ Page {
     }
 
     readonly property bool navigating: map.routing.navigating
+    readonly property QtObject routing: map.routing
+    readonly property QtObject mapItem: map
+
+    // The search action of the app cover: back to the map, then search.
+    function openSearchFromCover() {
+        pageStack.pop(page, PageStackAction.Immediate)
+        openSearch()
+    }
     readonly property bool choosingPosition: map.choosingPosition
+    Connections {
+        target: map
+        onNotice: Notices.show(message, Notice.Long, Notice.Center)
+        onIsolinesNeedMaps: pageStack.push(Qt.resolvedUrl("MessageDialog.qml"), {
+            title: appInfo.localized("downloader_update_maps"),
+            message: appInfo.localized("isolines_activation_error_dialog"),
+            acceptAction: function() { pageStack.push(Qt.resolvedUrl("MapsPage.qml")) }
+        })
+    }
+
+    // A long tap on the empty map hides the map buttons, and another shows them again, like on Android. Not
+    // while a route is planned or followed.
+    property bool fullscreen
+    Connections {
+        target: map.placePage
+        onSwitchFullScreen: {
+            if (map.routing.active || page.navigating)
+                return
+            page.fullscreen = !page.fullscreen
+            if (page.fullscreen) {
+                map.placePage.close()
+                // Every time, so that the way back isn't forgotten.
+                Notices.show(appInfo.localized("long_tap_toast"), Notice.Long, Notice.Center)
+            }
+        }
+    }
+
+    // The position chooser picks a route point, or a position for another app, rather than the place of a new
+    // map object.
+    property bool choosingRoutePoint
+    property bool choosingApiPoint
+    property string apiAppName
+    property string apiBackUrl
+    onChoosingPositionChanged: {
+        if (!choosingPosition) {
+            choosingRoutePoint = false
+            choosingApiPoint = false
+        }
+    }
 
     function openSearch() {
         var searchPage = pageStack.push(Qt.resolvedUrl("SearchPage.qml"), { search: search })
@@ -86,7 +144,19 @@ Page {
         onSearchRequested: {
             pageStack.pop(page, PageStackAction.Immediate)
             search.query = query
-            page.openSearch()
+            // Results on the map only, like isSearchOnMap on Android.
+            if (onMap)
+                search.showOnMap()
+            else
+                page.openSearch()
+        }
+        // An app asks for a position, like the Android API position chooser.
+        onCrosshairRequested: {
+            pageStack.pop(page, PageStackAction.Immediate)
+            page.apiAppName = appName
+            page.apiBackUrl = backUrl
+            page.choosingApiPoint = true
+            map.startChoosingPosition(false)
         }
     }
     function openBookmarks() {
@@ -107,7 +177,7 @@ Page {
     }
 
     MapButton {
-        visible: !page.navigating && !page.choosingPosition
+        visible: !page.navigating && !page.choosingPosition && !page.fullscreen
         anchors {
             top: parent.top
             left: parent.left
@@ -122,7 +192,7 @@ Page {
     // Positions follow the Android map_buttons_layout_regular.xml (and layout-land); the look stays Silica.
     Column {
         id: rightButtons
-        visible: !page.choosingPosition
+        visible: !page.choosingPosition && !page.fullscreen
         anchors {
             right: parent.right
             rightMargin: Theme.dp(8)
@@ -172,7 +242,7 @@ Page {
     // landscape; the gaps are about 0.6 of a button, as measured on the Android app.
     Row {
         id: bottomButtons
-        visible: !page.navigating && !page.choosingPosition
+        visible: !page.navigating && !page.choosingPosition && !page.fullscreen
         // Positioned by x: switching between left and horizontalCenter anchors on rotation can leave both set.
         x: page.isPortrait ? (parent.width - width) / 2 : Theme.dp(8)
         anchors {
@@ -214,10 +284,11 @@ Page {
             margins: Theme.dp(8)
         }
         // The navigation panel takes the top while navigating.
-        visible: map.trackRecording && !page.navigating
+        visible: map.trackRecording && !page.navigating && !page.fullscreen
         highlighted: true
         source: Qt.resolvedUrl("../../icons/menu/ic_track_recording_status.svg")
-        onClicked: page.stopTrackRecording()
+        // Shows the recording so far, like the Android track recording place page.
+        onClicked: recordingPanel.open = !recordingPanel.open
 
         SequentialAnimation on opacity {
             running: recordingButton.visible && Qt.application.active
@@ -226,6 +297,31 @@ Page {
             NumberAnimation { to: 1.0; duration: 800 }
         }
     }
+
+    // Shown while recording, with "Stop and save", like the Android recording notification.
+    Notification {
+        id: recordingNotification
+        appName: "Organic Maps"
+        appIcon: "organicmaps"
+        summary: appInfo.localized("track_recording")
+        remoteActions: [Notifications.openApp(),
+                        Notifications.action("stop", appInfo.localized("track_recording_stop_and_save"),
+                                             "stopTrackRecording")]
+    }
+    Connections {
+        target: map
+        onTrackRecordingChanged: {
+            if (map.trackRecording)
+                recordingNotification.publish()
+            else
+                recordingNotification.close()
+        }
+    }
+    Connections {
+        target: urlHandler
+        onStopTrackRecordingRequested: if (map.trackRecording) map.saveAndStopTrackRecording()
+    }
+    Component.onDestruction: recordingNotification.close()
 
     function stopTrackRecording() {
         if (map.isTrackRecordingEmpty())
@@ -262,9 +358,33 @@ Page {
         visible: page.navigating
         spacing: Theme.dp(8)
 
-        MapButton {
-            source: "image://theme/icon-m-search"
-            onClicked: page.openSearch()
+        // Quick search like the Android search wheel: the first tap offers categories to show on the map, the
+        // next opens search. While a category is shown the button has its icon and a tap clears it.
+        Row {
+            spacing: Theme.dp(8)
+
+            MapButton {
+                source: quickSearch.key !== "" ? quickSearch.icon(quickSearch.key) : "image://theme/icon-m-search"
+                highlighted: quickSearch.key !== "" || quickSearch.expanded
+                onClicked: {
+                    if (quickSearch.key !== "") {
+                        search.query = ""
+                    } else if (quickSearch.expanded) {
+                        quickSearch.expanded = false
+                        page.openSearch()
+                    } else {
+                        quickSearch.expanded = true
+                    }
+                }
+            }
+            Repeater {
+                model: quickSearch.expanded ? quickSearch.keys : []
+
+                MapButton {
+                    source: quickSearch.icon(modelData)
+                    onClicked: quickSearch.start(modelData)
+                }
+            }
         }
         MapButton {
             source: Qt.resolvedUrl("../../icons/bookmarks/ic_bookmarks_and_tracks.svg")
@@ -276,6 +396,55 @@ Page {
             alert: !!map.routing.navigation.speedCamLimitExceeded
             fontSize: Theme.fontSizeExtraLarge
         }
+    }
+
+    QtObject {
+        id: quickSearch
+
+        // The SearchWheel categories on Android, as search::DisplayedCategories keys.
+        readonly property var keys: ["category_fuel", "category_parking", "category_eat", "category_food",
+                                     "category_atm"]
+        // The category shown on the map, "" without one.
+        property string key
+        property string query
+        property bool expanded
+        onExpandedChanged: if (expanded) collapseTimer.restart()
+
+        function icon(categoryKey) {
+            return Qt.resolvedUrl("../../icons/categories/ic_" + categoryKey
+                                  + (Theme.colorScheme === Theme.LightOnDark ? "_night" : "") + ".svg")
+        }
+        function start(categoryKey) {
+            var categories = search.categories()
+            for (var i = 0; i < categories.length; ++i) {
+                if (categories[i].key === categoryKey) {
+                    search.searchCategory(categories[i].name, false /* addToHistory */)
+                    key = categoryKey
+                    query = search.query
+                    break
+                }
+            }
+            expanded = false
+        }
+    }
+    // The categories fold away by themselves, after the Android delay.
+    Timer {
+        id: collapseTimer
+        interval: 5000
+        onTriggered: quickSearch.expanded = false
+    }
+    // Another query, from the search page or a cleared one, ends the category search.
+    Connections {
+        target: search
+        onQueryChanged: if (search.query !== quickSearch.query) quickSearch.key = ""
+    }
+    // Its results leave the map with the navigation.
+    onNavigatingChanged: {
+        quickSearch.expanded = false
+        if (navigating)
+            fullscreen = false
+        if (!navigating && quickSearch.key !== "")
+            search.query = ""
     }
 
     // The map of the region in the middle of the map isn't downloaded: its name and size with a download
@@ -368,7 +537,11 @@ Page {
                 verticalCenter: chooserColumn.verticalCenter
             }
             icon.source: "image://theme/icon-m-cancel"
-            onClicked: map.stopChoosingPosition()
+            onClicked: {
+                if (page.choosingRoutePoint)
+                    map.routing.cancelPick()
+                map.stopChoosingPosition()
+            }
         }
 
         Column {
@@ -383,7 +556,9 @@ Page {
 
             Label {
                 width: parent.width
-                text: appInfo.localized("editor_add_select_location")
+                text: page.choosingApiPoint && page.apiAppName !== "" ? page.apiAppName
+                    : appInfo.localized(page.choosingRoutePoint || page.choosingApiPoint ? "choose_on_map"
+                                                                                       : "editor_add_select_location")
                 color: Theme.highlightColor
                 font.pixelSize: Theme.fontSizeLarge
                 truncationMode: TruncationMode.Fade
@@ -391,7 +566,8 @@ Page {
             Label {
                 width: parent.width
                 text: positionChooser.invalidPosition ? appInfo.localized("message_invalid_feature_position")
-                                                      : appInfo.localized("editor_focus_map_on_location")
+                    : appInfo.localized(page.choosingRoutePoint || page.choosingApiPoint ? "choose_point_on_map_hint"
+                                                                                         : "editor_focus_map_on_location")
                 color: positionChooser.invalidPosition ? Theme.errorColor : Theme.secondaryHighlightColor
                 font.pixelSize: Theme.fontSizeExtraSmall
                 wrapMode: Text.Wrap
@@ -406,6 +582,23 @@ Page {
             }
             icon.source: "image://theme/icon-m-acknowledge"
             onClicked: {
+                // Sailfish has no app results like Android: the position is copied, and handed to a link back
+                // to the app when it gave one.
+                if (page.choosingApiPoint) {
+                    var chosen = map.confirmChosenPosition(false)
+                    var ll = chosen[0].toFixed(6) + "," + chosen[1].toFixed(6)
+                    Clipboard.text = ll
+                    Notices.show(appInfo.localized("copied_to_clipboard", [ll]), Notice.Short, Notice.Center)
+                    if (page.apiBackUrl !== "")
+                        Qt.openUrlExternally(page.apiBackUrl + (page.apiBackUrl.indexOf("?") >= 0 ? "&" : "?")
+                                             + "ll=" + ll)
+                    return
+                }
+                if (page.choosingRoutePoint) {
+                    var point = map.confirmChosenPosition(false)
+                    map.routing.pickPosition(point[0], point[1])
+                    return
+                }
                 var position = map.confirmChosenPosition()
                 positionChooser.invalidPosition = position.length === 0
                 if (!positionChooser.invalidPosition)
@@ -436,12 +629,25 @@ Page {
         }
     }
 
+    TrackRecordingPanel {
+        id: recordingPanel
+        map: map
+        onSaveClicked: {
+            open = false
+            page.stopTrackRecording()
+        }
+    }
+
     RoutePanel {
         id: routePanel
         routing: map.routing
         placePage: map.placePage
         onSearchClicked: page.openSearch()
         onBookmarksClicked: page.openBookmarks()
+        onChooseOnMapClicked: {
+            page.choosingRoutePoint = true
+            map.startChoosingPosition(false)
+        }
     }
 
     MapPanel {

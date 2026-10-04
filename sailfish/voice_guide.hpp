@@ -16,7 +16,8 @@ namespace sailfish
 {
 // Speaks turn notifications, the role of the Android TtsPlayer. Sailfish OS has no speech engine of its own, so
 // this uses Speech Note (natural Piper voices) over D-Bus when it has a voice for the language, or else a speech
-// synthesizer program installed on the device, as Pure Maps does.
+// synthesizer program installed on the device, as Pure Maps does. Either writes a WAV file that is played here, at
+// the voice volume.
 class VoiceGuide : public QObject
 {
   Q_OBJECT
@@ -42,6 +43,9 @@ public:
   // Opens Speech Note, to download voices.
   void OpenSpeechNote();
 
+  // 0..100.
+  void SetVolume(int volume) { m_player.setVolume(volume); }
+
   // Replaces what is being said, as the Android TtsPlayer does.
   void Speak(QStringList const & texts);
   void Stop();
@@ -50,7 +54,7 @@ signals:
   void Changed();
 
 private slots:
-  void OnSpeechNoteFinished(int task);
+  void OnSpeechNoteFileReady(QStringList const & files, int task);
 
 private:
   // An installed speech synthesizer program.
@@ -62,7 +66,6 @@ private:
 
   void ChooseLanguage();
   void OnSpeechNoteLanguages(QDBusPendingCallWatcher * watcher);
-  void SpeakNextWithSpeechNote();
   void SynthesizeNext();
   void OnSynthesized(int exitCode, QProcess::ExitStatus status);
   void OnPlayerStateChanged(QMediaPlayer::State state);
@@ -78,11 +81,15 @@ private:
   // Core language -> the first program that speaks it.
   std::map<std::string, Program> m_programVoices;
 
-  // Set when the language is spoken by Speech Note, with the task being spoken.
+  // Set when the language is spoken by Speech Note, with the task writing the speech, -1 without one.
   QString m_speechNoteLanguage;
   int m_speechNoteTask = -1;
+  // Counts the requests to Speech Note, so that a reply to one that was stopped meanwhile is ignored.
+  int m_speechNoteRequest = 0;
+  bool m_speechNotePending = false;
 
-  // Otherwise a program writes a WAV file, which is played here: not all of them can play by themselves.
+  // Otherwise a program writes the WAV file. Neither is played by its writer: Speech Note has no volume control,
+  // not all programs can play.
   Engine const * m_engine = nullptr;
   QString m_program;
   QString m_voice;

@@ -29,13 +29,23 @@ public:
 public slots:
   // The X-Maemo-Method of organicmaps.desktop.
   Q_SCRIPTABLE void openUrl(QStringList const & urls);
+  // The actions of the download and track recording notifications.
+  Q_SCRIPTABLE void cancelDownloads() { emit cancelDownloadsRequested(); }
+  Q_SCRIPTABLE void stopTrackRecording() { emit stopTrackRecordingRequested(); }
 
 signals:
   // The window should come to the front.
   void activated();
   // Points as {lat, lon, name}, the first is the start and the last the finish.
   void routeRequested(int routerType, QVariantList const & points);
-  void searchRequested(QString const & query);
+  // onMap: show the results on the map rather than the search page, like isSearchOnMap on Android.
+  void searchRequested(QString const & query, bool onMap);
+  // An om://crosshair link: pick a position for the app named, which may give a link back.
+  void crosshairRequested(QString const & appName, QString const & backUrl);
+  // The browser came back from the OpenStreetMap login with this code.
+  void oauth2CodeReceived(QString const & code);
+  void cancelDownloadsRequested();
+  void stopTrackRecordingRequested();
 
 private:
   void ProcessPending();

@@ -4,7 +4,9 @@
 #include <QString>
 #include <QStringList>
 #include <QVariantList>
+#include <QVariantMap>
 
+#include <string>
 #include <string_view>
 #include <vector>
 
@@ -21,6 +23,24 @@ class PlacePage : public QObject
   Q_PROPERTY(QString title READ title NOTIFY changed)
   Q_PROPERTY(QString subtitle READ subtitle NOTIFY changed)
   Q_PROPERTY(QString address READ address NOTIFY changed)
+  // The second name line of the header, like on Android.
+  Q_PROPERTY(QString secondaryTitle READ secondaryTitle NOTIFY changed)
+  // The OpenStreetMap description of the place.
+  Q_PROPERTY(QString osmDescription READ osmDescription NOTIFY changed)
+  // The notes of a bookmark or track.
+  Q_PROPERTY(QString notes READ notes NOTIFY changed)
+  // The list of a bookmark or track and its color as "#rrggbb", like the Android category row; empty otherwise.
+  Q_PROPERTY(QString category READ category NOTIFY changed)
+  Q_PROPERTY(QString color READ color NOTIFY changed)
+  Q_PROPERTY(QStringList colors READ colors CONSTANT)
+  // A route point is selected: it can be removed, like on Android.
+  Q_PROPERTY(bool isRoutePoint READ isRoutePoint NOTIFY changed)
+  // A warning on the route, as the Routing::Road to avoid, 0 for none or one that can't be avoided.
+  Q_PROPERTY(int roadToAvoid READ roadToAvoid NOTIFY changed)
+  // The map of the place isn't downloaded, see MissingMapInfo().
+  Q_PROPERTY(QVariantMap country READ country NOTIFY countryChanged)
+  // Tracks under the tap as {title, color, selected} when there are several, like the Android title chevron.
+  Q_PROPERTY(QVariantList trackCandidates READ trackCandidates NOTIFY changed)
   Q_PROPERTY(QString distance READ distance NOTIFY distanceChanged)
   // Direction to the place relative to the device heading in degrees, negative without a position.
   Q_PROPERTY(double azimuth READ azimuth NOTIFY distanceChanged)
@@ -30,6 +50,8 @@ class PlacePage : public QObject
   Q_PROPERTY(QString shareText READ shareText NOTIFY changed)
   Q_PROPERTY(QString geoUri READ geoUri NOTIFY changed)
   Q_PROPERTY(bool isBookmark READ isBookmark NOTIFY changed)
+  // The bookmark of this place was just deleted: saving restores it, like Restore on Android.
+  Q_PROPERTY(bool canRestoreBookmark READ canRestoreBookmark NOTIFY changed)
   Q_PROPERTY(bool isTrack READ isTrack NOTIFY changed)
   // The selected bookmark or track, for BookmarkEditor.
   Q_PROPERTY(quint64 userMarkId READ userMarkId NOTIFY changed)
@@ -90,12 +112,23 @@ public:
   QString title() const { return m_title; }
   QString subtitle() const { return m_subtitle; }
   QString address() const { return m_address; }
+  QString secondaryTitle() const { return m_secondaryTitle; }
+  QString osmDescription() const { return m_osmDescription; }
+  QString notes() const { return m_notes; }
+  QString category() const { return m_category; }
+  QString color() const { return m_color; }
+  QStringList colors() const;
+  bool isRoutePoint() const { return m_isRoutePoint; }
+  int roadToAvoid() const { return m_roadToAvoid; }
+  QVariantMap country() const { return m_country; }
+  QVariantList trackCandidates() const { return m_trackCandidates; }
   QString distance() const { return m_distance; }
   double azimuth() const { return m_azimuth; }
   QString bearing() const { return m_bearing; }
   QString shareText() const { return m_shareText; }
   QString geoUri() const { return m_geoUri; }
   bool isBookmark() const { return m_isBookmark; }
+  bool canRestoreBookmark() const;
   bool isTrack() const { return m_isTrack; }
   quint64 userMarkId() const { return m_userMarkId; }
   bool canEdit() const { return m_canEdit; }
@@ -132,9 +165,19 @@ public:
   Q_INVOKABLE void setElevationActivePoint(double distance);
   // Shows a route of routes on the map, like choosing it in the Android routes popup.
   Q_INVOKABLE void showRoute(int index);
+  // Lists to move the bookmark or track to as {id, name}, and moving it there.
+  Q_INVOKABLE QVariantList categories() const;
+  Q_INVOKABLE void setCategory(quint64 categoryId);
+  // A preset of colors, like the Android color picker of the place page.
+  Q_INVOKABLE void setColor(int colorIndex);
+  Q_INVOKABLE void selectTrackCandidate(int index);
+  Q_INVOKABLE void downloadCountry();
+  Q_INVOKABLE void cancelCountry();
 
   // Called on every location update; does nothing without a selected place.
   void UpdateDistance();
+  // The subtitle of "my position": altitude and speed, like on Android. Negative speed when unknown.
+  void UpdateMyPosition(bool hasAltitude, double altitude, double speed);
   // Compass heading in radians from true north.
   void SetNorth(double north);
 
@@ -142,18 +185,34 @@ signals:
   void changed();
   void distanceChanged();
   void elevationPointsChanged();
+  void countryChanged();
+  // A long tap on the empty map, which shows or hides the map buttons on Android.
+  void switchFullScreen();
 
 private:
   void Update();
   void UpdateOpeningHours(std::string_view openingHours);
   void UpdateTrack();
   void UpdateRouteRefs();
+  void UpdateCategory();
+  void UpdateCountry();
 
   Framework & m_framework;
   bool m_open = false;
   QString m_title;
   QString m_subtitle;
   QString m_address;
+  QString m_secondaryTitle;
+  QString m_osmDescription;
+  QString m_notes;
+  QString m_category;
+  QString m_color;
+  bool m_isRoutePoint = false;
+  int m_roadToAvoid = 0;
+  QVariantMap m_country;
+  QVariantList m_trackCandidates;
+  std::string m_countryId;
+  int m_storageSlot = 0;
   QString m_distance;
   double m_azimuth = -1.0;
   QString m_bearing;

@@ -1,13 +1,19 @@
 #include "sailfish/place_page.hpp"
 
 #include "sailfish/app_info.hpp"
+#include "sailfish/bookmarks_model.hpp"
+#include "sailfish/countries_model.hpp"
 
 #include "map/bookmark_helpers.hpp"
 #include "map/bookmark_manager.hpp"
 #include "map/elevation_info.hpp"
 #include "map/framework.hpp"
 #include "map/place_page_info.hpp"
+#include "map/routing_mark.hpp"
 #include "map/track.hpp"
+
+#include "kml/type_utils.hpp"
+#include "kml/types.hpp"
 
 #include "ge0/url_generator.hpp"
 
@@ -20,8 +26,13 @@
 
 #include "opening_hours/opening_hours.hpp"
 
+#include "routing/routing_options.hpp"
+
+#include "storage/storage.hpp"
+
 #include "platform/distance.hpp"
 #include "platform/localization.hpp"
+#include "platform/measurement_utils.hpp"
 #include "platform/settings.hpp"
 
 #include "geometry/angles.hpp"
@@ -152,14 +163,26 @@ PlacePage::PlacePage(Framework & framework, QObject * parent) : QObject(parent),
   {
     m_open = false;
     emit changed();
-  }, [this] { Update(); }, {} /* onSwitchFullScreen */);
+  }, [this] { Update(); }, [this] { emit switchFullScreen(); });
   auto & manager = m_framework.GetBookmarkManager();
   manager.SetElevationActivePointChangedCallback([this](kml::TrackId, double) { emit elevationPointsChanged(); });
   manager.SetElevationMyPositionChangedCallback([this](kml::TrackId, double) { emit elevationPointsChanged(); });
+  // The download row follows the map of the place.
+  m_storageSlot = m_framework.GetStorage().Subscribe(
+      [this](storage::CountryId const & id)
+  {
+    if (id == m_countryId)
+      UpdateCountry();
+  }, [this](storage::CountryId const & id, downloader::Progress const &)
+  {
+    if (id == m_countryId)
+      UpdateCountry();
+  });
 }
 
 PlacePage::~PlacePage()
 {
+  m_framework.GetStorage().Unsubscribe(m_storageSlot);
   m_framework.SetPlacePageListeners({}, {}, {}, {});
   auto & manager = m_framework.GetBookmarkManager();
   manager.SetElevationActivePointChangedCallback({});
@@ -232,6 +255,11 @@ void PlacePage::toggleBookmark()
   m_framework.UpdatePlacePageInfoForCurrentSelection(buildInfo);
 }
 
+bool PlacePage::canRestoreBookmark() const
+{
+  return m_framework.GetBookmarkManager().HasRecentlyDeletedBookmark();
+}
+
 void PlacePage::Update()
 {
   if (!m_framework.HasPlacePageInfo())
@@ -242,6 +270,32 @@ void PlacePage::Update()
   m_title = QString::fromStdString(info.GetTitle());
   m_subtitle = QString::fromStdString(info.GetSubtitle());
   m_address = QString::fromStdString(info.GetSecondarySubtitle());
+  m_secondaryTitle = QString::fromStdString(info.GetSecondaryTitle());
+  m_osmDescription = QString::fromStdString(info.GetOSMDescription());
+  m_isRoutePoint = info.IsRoutePoint();
+  // The warnings Android offers to avoid; steps and gates have no routing option.
+  switch (info.GetRoadType())
+  {
+  case RoadWarningMarkType::Toll: m_roadToAvoid = routing::RoutingOptions::Toll; break;
+  case RoadWarningMarkType::Ferry: m_roadToAvoid = routing::RoutingOptions::Ferry; break;
+  case RoadWarningMarkType::Dirty: m_roadToAvoid = routing::RoutingOptions::Dirty; break;
+  default: m_roadToAvoid = 0; break;
+  }
+  m_countryId = info.IsMyPosition() ? std::string() : info.GetCountryId();
+  UpdateCountry();
+  m_trackCandidates.clear();
+  if (auto const & candidates = info.GetTrackCandidates(); candidates.size() > 1)
+  {
+    for (auto const & candidate : candidates)
+    {
+      bool const selected = info.IsRelationTrack() ? candidate.m_relationId == info.GetTrackRelationId()
+                                                   : candidate.m_trackId == info.GetTrackId();
+      m_trackCandidates.append(
+          QVariantMap{{"title", QString::fromStdString(candidate.m_title)},
+                      {"color", QStringLiteral("#%1").arg(candidate.m_color.GetRGBA() >> 8, 6, 16, QLatin1Char('0'))},
+                      {"selected", selected}});
+    }
+  }
 
   auto const entries = place_page::GetAvailableCoordinateFormats(info.GetLatLon(), info.GetCountryId());
   auto const format = place_page::EffectiveCoordinateFormat(entries, SavedCoordinatesFormat());
@@ -321,6 +375,11 @@ void PlacePage::Update()
   add("image://theme/icon-m-levels", ToQString(info.GetMetadata(Metadata::FMD_LEVEL)));
   if (auto const capacity = info.GetMetadata(Metadata::FMD_CAPACITY); !capacity.empty())
     add("../../icons/placepage/ic_capacity_white.svg", Localized("capacity", {ToQString(capacity)}));
+  // An ATM in a bank or a shop, like on Android.
+  static uint32_t const atm = classif().GetTypeByPath({"amenity", "atm"});
+  if (info.GetTypes().Has(atm))
+    add("../../icons/categories/ic_category_atm.svg",
+        QString::fromStdString(platform::GetLocalizedTypeName("amenity-atm")));
   // Classificator types like wheelchair-yes and self_service-yes, localized like other types.
   if (auto const wheelchair = info.GetMetadata(Metadata::FMD_WHEELCHAIR); !wheelchair.empty())
     add("../../icons/placepage/ic_wheelchair_white.svg",
@@ -358,8 +417,138 @@ void PlacePage::Update()
   UpdateRouteRefs();
 
   UpdateTrack();
+  UpdateCategory();
   UpdateDistance();
   emit changed();
+}
+
+void PlacePage::UpdateCategory()
+{
+  m_category.clear();
+  m_color.clear();
+  m_notes.clear();
+  auto const & manager = m_framework.GetBookmarkManager();
+  if (m_isBookmark)
+  {
+    auto const * bookmark = manager.GetBookmark(m_userMarkId);
+    if (!bookmark)
+      return;
+    m_category = QString::fromStdString(manager.GetCategoryName(bookmark->GetGroupId()));
+    m_color = QStringLiteral("#%1").arg(bookmark->GetColorForRendering().GetRGBA() >> 8, 6, 16, QLatin1Char('0'));
+    m_notes = QString::fromStdString(bookmark->GetDescription());
+  }
+  else if (m_isTrack)
+  {
+    auto const * track = manager.GetTrack(m_userMarkId);
+    // Public transport route tracks belong to no list.
+    if (!track || track->GetGroupId() == kml::kInvalidMarkGroupId)
+      return;
+    m_category = QString::fromStdString(manager.GetCategoryName(track->GetGroupId()));
+    m_color = QStringLiteral("#%1").arg(track->GetColor(0).GetRGBA() >> 8, 6, 16, QLatin1Char('0'));
+    m_notes = QString::fromStdString(kml::GetDefaultStr(track->GetData().m_description));
+  }
+}
+
+void PlacePage::UpdateCountry()
+{
+  auto country = MissingMapInfo(m_framework.GetStorage(), m_countryId);
+  if (country != m_country)
+  {
+    m_country = std::move(country);
+    emit countryChanged();
+  }
+}
+
+QStringList PlacePage::colors() const
+{
+  return PresetColors();
+}
+
+QVariantList PlacePage::categories() const
+{
+  QVariantList result;
+  auto const & manager = m_framework.GetBookmarkManager();
+  for (auto const id : manager.GetSortedBmGroupIdList())
+    result.append(QVariantMap{{"id", QVariant::fromValue<quint64>(id)},
+                              {"name", QString::fromStdString(manager.GetCategoryName(id))}});
+  return result;
+}
+
+void PlacePage::setCategory(quint64 categoryId)
+{
+  auto & manager = m_framework.GetBookmarkManager();
+  if (m_isBookmark)
+  {
+    if (auto const * bookmark = manager.GetBookmark(m_userMarkId))
+      manager.GetEditSession().MoveBookmark(m_userMarkId, bookmark->GetGroupId(), categoryId);
+  }
+  else if (m_isTrack)
+  {
+    if (auto const * track = manager.GetTrack(m_userMarkId))
+      manager.GetEditSession().MoveTrack(m_userMarkId, track->GetGroupId(), categoryId);
+  }
+  m_framework.UpdatePlacePageInfoForCurrentSelection();
+}
+
+void PlacePage::setColor(int colorIndex)
+{
+  if (colorIndex < 0 || colorIndex >= static_cast<int>(kml::kOrderedPredefinedColors.size()))
+    return;
+  auto const color = kml::ColorFromPredefinedColor(kml::kOrderedPredefinedColors[static_cast<size_t>(colorIndex)]);
+  auto & manager = m_framework.GetBookmarkManager();
+  {
+    auto session = manager.GetEditSession();
+    if (m_isBookmark)
+      session.SetBookmarksAndTracksColor({m_userMarkId}, {}, color);
+    else if (m_isTrack)
+      session.ChangeTrackColor(m_userMarkId, color);
+  }
+  m_framework.UpdatePlacePageInfoForCurrentSelection();
+}
+
+void PlacePage::selectTrackCandidate(int index)
+{
+  if (!m_framework.HasPlacePageInfo())
+    return;
+  auto const & candidates = m_framework.GetCurrentPlacePageInfo().GetTrackCandidates();
+  if (index < 0 || static_cast<size_t>(index) >= candidates.size())
+    return;
+  auto const & candidate = candidates[static_cast<size_t>(index)];
+  m_framework.SelectTrackCandidate(candidate.m_trackId, candidate.m_relationId);
+}
+
+void PlacePage::downloadCountry()
+{
+  if (!m_countryId.empty())
+    DownloadMap(m_framework.GetStorage(), m_countryId);
+}
+
+void PlacePage::cancelCountry()
+{
+  if (!m_countryId.empty())
+    m_framework.GetStorage().CancelDownloadNode(m_countryId);
+}
+
+void PlacePage::UpdateMyPosition(bool hasAltitude, double altitude, double speed)
+{
+  if (!m_framework.HasPlacePageInfo() || !m_framework.GetCurrentPlacePageInfo().IsMyPosition())
+    return;
+  QString subtitle;
+  if (hasAltitude)
+    subtitle = QStringLiteral("▲") + QString::fromStdString(platform::Distance::FormatAltitude(altitude));
+  if (speed >= 0)
+  {
+    auto const units = measurement_utils::GetMeasurementUnits();
+    if (!subtitle.isEmpty())
+      subtitle += QStringLiteral("   ");
+    subtitle += QString::fromStdString(measurement_utils::FormatSpeedNumeric(speed, units) + " " +
+                                       platform::GetLocalizedSpeedUnits(units));
+  }
+  if (subtitle != m_subtitle)
+  {
+    m_subtitle = subtitle;
+    emit changed();
+  }
 }
 
 void PlacePage::UpdateRouteRefs()

@@ -20,11 +20,15 @@ set(SRC
   bookmarks_model.hpp
   countries_model.cpp
   countries_model.hpp
+  file_log.cpp
+  file_log.hpp
   framework_access.hpp
   map_item.cpp
   maps_storage.cpp
   maps_storage.hpp
   map_item.hpp
+  opening_hours_editor.cpp
+  opening_hours_editor.hpp
   osm_account.cpp
   osm_account.hpp
   place_editor.cpp
@@ -111,6 +115,8 @@ install(FILES
   "${ANDROID_RES}/drawable-xxhdpi/ic_transit.webp" "${ANDROID_RES}/drawable-xxhdpi/ic_bike.webp"
   "${ANDROID_RES}/drawable-xxhdpi/ic_route_from.webp" "${ANDROID_RES}/drawable-xxhdpi/ic_route_to.webp"
   "${ANDROID_RES}/drawable-xxhdpi/ic_route_via.webp"
+  "${ANDROID_RES}/drawable-xxhdpi/ic_avoid_tolls.webp" "${ANDROID_RES}/drawable-xxhdpi/ic_avoid_unpaved.webp"
+  "${ANDROID_RES}/drawable-xxhdpi/ic_avoid_ferry.webp"
   "${ANDROID_RES}/drawable/route_point_start.png" "${ANDROID_RES}/drawable/route_point_finish.png"
   DESTINATION share/organicmaps/icons/routing)
 set(ANDROID_SDK_RES "${OMIM_ROOT}/android/sdk/src/main/res")

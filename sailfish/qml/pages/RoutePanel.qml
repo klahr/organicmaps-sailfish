@@ -15,9 +15,57 @@ MapPanel {
     // Empty slots and stops are picked like any place: from search, bookmarks or the map.
     signal searchClicked()
     signal bookmarksClicked()
+    // The picked slot is to be chosen with the cross in the middle of the map.
+    signal chooseOnMapClicked()
+
+    // The label of the picked slot, like RoutePointLabels on Android.
+    function pickLabel() {
+        var replace = routing.pickIndex >= 0
+        switch (routing.pickType) {
+        case Routing.Start: return appInfo.localized(replace ? "change_start_location" : "choose_start_location")
+        case Routing.Finish: return appInfo.localized(replace ? "change_destination" : "choose_destination")
+        default: return appInfo.localized(replace ? "placepage_replace_stop" : "placepage_add_stop")
+        }
+    }
 
     modal: false
     spacing: 0
+
+    // Like RoutingPlanFragment on Android: navigation starts from the position, which is asked about first, and
+    // the routing disclaimer is accepted once.
+    function startNavigation() {
+        if (!routing.startIsMyPosition) {
+            pageStack.push(Qt.resolvedUrl("MessageDialog.qml"), {
+                title: appInfo.localized("p2p_only_from_current"),
+                message: appInfo.localized("p2p_reroute_from_current"),
+                acceptAction: function() { panel.checkDisclaimerAndStart() }
+            })
+            return
+        }
+        checkDisclaimerAndStart()
+    }
+    function checkDisclaimerAndStart() {
+        if (routing.disclaimerAccepted) {
+            routing.start()
+            return
+        }
+        var message = ["dialog_routing_disclaimer_priority", "dialog_routing_disclaimer_precision",
+                       "dialog_routing_disclaimer_recommendations", "dialog_routing_disclaimer_borders",
+                       "dialog_routing_disclaimer_beware"].map(function(key) { return appInfo.localized(key) })
+        pageStack.push(Qt.resolvedUrl("MessageDialog.qml"), {
+            title: appInfo.localized("dialog_routing_disclaimer_title"),
+            message: message.join("\n\n"),
+            acceptText: appInfo.localized("accept"),
+            acceptAction: function() {
+                routing.acceptDisclaimer()
+                routing.start()
+            }
+        })
+    }
+    Connections {
+        target: routing
+        onMessage: Notices.show(text, Notice.Short, Notice.Center)
+    }
 
     // Shown while a route is planned, giving way to the place page of a tapped place.
     readonly property bool shouldShow: routing.active && !routing.navigating && !placePage.open
@@ -140,6 +188,12 @@ MapPanel {
                     anchors.verticalCenter: parent.verticalCenter
                 }
             }
+            Label {
+                visible: routing.built && text !== ""
+                text: routing.ascentDescent
+                font.pixelSize: Theme.fontSizeSmall
+                color: Theme.secondaryColor
+            }
             // Transit legs: walking, then each line with its number in the line color.
             Flow {
                 width: parent.width
@@ -217,6 +271,26 @@ MapPanel {
         }
     }
 
+    // Walking and bicycle routes, like the Android route chart. Tapping marks the point on the route.
+    // Lower than on the track page, as the panel doesn't scroll.
+    ElevationChart {
+        height: Theme.itemSizeExtraLarge
+        profile: routing.elevationProfile
+        length: routing.elevationLength
+        minLabel: routing.minElevation
+        maxLabel: routing.maxElevation
+        activePoint: routing.elevationActivePoint
+        onPointClicked: routing.setElevationActivePoint(distance)
+    }
+
+    // Avoided roads are the likely cause of a failed car route, as on Android.
+    Button {
+        anchors.horizontalCenter: parent.horizontalCenter
+        visible: routing.optionsError
+        text: appInfo.localized("settings")
+        onClicked: pageStack.push(Qt.resolvedUrl("RoutingOptionsPage.qml"), { routing: routing })
+    }
+
     // Maps the route needs, as offered by the Android routing dialog.
     Button {
         anchors.horizontalCenter: parent.horizontalCenter
@@ -253,7 +327,7 @@ MapPanel {
                     empty: true
                     icon: "../../icons/routing/route_point_start.png"
                     text: appInfo.localized("p2p_from_here")
-                    onClicked: panel.searchClicked()
+                    onClicked: routing.startPick(Routing.Start, -1)
                 }
 
                 Repeater {
@@ -283,6 +357,12 @@ MapPanel {
                                 onClicked: routing.setStartToMyPosition()
                             }
                             MenuItem {
+                                text: appInfo.localized(modelData.type === Routing.Start ? "change_start_location"
+                                                      : modelData.type === Routing.Finish ? "change_destination"
+                                                      : "placepage_replace_stop")
+                                onClicked: routing.startPick(modelData.type, index)
+                            }
+                            MenuItem {
                                 text: appInfo.localized("delete")
                                 onClicked: routing.removePoint(index)
                             }
@@ -295,20 +375,62 @@ MapPanel {
                     empty: true
                     icon: "../../icons/routing/route_point_finish.png"
                     text: appInfo.localized("p2p_to_here")
-                    onClicked: panel.searchClicked()
+                    onClicked: routing.startPick(Routing.Finish, -1)
                 }
                 RoutePointSlot {
-                    visible: panel.hasStart && panel.hasFinish
+                    visible: panel.hasStart && panel.hasFinish && routing.canAddStop
                     icon: "image://theme/icon-m-add"
                     text: appInfo.localized("placepage_add_stop")
                     accent: true
-                    onClicked: panel.searchClicked()
+                    onClicked: routing.startPick(Routing.Intermediate, -1)
                 }
             }
         }
     }
 
-    // Bottom bar of the Android route sheet: search, bookmarks, maps and START.
+    // Where the picked slot's place comes from, like the Android search header while picking: search,
+    // bookmarks, the map or the position.
+    Column {
+        width: parent.width
+        visible: routing.pickType >= 0
+
+        SectionHeader {
+            text: panel.pickLabel()
+        }
+        Flow {
+            x: Theme.horizontalPageMargin
+            width: parent.width - 2 * x
+            spacing: Theme.paddingMedium
+
+            Button {
+                text: appInfo.localized("search")
+                onClicked: panel.searchClicked()
+            }
+            Button {
+                text: appInfo.localized("bookmarks")
+                onClicked: panel.bookmarksClicked()
+            }
+            Button {
+                text: appInfo.localized("choose_on_map")
+                onClicked: panel.chooseOnMapClicked()
+            }
+            Button {
+                visible: routing.pickType !== Routing.Intermediate
+                text: appInfo.localized("p2p_your_location")
+                onClicked: routing.pickMyPosition()
+            }
+            Button {
+                text: appInfo.localized("cancel")
+                onClicked: routing.cancelPick()
+            }
+        }
+        Item {
+            width: 1
+            height: Theme.paddingMedium
+        }
+    }
+
+    // Bottom bar of the Android route sheet: search, bookmarks, maps, save and START.
     Row {
         id: bottomBar
         x: Theme.horizontalPageMargin
@@ -334,13 +456,22 @@ MapPanel {
             source: Qt.resolvedUrl("../../icons/menu/ic_download.svg")
             onClicked: pageStack.push(Qt.resolvedUrl("MapsPage.qml"))
         }
+        // Saves the route as a track, once per built route.
+        MapButton {
+            anchors.verticalCenter: parent.verticalCenter
+            radius: Theme.dp(14)
+            source: Qt.resolvedUrl("../../icons/routing/icon_save.svg")
+            enabled: routing.built && !routing.routeSaved
+            opacity: enabled ? 1.0 : Theme.opacityLow
+            onClicked: routing.saveRoute()
+        }
         // Car, walking and bicycle routes can be navigated, as on Android.
         Button {
             anchors.verticalCenter: parent.verticalCenter
             width: bottomBar.width - x
             enabled: routing.canStart
             text: appInfo.localized("p2p_start").toUpperCase()
-            onClicked: routing.start()
+            onClicked: panel.startNavigation()
         }
     }
 }

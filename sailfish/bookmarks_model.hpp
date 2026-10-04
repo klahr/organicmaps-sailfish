@@ -1,6 +1,7 @@
 #pragma once
 
 #include <QAbstractListModel>
+#include <QStringList>
 #include <QVariantList>
 
 #include <cstdint>
@@ -10,6 +11,9 @@ class Framework;
 
 namespace sailfish
 {
+// The preset colors of bookmarks and tracks as "#rrggbb", in the order of the pickers of the other platforms.
+QStringList PresetColors();
+
 // Forwards BookmarkManager changes (edits, finished loading) to every bookmarks model.
 class BookmarksNotifier : public QObject
 {
@@ -34,6 +38,8 @@ class BookmarkCategoriesModel : public QAbstractListModel
   Q_OBJECT
   // For "Show all" / "Hide all", like on Android.
   Q_PROPERTY(bool allVisible READ allVisible NOTIFY allVisibleChanged)
+  // Deleted lists stay in the trash until deleted there, as on iOS.
+  Q_PROPERTY(int recentlyDeletedCount READ recentlyDeletedCount NOTIFY recentlyDeletedChanged)
 
 public:
   enum Roles
@@ -52,15 +58,21 @@ public:
   QHash<int, QByteArray> roleNames() const override;
 
   bool allVisible() const;
+  int recentlyDeletedCount() const;
 
   Q_INVOKABLE void setVisible(int row, bool visible);
   Q_INVOKABLE void setAllVisible(bool visible);
   Q_INVOKABLE void createCategory(QString const & name);
   Q_INVOKABLE void deleteCategory(int row);
   Q_INVOKABLE void showOnMap(int row);
+  // Lists in the trash as {name, path, date}.
+  Q_INVOKABLE QVariantList recentlyDeleted() const;
+  Q_INVOKABLE void recoverDeleted(QStringList const & paths);
+  Q_INVOKABLE void deleteForever(QStringList const & paths);
 
 signals:
   void allVisibleChanged();
+  void recentlyDeletedChanged();
 
 private:
   void Reset();
@@ -82,6 +94,9 @@ class BookmarksModel : public QAbstractListModel
   Q_PROPERTY(QVariantList sortingTypes READ sortingTypes NOTIFY categoryInfoChanged)
   // Shows only the items with this text in their names.
   Q_PROPERTY(QString filter READ filter WRITE setFilter NOTIFY filterChanged)
+  Q_PROPERTY(QStringList colors READ colors CONSTANT)
+  // Lists to move items to as {id, name}.
+  Q_PROPERTY(QVariantList categories READ categories NOTIFY categoryInfoChanged)
 
 public:
   enum Roles
@@ -92,7 +107,13 @@ public:
     // The feature type of a bookmark, the length of a track.
     TypeRole,
     // The section of a sorted list, like "Tracks" or "A week ago".
-    BlockRole
+    BlockRole,
+    // "#rrggbb", like the Android list icons.
+    ColorRole,
+    // Of a bookmark from the position, "" without one.
+    DistanceRole,
+    // Of a track on the map.
+    VisibleRole
   };
 
   // Mirrors BookmarkManager::SortingType.
@@ -120,11 +141,22 @@ public:
   QVariantList sortingTypes() const;
   QString filter() const { return m_filter; }
   void setFilter(QString const & filter);
+  QStringList colors() const { return PresetColors(); }
+  QVariantList categories() const;
 
   Q_INVOKABLE void showOnMap(int row);
   Q_INVOKABLE void remove(int row);
+  // The text Android shares for a bookmark: name, address, coordinates and a link.
+  Q_INVOKABLE QString shareText(int row) const;
   // Renames the list and sets its description, like the Android list settings.
   Q_INVOKABLE void setCategoryInfo(QString const & name, QString const & description);
+  Q_INVOKABLE void setTrackVisible(int row, bool visible);
+  // Several items at once, like the Android selection actions.
+  Q_INVOKABLE void removeRows(QVariantList const & rows);
+  Q_INVOKABLE void moveRows(QVariantList const & rows, quint64 categoryId);
+  Q_INVOKABLE void setRowsColor(QVariantList const & rows, int colorIndex);
+  // All bookmarks or all tracks of the list, like the Android list settings.
+  Q_INVOKABLE void setAllColor(bool tracks, int colorIndex);
 
 signals:
   void categoryIdChanged();
@@ -144,6 +176,8 @@ private:
   void SetItems(std::vector<Item> && items);
   bool Matches(Item const & item) const;
   QString ItemName(Item const & item) const;
+  // The bookmarks and tracks of rows, or of all items.
+  void CollectIds(QVariantList const & rows, std::vector<uint64_t> & marks, std::vector<uint64_t> & tracks) const;
 
   Framework & m_framework;
   quint64 m_categoryId = 0;

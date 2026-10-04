@@ -55,13 +55,52 @@ storage::CountryId ToCountryId(QString const & countryId)
 }
 }  // namespace
 
+QVariantMap MissingMapInfo(storage::Storage const & storage, storage::CountryId const & countryId)
+{
+  QVariantMap country;
+  if (countryId.empty())
+    return country;
+  auto const attrs = GetAttrs(storage, countryId);
+  switch (attrs.m_status)
+  {
+  case NodeStatus::NotDownloaded:
+  case NodeStatus::Downloading:
+  case NodeStatus::Applying:
+  case NodeStatus::InQueue:
+  case NodeStatus::Error:
+  {
+    auto const & progress = attrs.m_downloadingProgress;
+    country["countryId"] = QString::fromStdString(countryId);
+    country["name"] = QString::fromStdString(attrs.m_nodeLocalName);
+    country["size"] = FormatSize(static_cast<qint64>(attrs.m_mwmSize));
+    country["status"] = static_cast<int>(attrs.m_status);
+    country["progress"] =
+        progress.m_bytesTotal > 0 ? static_cast<double>(progress.m_bytesDownloaded) / progress.m_bytesTotal : 0.0;
+    break;
+  }
+  default: break;
+  }
+  return country;
+}
+
+void DownloadMap(storage::Storage & storage, storage::CountryId const & countryId)
+{
+  if (GetAttrs(storage, countryId).m_status == NodeStatus::Error)
+    storage.RetryDownloadNode(countryId);
+  else
+    storage.DownloadNode(countryId);
+}
+
 CountriesModel::CountriesModel(QObject * parent) : QAbstractListModel(parent), m_storage(GetFramework().GetStorage())
 {
   m_parentId = m_storage.GetRootId();
   m_downloadInProgress = m_storage.IsDownloadInProgress();
-  m_slotId = m_storage.Subscribe([this](storage::CountryId const & countryId) {
+  m_slotId = m_storage.Subscribe([this](storage::CountryId const & countryId) { OnCountryChanged(countryId); },
+                                 [this](storage::CountryId const & countryId, downloader::Progress const & progress)
+  {
+    OnProgress(countryId, progress);
     OnCountryChanged(countryId);
-  }, [this](storage::CountryId const & countryId, downloader::Progress const &) { OnCountryChanged(countryId); });
+  });
   Reload();
 }
 
@@ -188,10 +227,22 @@ void CountriesModel::SetChildren(storage::CountriesVec && children)
   endResetModel();
 }
 
+void CountriesModel::OnProgress(storage::CountryId const & countryId, downloader::Progress const & progress)
+{
+  m_downloadingName = QString::fromStdString(GetAttrs(m_storage, countryId).m_nodeLocalName);
+  m_downloadingProgress = progress.IsUnknown() || progress.m_bytesTotal <= 0
+                            ? 0.0
+                            : static_cast<double>(progress.m_bytesDownloaded) / progress.m_bytesTotal;
+  emit downloadingChanged();
+}
+
 void CountriesModel::OnCountryChanged(storage::CountryId const & countryId)
 {
   // A map that finished downloading or was deleted moves between the downloaded and available lists.
-  auto const status = GetAttrs(m_storage, countryId).m_status;
+  auto const attrs = GetAttrs(m_storage, countryId);
+  auto const status = attrs.m_status;
+  if (status == NodeStatus::Error)
+    emit downloadFailed(QString::fromStdString(attrs.m_nodeLocalName));
   if (m_query.isEmpty() && (status == NodeStatus::OnDisk || status == NodeStatus::NotDownloaded))
   {
     Reload();
@@ -207,6 +258,12 @@ void CountriesModel::OnCountryChanged(storage::CountryId const & countryId)
   {
     m_downloadInProgress = inProgress;
     emit downloadInProgressChanged();
+    if (!inProgress)
+    {
+      m_downloadingName.clear();
+      m_downloadingProgress = 0;
+      emit downloadingChanged();
+    }
   }
   emit updatesChanged();
 }
@@ -319,6 +376,36 @@ QHash<int, QByteArray> CountriesModel::roleNames() const
 void CountriesModel::download(QString const & countryId)
 {
   m_storage.DownloadNode(ToCountryId(countryId));
+}
+
+bool CountriesModel::hasSpaceToDownload(QString const & countryId) const
+{
+  return storage::IsEnoughSpaceForDownload(ToCountryId(countryId), m_storage);
+}
+
+bool CountriesModel::hasSpaceToUpdate(QString const & countryId) const
+{
+  return storage::IsEnoughSpaceForUpdate(ToCountryId(countryId), m_storage);
+}
+
+bool CountriesModel::hasUnsavedEdits(QString const & countryId) const
+{
+  return GetFramework().HasUnsavedEdits(ToCountryId(countryId));
+}
+
+bool CountriesModel::navigating() const
+{
+  return GetFramework().GetRoutingManager().IsRoutingFollowing();
+}
+
+int CountriesModel::parentStatus() const
+{
+  return static_cast<int>(GetAttrs(m_storage, m_parentId).m_status);
+}
+
+void CountriesModel::cancelAll()
+{
+  m_storage.CancelDownloadNode(m_storage.GetRootId());
 }
 
 void CountriesModel::cancel(QString const & countryId)
