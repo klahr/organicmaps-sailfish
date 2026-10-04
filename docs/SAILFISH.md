@@ -36,8 +36,8 @@ ssh defaultuser@<device> devel-su pkcon install-local organicmaps-*.aarch64.rpm
 
 ## Notes
 
-- UI strings come from `data/strings/strings.txt` and `data/strings/types_strings.txt`, read at runtime by
-  `libs/platform/localization_sailfish.cpp`.
+- UI strings come from `data/strings/strings.txt` and `data/strings/types_strings.txt`, plus the Sailfish-only
+  ones in `sailfish/strings.txt`, all read at runtime by `sailfish/localization.cpp`.
 - The SVG icons are converted from the Android vector drawables at build time by
   `sailfish/tools/android_vector_to_svg.py`.
 - Voice guidance uses Speech Note over D-Bus when installed, or a local speech synthesizer such as espeak-ng.

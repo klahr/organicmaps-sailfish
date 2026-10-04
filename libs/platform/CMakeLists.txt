@@ -122,9 +122,6 @@ else() # neither iPhone nor Android
                  "${CMAKE_CURRENT_BINARY_DIR}/platform_qt_version.cpp"
                   @ONLY)
 
-  if (PLATFORM_SAILFISH)
-    append(SRC localization_sailfish.cpp)
-  endif()
   append(SRC
     localization_dummy.cpp
     network_policy_dummy.cpp

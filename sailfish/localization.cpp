@@ -44,7 +44,9 @@ std::string Unescape(std::string_view value)
   return result;
 }
 
-// Reads the twine files shipped in resources, keeping the current language with an English fallback.
+// Reads the twine files shipped in resources, the shared ones and those of this app, keeping the current language
+// with an English fallback. Implements platform/localization.hpp for the Sailfish OS app, like the platform code
+// of the Android SDK.
 // Plural forms (lang:other) are skipped, they are not used through this API.
 Strings LoadStrings()
 {
@@ -52,7 +54,7 @@ Strings LoadStrings()
   std::string const baseLang = lang.substr(0, lang.find('-'));
 
   std::unordered_map<std::string, Entry> entries;
-  for (char const * file : {"strings/types_strings.txt", "strings/strings.txt"})
+  for (char const * file : {"strings/types_strings.txt", "strings/strings.txt", "strings/sailfish_strings.txt"})
   {
     std::ifstream in(GetPlatform().ResourcesDir() + file);
     if (!in)

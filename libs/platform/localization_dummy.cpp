@@ -11,7 +11,7 @@ std::string GetLocalizedBrandName(std::string const & brand)
   return brand;
 }
 
-// Sailfish OS reads the type names and strings from the shipped twine files, see localization_sailfish.cpp.
+// The Sailfish OS app reads the type names and strings from the shipped twine files, see sailfish/localization.cpp.
 #ifndef OMIM_OS_SAILFISH
 std::string GetLocalizedTypeName(std::string const & type)
 {

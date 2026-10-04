@@ -25,6 +25,7 @@ set(SRC
   framework_access.hpp
   helpers.cpp
   helpers.hpp
+  localization.cpp
   map_item.cpp
   maps_storage.cpp
   maps_storage.hpp
@@ -91,9 +92,10 @@ foreach(resource ${RUNTIME_RESOURCES})
   endif()
 endforeach()
 
-# Read at runtime by platform/localization_sailfish.cpp for type names and UI strings.
+# Read at runtime by localization.cpp for type names and UI strings, with the strings of this app only.
 install(FILES "${OMIM_ROOT}/data/strings/types_strings.txt" "${OMIM_ROOT}/data/strings/strings.txt"
         DESTINATION share/organicmaps/data/strings)
+install(FILES strings.txt DESTINATION share/organicmaps/data/strings RENAME sailfish_strings.txt)
 
 install(TARGETS ${PROJECT_NAME} DESTINATION bin)
 install(TARGETS ${PROJECT_NAME}_lib LIBRARY DESTINATION share/organicmaps/lib)
