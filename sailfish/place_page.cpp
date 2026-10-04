@@ -324,7 +324,7 @@ void PlacePage::Update()
       m_details.append(QVariantMap{{"icon", icon}, {"text", text}, {"url", url}});
   };
   // The order of place_page_details.xml and place_page_links_fragment.xml on Android.
-  add("../../icons/placepage/ic_cuisine.svg", QString::fromStdString(info.FormatCuisines()));
+  add("../../icons/editor/ic_cuisine.svg", QString::fromStdString(info.FormatCuisines()));
   add("../../icons/placepage/ic_entrance.webp", ToQString(info.GetMetadata(Metadata::FMD_FLATS)));
   add("image://theme/icon-m-person", ToQString(info.GetMetadata(Metadata::FMD_OPERATOR)));
   if (auto const network = info.GetMetadata(Metadata::FMD_NETWORK); !network.empty())
@@ -383,12 +383,12 @@ void PlacePage::Update()
   if (auto const internet = info.GetInternet(); internet != feature::Internet::Unknown)
     add("image://theme/icon-m-wlan", Localized(internet == feature::Internet::No ? "no_available" : "yes_available"));
   if (info.GetMetadata(Metadata::FMD_DRIVE_THROUGH) == "yes")
-    add("../../icons/placepage/ic_drive_through_white.svg", Localized("drive_through"));
+    add("../../icons/editor/ic_drive_through_white.svg", Localized("drive_through"));
   if (auto const selfService = info.GetMetadata(Metadata::FMD_SELF_SERVICE); !selfService.empty())
     add("../../icons/editor/ic_self_service.svg",
         QString::fromStdString(platform::GetLocalizedTypeName("self_service-" + std::string(selfService))));
   if (info.GetMetadata(Metadata::FMD_OUTDOOR_SEATING) == "yes")
-    add("../../icons/placepage/ic_outdoor_seating.svg", Localized("outdoor_seating"));
+    add("../../icons/editor/ic_outdoor_seating.svg", Localized("outdoor_seating"));
 
   m_routes.clear();
   m_routeIds.clear();

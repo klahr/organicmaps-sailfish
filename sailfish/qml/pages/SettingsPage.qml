@@ -141,7 +141,17 @@ Page {
             ValueButton {
                 label: appInfo.localized("change_map_locale")
                 value: appSettings.mapLanguageName
-                onClicked: pageStack.push(Qt.resolvedUrl("MapLanguagePage.qml"))
+                // The same list as on Android, opened at the current language.
+                onClicked: {
+                    var languages = appSettings.mapLanguages
+                    pageStack.push(Qt.resolvedUrl("ListPickerPage.qml"), {
+                        title: appInfo.localized("change_map_locale"),
+                        items: languages.map(function(language) {
+                            return { name: language.name, selected: language.code === appSettings.mapLanguage }
+                        }),
+                        picked: function(index) { appSettings.mapLanguage = languages[index].code }
+                    })
+                }
             }
             ValueButton {
                 label: appInfo.localized("pref_bg_tiles_title")

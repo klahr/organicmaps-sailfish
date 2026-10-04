@@ -55,6 +55,27 @@ Page {
                     }
                 }
             }
+            // The Speech Note voices of the language, like the voice choice of iOS.
+            ComboBox {
+                visible: routing.voices.length > 0
+                enabled: routing.voiceEnabled
+                label: appInfo.localized("pref_tts_voice_title")
+                currentIndex: {
+                    for (var i = 0; i < routing.voices.length; ++i)
+                        if (routing.voices[i].id === routing.voice)
+                            return i
+                    return 0
+                }
+                menu: ContextMenu {
+                    Repeater {
+                        model: routing.voices
+                        MenuItem {
+                            text: modelData.name
+                            onClicked: routing.voice = modelData.id
+                        }
+                    }
+                }
+            }
             TextSwitch {
                 enabled: routing.voiceEnabled
                 text: appInfo.localized("pref_tts_street_names_title")

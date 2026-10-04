@@ -2,6 +2,7 @@ import QtQuick 2.6
 import Sailfish.Silica 1.0
 
 // Picks one of items, given as {name, color, selected}: picked is called with its index, then the page goes back.
+// It opens at the selected item.
 // addText and addAction offer another choice in the pull-down menu, like "Add a New List".
 Page {
     id: page
@@ -55,6 +56,15 @@ Page {
                 text: modelData.name
                 truncationMode: TruncationMode.Fade
                 highlighted: parent.highlighted
+            }
+        }
+
+        Component.onCompleted: {
+            for (var i = 0; i < page.items.length; ++i) {
+                if (page.items[i].selected) {
+                    positionViewAtIndex(i, ListView.Center)
+                    break
+                }
             }
         }
 

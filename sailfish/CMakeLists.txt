@@ -104,6 +104,8 @@ install(DIRECTORY qml sounds DESTINATION share/organicmaps)
 set(SVG_ICONS_DIR "${CMAKE_CURRENT_BINARY_DIR}/icons")
 add_custom_command(
   OUTPUT "${SVG_ICONS_DIR}/.stamp"
+  # Starts afresh, so that icons no longer converted aren't installed.
+  COMMAND ${CMAKE_COMMAND} -E remove_directory "${SVG_ICONS_DIR}"
   COMMAND ${Python3_EXECUTABLE} "${CMAKE_CURRENT_SOURCE_DIR}/tools/android_vector_to_svg.py" "${SVG_ICONS_DIR}"
   COMMAND ${CMAKE_COMMAND} -E touch "${SVG_ICONS_DIR}/.stamp"
   DEPENDS tools/android_vector_to_svg.py

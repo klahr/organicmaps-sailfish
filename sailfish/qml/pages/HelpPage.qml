@@ -83,7 +83,7 @@ Page {
             // The donation box of Android, when the server offers a donation page.
             MenuRow {
                 visible: appSettings.donateUrl !== ""
-                icon: page.icon("ic_donate.svg")
+                icon: page.icon("../menu/ic_donate.svg")
                 text: appInfo.localized("donate")
                 onClicked: Qt.openUrlExternally(appSettings.donateUrl)
             }
@@ -123,16 +123,16 @@ Page {
                     { icon: "ic_question_mark.svg", text: appInfo.localized("faq"), url: page.bundled("faq.html") },
                     { icon: "ic_report_a_bug.svg", text: appInfo.localized("report_a_bug"),
                       url: "https://github.com/organicmaps/organicmaps/issues" },
-                    { icon: "ic_donate.svg", text: appInfo.localized("how_to_support_us"), url: page.siteUrl + "support-us/" },
+                    { icon: "../menu/ic_donate.svg", text: appInfo.localized("how_to_support_us"), url: page.siteUrl + "support-us/" },
                     { icon: "ic_news.svg", text: appInfo.localized("news"), url: page.siteUrl + "news/" },
                     { icon: "ic_telegram.svg", text: "Telegram", url: appInfo.localized("telegram_url") },
                     { icon: "ic_github.svg", text: "GitHub", url: "https://github.com/organicmaps/organicmaps" },
                     { icon: "ic_website.svg", text: appInfo.localized("website"), url: page.siteUrl },
                     { icon: "ic_matrix.svg", text: "Matrix", url: "https://matrix.to/#/%23organicmaps:matrix.org" },
                     { icon: "ic_mastodon.svg", text: "Mastodon", url: "https://fosstodon.org/@organicmaps" },
-                    { icon: "ic_facebook_white.svg", text: "Facebook", url: "https://www.facebook.com/OrganicMaps" },
-                    { icon: "ic_twitterx.svg", text: "X (Twitter)", url: "https://twitter.com/OrganicMapsApp" },
-                    { icon: "ic_instagram.svg", text: "Instagram", url: appInfo.localized("instagram_url") },
+                    { icon: "../editor/ic_facebook.svg", text: "Facebook", url: "https://www.facebook.com/OrganicMaps" },
+                    { icon: "../editor/ic_twitterx.svg", text: "X (Twitter)", url: "https://twitter.com/OrganicMapsApp" },
+                    { icon: "../editor/ic_instagram.svg", text: "Instagram", url: appInfo.localized("instagram_url") },
                     { icon: "ic_openstreetmap.svg", text: "OpenStreetMap", url: appInfo.localized("osm_wiki_about_url") },
                     { icon: "ic_openstreetmap.svg", text: appInfo.localized("report_incorrect_map_bug"),
                       url: "https://www.openstreetmap.org/fixthemap" }

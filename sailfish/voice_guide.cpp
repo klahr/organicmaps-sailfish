@@ -14,6 +14,8 @@
 #include <QStandardPaths>
 #include <QUrl>
 
+#include <algorithm>
+
 namespace sailfish
 {
 struct VoiceGuide::Engine
@@ -120,6 +122,21 @@ bool VoiceGuide::HasSpeechNoteVoice(std::string const & language) const
   return m_speechNoteVoices.contains(language);
 }
 
+std::vector<std::pair<QString, QString>> VoiceGuide::SpeechNoteVoices() const
+{
+  auto const it = m_speechNoteModels.find(m_language);
+  return it != m_speechNoteModels.end() && !m_speechNoteLanguage.isEmpty() ? it->second
+                                                                           : std::vector<std::pair<QString, QString>>();
+}
+
+void VoiceGuide::SetSpeechNoteVoice(QString const & id)
+{
+  // An unknown voice, e.g. one deleted in Speech Note, falls back to the default of the language.
+  auto const voices = SpeechNoteVoices();
+  bool const known = std::any_of(voices.begin(), voices.end(), [&id](auto const & voice) { return voice.first == id; });
+  m_speechNoteVoice = known ? id : QString();
+}
+
 void VoiceGuide::SetPreferredLanguage(std::string const & preferred, std::string const & appLanguage)
 {
   m_preferredLanguage = preferred;
@@ -153,7 +170,7 @@ void VoiceGuide::Refresh()
   auto const watcher = new QDBusPendingCallWatcher(QDBusConnection::sessionBus().asyncCall(
       QDBusMessage::createMethodCall(kSpeechNoteService, QStringLiteral("/"),
                                      QStringLiteral("org.freedesktop.DBus.Properties"), QStringLiteral("Get"))
-      << kSpeechNoteService << QStringLiteral("TtsLangs")));
+      << kSpeechNoteService << QStringLiteral("TtsModels")));
   connect(watcher, &QDBusPendingCallWatcher::finished, this, &VoiceGuide::OnSpeechNoteLanguages);
 }
 
@@ -162,6 +179,7 @@ void VoiceGuide::OnSpeechNoteLanguages(QDBusPendingCallWatcher * watcher)
   watcher->deleteLater();
   QDBusPendingReply<QDBusVariant> const reply = *watcher;
   m_speechNoteVoices.clear();
+  m_speechNoteModels.clear();
   m_speechNoteInstalled = !reply.isError();
   if (reply.isError())
   {
@@ -169,14 +187,33 @@ void VoiceGuide::OnSpeechNoteLanguages(QDBusPendingCallWatcher * watcher)
   }
   else
   {
-    QVariantMap languages;
-    reply.value().variant().value<QDBusArgument>() >> languages;
+    // Voices by id as [id, name, ..., language], the name like "Svenska (Piper Alma Medium Female) / sv".
+    QVariantMap models;
+    reply.value().variant().value<QDBusArgument>() >> models;
+    std::map<QString, std::vector<std::pair<QString, QString>>> voicesByLanguage;
+    for (auto const & model : models)
+    {
+      QStringList fields;
+      if (model.canConvert<QDBusArgument>())
+        model.value<QDBusArgument>() >> fields;
+      else
+        fields = model.toStringList();
+      if (fields.size() < 4)
+        continue;
+      auto name = fields[1];
+      if (auto const open = name.indexOf('('), close = name.lastIndexOf(')'); open >= 0 && close > open)
+        name = name.mid(open + 1, close - open - 1);
+      voicesByLanguage[fields[3]].emplace_back(fields[0], name);
+    }
     for (auto const & lang : routing::turns::sound::kLanguageList)
     {
       std::string const code(lang.first);
       auto const speechNoteCode = SpeechNoteCode(code);
-      if (languages.contains(speechNoteCode))
+      if (auto const it = voicesByLanguage.find(speechNoteCode); it != voicesByLanguage.end())
+      {
         m_speechNoteVoices.emplace(code, speechNoteCode);
+        m_speechNoteModels.emplace(code, it->second);
+      }
     }
   }
   ChooseLanguage();
@@ -199,6 +236,7 @@ void VoiceGuide::ChooseLanguage()
 
   m_language = language;
   m_speechNoteLanguage.clear();
+  m_speechNoteVoice.clear();
   m_engine = nullptr;
   if (auto const it = m_speechNoteVoices.find(language); it != m_speechNoteVoices.end())
   {
@@ -280,7 +318,8 @@ void VoiceGuide::SynthesizeNext()
     auto const request = m_speechNoteRequest;
     auto const watcher = new QDBusPendingCallWatcher(QDBusConnection::sessionBus().asyncCall(
         SpeechNoteCall(QStringLiteral("TtsSpeechToFile"))
-        << m_queue.takeFirst() << m_speechNoteLanguage << QVariantMap{{"audio_format", "wav"}}));
+        << m_queue.takeFirst() << (m_speechNoteVoice.isEmpty() ? m_speechNoteLanguage : m_speechNoteVoice)
+        << QVariantMap{{"audio_format", "wav"}}));
     connect(watcher, &QDBusPendingCallWatcher::finished, this, [this, request](QDBusPendingCallWatcher * call)
     {
       call->deleteLater();

@@ -8,6 +8,7 @@
 
 #include <map>
 #include <string>
+#include <utility>
 #include <vector>
 
 class QDBusPendingCallWatcher;
@@ -35,6 +36,10 @@ public:
   std::vector<std::string> Languages() const;
   bool IsSpeechNoteInstalled() const { return m_speechNoteInstalled; }
   bool HasSpeechNoteVoice(std::string const & language) const;
+  // The Speech Note voices of the spoken language as {id, name}, and the one to speak with, empty for the default
+  // voice of the language. Like the voice choice of iOS.
+  std::vector<std::pair<QString, QString>> SpeechNoteVoices() const;
+  void SetSpeechNoteVoice(QString const & id);
 
   // The language to speak when it has a voice; otherwise the app language, any Speech Note voice or English.
   void SetPreferredLanguage(std::string const & preferred, std::string const & appLanguage);
@@ -78,11 +83,14 @@ private:
   bool m_speechNoteInstalled = false;
   // Core language -> Speech Note language with a voice.
   std::map<std::string, QString> m_speechNoteVoices;
+  // Core language -> its Speech Note voices as {id, name}.
+  std::map<std::string, std::vector<std::pair<QString, QString>>> m_speechNoteModels;
   // Core language -> the first program that speaks it.
   std::map<std::string, Program> m_programVoices;
 
   // Set when the language is spoken by Speech Note, with the task writing the speech, -1 without one.
   QString m_speechNoteLanguage;
+  QString m_speechNoteVoice;
   int m_speechNoteTask = -1;
   // Counts the requests to Speech Note, so that a reply to one that was stopped meanwhile is ignored.
   int m_speechNoteRequest = 0;

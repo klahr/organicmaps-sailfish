@@ -252,3 +252,14 @@ fr = Impossible de déplacer les cartes. Vérifiez l’espace libre et qu’aucu
 ru = Не удалось переместить карты. Проверьте свободное место и что карты сейчас не загружаются.
 sv = Kartorna kunde inte flyttas. Kontrollera ledigt utrymme och att inga kartor laddas ned.
 uk = Не вдалося перемістити мапи. Перевірте вільне місце і що мапи зараз не завантажуються.
+
+[pref_tts_voice_title]
+comment = Sailfish OS: chooses one of the Speech Note voices of the voice instructions language
+tags = sailfish
+en = Voice
+de = Stimme
+es = Voz
+fr = Voix
+ru = Голос
+sv = Röst
+uk = Голос

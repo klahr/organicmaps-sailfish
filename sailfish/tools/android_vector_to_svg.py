@@ -24,15 +24,17 @@ CATEGORIES = ['ic_category_' + key for key in (
     'nightlife', 'children', 'bank', 'entertainment', 'water', 'hospital', 'pharmacy', 'recycling', 'rv', 'police',
     'toilet', 'post')]
 # Place page row icons missing from the Silica theme.
-PLACE_PAGE = ['ic_wheelchair_white', 'ic_capacity_white', 'ic_open_in', 'ic_category_bus',
-              'ic_category_tram', 'ic_cuisine', 'ic_network_white', 'ic_drive_through_white', 'ic_outdoor_seating']
+# Cuisine, drive-through and outdoor seating use the editor copies.
+PLACE_PAGE = ['ic_wheelchair_white', 'ic_capacity_white', 'ic_open_in', 'ic_category_bus', 'ic_category_tram',
+              'ic_network_white']
 # Bookmarks button and list visibility toggles.
 BOOKMARKS = ['ic_bookmarks_and_tracks', 'ic_show', 'ic_hide']
 # My position button states.
 MY_POSITION = ['ic_location_off', 'ic_not_follow', 'ic_follow', 'ic_follow_and_rotate']
 # The logo of the help button and the about page, and the icons of the about page rows, as in about.xml on Android.
-HELP = ['logo', 'ic_question_mark', 'ic_report_a_bug', 'ic_donate', 'ic_news', 'ic_telegram', 'ic_github', 'ic_website',
-        'ic_matrix', 'ic_mastodon', 'ic_facebook_white', 'ic_twitterx', 'ic_instagram', 'ic_openstreetmap']
+# Donate and the social networks of the editor are reused from the menu and editor copies.
+HELP = ['logo', 'ic_question_mark', 'ic_report_a_bug', 'ic_news', 'ic_telegram', 'ic_github', 'ic_website',
+        'ic_matrix', 'ic_mastodon', 'ic_openstreetmap']
 # Main menu entries and the recording status button. Android tints the single color ones at runtime, so
 # they are made white (WHITE) for Silica to colorize; ic_track_recording_on keeps its two colors.
 MENU = ['ic_download', 'ic_donate', 'ic_settings', 'ic_track_recording_off', 'ic_track_recording_on', 'ic_share',

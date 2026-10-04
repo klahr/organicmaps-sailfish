@@ -74,6 +74,12 @@ std::string_view constexpr kVoiceVolumeSetting = "TtsVolume";
 // The setting of Android.
 std::string_view constexpr kDisclaimerSetting = "IsDisclaimerApproved";
 
+// The Speech Note voice chosen for a language, empty for its default.
+std::string VoiceSetting(std::string const & language)
+{
+  return "SailfishSpeechNoteVoice_" + language;
+}
+
 qint64 constexpr kDarkOutsideCheckIntervalMs = 60 * 1000;
 
 // The arrival time when setting off now.
@@ -506,7 +512,11 @@ void Routing::SetupVoice()
   {
     auto & manager = m_framework.GetRoutingManager();
     if (m_voice->IsAvailable())
+    {
       manager.SetTurnNotificationsLocale(m_voice->Language());
+      m_voice->SetSpeechNoteVoice(
+          QString::fromStdString(LoadSetting(VoiceSetting(m_voice->Language()), std::string())));
+    }
     if (m_navigating)
       manager.EnableTurnNotifications(voiceEnabled());
     emit voiceChanged();
@@ -615,6 +625,29 @@ void Routing::setVoiceVolume(int volume)
     return;
   settings::Set(kVoiceVolumeSetting, volume / 100.0);
   m_voice->SetVolume(volume);
+  emit voiceChanged();
+}
+
+QVariantList Routing::voices() const
+{
+  auto const voices = m_voice->SpeechNoteVoices();
+  if (voices.size() < 2)
+    return {};
+  QVariantList result{QVariantMap{{"id", QString()}, {"name", Localized("auto")}}};
+  for (auto const & [id, name] : voices)
+    result.append(QVariantMap{{"id", id}, {"name", name}});
+  return result;
+}
+
+QString Routing::voice() const
+{
+  return QString::fromStdString(LoadSetting(VoiceSetting(m_voice->Language()), std::string()));
+}
+
+void Routing::setVoice(QString const & voice)
+{
+  settings::Set(VoiceSetting(m_voice->Language()), voice.toStdString());
+  m_voice->SetSpeechNoteVoice(voice);
   emit voiceChanged();
 }
 

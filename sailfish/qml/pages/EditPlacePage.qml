@@ -166,19 +166,23 @@ Dialog {
                     text: appInfo.localized("add_language")
                     onClicked: {
                         var used = dialog.names.map(function(name) { return name.code })
-                        var page = pageStack.push(Qt.resolvedUrl("LanguagePage.qml"), {
-                            languages: editor.otherLanguages().filter(function(language) {
-                                return used.indexOf(language.code) < 0
-                            })
+                        var languages = editor.otherLanguages().filter(function(language) {
+                            return used.indexOf(language.code) < 0
                         })
-                        page.selected.connect(function(code, language) {
-                            // Keeps the typed names: the Repeater recreates its fields for the new model.
-                            var names = []
-                            for (var n = 0; n < namesRepeater.count; ++n)
-                                names.push({ code: dialog.names[n].code, language: dialog.names[n].language,
-                                             value: namesRepeater.itemAt(n).text })
-                            names.push({ code: code, language: language, value: "" })
-                            dialog.names = names
+                        // "Add a language", like the Android LanguagesFragment.
+                        pageStack.push(Qt.resolvedUrl("ListPickerPage.qml"), {
+                            title: appInfo.localized("choose_language"),
+                            items: languages.map(function(language) { return { name: language.language } }),
+                            picked: function(index) {
+                                // Keeps the typed names: the Repeater recreates its fields for the new model.
+                                var names = []
+                                for (var n = 0; n < namesRepeater.count; ++n)
+                                    names.push({ code: dialog.names[n].code, language: dialog.names[n].language,
+                                                 value: namesRepeater.itemAt(n).text })
+                                names.push({ code: languages[index].code, language: languages[index].language,
+                                             value: "" })
+                                dialog.names = names
+                            }
                         })
                     }
                 }

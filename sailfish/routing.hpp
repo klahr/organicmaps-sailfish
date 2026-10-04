@@ -95,6 +95,10 @@ class Routing : public QObject
   Q_PROPERTY(bool announceStreets READ announceStreets WRITE setAnnounceStreets NOTIFY voiceChanged)
   // 0..100, like the Android voice volume.
   Q_PROPERTY(int voiceVolume READ voiceVolume WRITE setVoiceVolume NOTIFY voiceChanged)
+  // The Speech Note voices of the voice language as {id, name}, the first being its default with an empty id,
+  // when there is a choice; and the chosen one, kept per language. Like the voice choice of iOS.
+  Q_PROPERTY(QVariantList voices READ voices NOTIFY voiceChanged)
+  Q_PROPERTY(QString voice READ voice WRITE setVoice NOTIFY voiceChanged)
 
 public:
   // Mirrors routing::RouterType.
@@ -215,6 +219,9 @@ public:
   bool announceStreets() const;
   void setAnnounceStreets(bool announce);
   int voiceVolume() const;
+  QVariantList voices() const;
+  QString voice() const;
+  void setVoice(QString const & voice);
   void setVoiceVolume(int volume);
   // Looks for voices again, e.g. back from installing Speech Note or a voice.
   Q_INVOKABLE void refreshVoice();
