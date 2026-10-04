@@ -25,6 +25,8 @@ public:
 
   // Registers the D-Bus service for the launcher; false when another instance has it.
   bool RegisterOnDBus();
+  // Hands the files and links to the instance that has the D-Bus service.
+  static void OpenInRunningApp(QStringList const & urls);
 
 public slots:
   // The X-Maemo-Method of organicmaps.desktop.

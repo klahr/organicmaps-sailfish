@@ -17,7 +17,6 @@ Page {
     onListsChanged: if (lists.length === 0 && status === PageStatus.Active) pageStack.pop()
 
     SilicaListView {
-        id: listView
         anchors.fill: parent
         model: page.lists
 

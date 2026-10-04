@@ -4,6 +4,7 @@
 #include "sailfish/app_settings.hpp"
 #include "sailfish/countries_model.hpp"
 #include "sailfish/framework_access.hpp"
+#include "sailfish/helpers.hpp"
 #include "sailfish/place_page.hpp"
 #include "sailfish/routing.hpp"
 
@@ -18,9 +19,6 @@
 #include "storage/storage.hpp"
 #include "storage/storage_helpers.hpp"
 
-#include "platform/distance.hpp"
-#include "platform/localization.hpp"
-#include "platform/measurement_utils.hpp"
 #include "platform/platform.hpp"
 
 #include "geometry/angles.hpp"
@@ -279,19 +277,7 @@ void MapItem::WatchRecording()
     m_recordingMinElevation = QString::fromStdString(stats.GetFormattedMinElevation());
     m_recordingMaxElevation = QString::fromStdString(stats.GetFormattedMaxElevation());
     if (!m_framework.IsTrackRecordingEmpty())
-    {
-      auto const & elevation = Framework::GetTrackRecordingElevationInfo();
-      // Enough points for a phone wide chart, as on the track place page.
-      size_t const count = elevation.GetSize();
-      size_t const step = count / 600 + 1;
-      size_t i = 0;
-      elevation.ForEachPoint([&](double distance, geometry::Altitude altitude)
-      {
-        if (i % step == 0 || i + 1 == count)
-          m_recordingProfile << distance << altitude;
-        ++i;
-      });
-    }
+      m_recordingProfile = ElevationProfile(Framework::GetTrackRecordingElevationInfo());
     emit recordingStatsChanged();
   });
 }
@@ -349,9 +335,7 @@ void MapItem::OnCurrentCountryChanged(std::string const & countryId)
   if (countryId.empty() || !AppSettings::IsAutoDownloadEnabled())
     return;
   auto & storage = m_framework.GetStorage();
-  storage::NodeStatuses statuses;
-  storage.GetNodeStatuses(countryId, statuses);
-  if (statuses.m_status != storage::NodeStatus::NotDownloaded)
+  if (MapAttrs(storage, countryId).m_status != storage::NodeStatus::NotDownloaded)
     return;
   auto const position = m_framework.GetCurrentPosition();
   if (!position || m_framework.GetCountryInfoGetter().GetRegionCountryId(*position) != countryId)
@@ -367,17 +351,14 @@ QVariantMap MapItem::mapToUpdateForEditing() const
   auto const center = m_framework.GetViewportCenter();
   if (m_framework.CanEditMapForPosition(center))
     return {};
-  auto const countryId = m_framework.GetCountryInfoGetter().GetRegionCountryId(center);
-  storage::NodeAttrs attrs;
-  m_framework.GetStorage().GetNodeAttrs(countryId, attrs);
-  if (countryId.empty() || attrs.m_status != storage::NodeStatus::OnDiskOutOfDate)
-    return {};
-  return {{"countryId", QString::fromStdString(countryId)}, {"name", QString::fromStdString(attrs.m_nodeLocalName)}};
+  auto const country =
+      MissingMapInfo(m_framework.GetStorage(), m_framework.GetCountryInfoGetter().GetRegionCountryId(center), true);
+  return country.value("outdated").toBool() ? country : QVariantMap();
 }
 
-void MapItem::updateMap(QString const & countryId)
+void MapItem::downloadMap(QString const & countryId)
 {
-  m_framework.GetStorage().UpdateNode(countryId.toStdString());
+  DownloadMap(m_framework.GetStorage(), countryId.toStdString());
 }
 
 bool MapItem::needUpdateForRoutes() const
@@ -399,15 +380,11 @@ void MapItem::UpdatePositionInfo()
   {
     auto const latLon = mercator::ToLatLon(*position);
     info["address"] = QString::fromStdString(m_framework.GetAddressAtPoint(*position).FormatAddress());
-    info["coordinates"] = QStringLiteral("%1, %2").arg(latLon.m_lat, 0, 'f', 5).arg(latLon.m_lon, 0, 'f', 5);
+    info["coordinates"] = FormatLatLon(latLon.m_lat, latLon.m_lon);
     if (m_hasAltitude)
-      info["altitude"] = QStringLiteral("▲") + QString::fromStdString(platform::Distance::FormatAltitude(m_altitude));
+      info["altitude"] = FormatAltitude(m_altitude);
     if (m_speed > 0.5)
-    {
-      auto const units = measurement_utils::GetMeasurementUnits();
-      info["speed"] = QString::fromStdString(measurement_utils::FormatSpeedNumeric(m_speed, units) + " " +
-                                             platform::GetLocalizedSpeedUnits(units));
-    }
+      info["speed"] = FormatSpeed(m_speed);
   }
   if (info != m_positionInfo)
   {
@@ -426,16 +403,9 @@ void MapItem::UpdateCurrentCountry()
   }
 }
 
-void MapItem::downloadCurrentCountry()
+void MapItem::cancelMap(QString const & countryId)
 {
-  if (!m_currentCountryId.empty())
-    DownloadMap(m_framework.GetStorage(), m_currentCountryId);
-}
-
-void MapItem::cancelCurrentCountry()
-{
-  if (!m_currentCountryId.empty())
-    m_framework.GetStorage().CancelDownloadNode(m_currentCountryId);
+  m_framework.GetStorage().CancelDownloadNode(countryId.toStdString());
 }
 
 void MapItem::OnCompassReading()

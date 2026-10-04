@@ -41,12 +41,12 @@ class AppSettings : public QObject
   Q_PROPERTY(bool perspectiveView READ perspectiveView WRITE setPerspectiveView NOTIFY changed)
   Q_PROPERTY(bool autoZoom READ autoZoom WRITE setAutoZoom NOTIFY changed)
   // A dark map while navigating between sunset and sunrise, see Routing::darkOutside.
+  Q_PROPERTY(bool autoNightInNavigation READ autoNightInNavigation WRITE setAutoNightInNavigation NOTIFY changed)
   // Debug logs in a file, which "Report a bug" shares, at logUrl.
   Q_PROPERTY(bool logging READ logging WRITE setLogging NOTIFY changed)
+  Q_PROPERTY(QString logUrl READ logUrl CONSTANT)
   // The notice that edits go public was seen with a first edit or note, like Android's one-time dialog.
   Q_PROPERTY(bool editsPublicNoticeShown READ editsPublicNoticeShown WRITE setEditsPublicNoticeShown NOTIFY changed)
-  Q_PROPERTY(QString logUrl READ logUrl CONSTANT)
-  Q_PROPERTY(bool autoNightInNavigation READ autoNightInNavigation WRITE setAutoNightInNavigation NOTIFY changed)
   // power_management::Scheme: Normal (never), EconomyMaximum (always) or Auto (low battery).
   Q_PROPERTY(int powerScheme READ powerScheme WRITE setPowerScheme NOTIFY changed)
   // routing::SpeedCameraManagerMode: Auto, Always or Never.

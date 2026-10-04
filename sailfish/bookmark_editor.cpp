@@ -1,8 +1,8 @@
 #include "sailfish/bookmark_editor.hpp"
 
 #include "sailfish/app_info.hpp"
-#include "sailfish/bookmarks_model.hpp"
 #include "sailfish/framework_access.hpp"
+#include "sailfish/helpers.hpp"
 
 #include "map/bookmark_manager.hpp"
 #include "map/framework.hpp"
@@ -15,17 +15,6 @@
 
 namespace sailfish
 {
-namespace
-{
-int PresetIndex(dp::Color color)
-{
-  auto const & presets = kml::kOrderedPredefinedColors;
-  auto const it = std::find_if(presets.begin(), presets.end(), [color](kml::PredefinedColor preset)
-  { return kml::ColorFromPredefinedColor(preset).GetRGBA() == color.GetRGBA(); });
-  return it != presets.end() ? static_cast<int>(std::distance(presets.begin(), it)) : -1;
-}
-}  // namespace
-
 BookmarkEditor::BookmarkEditor(QObject * parent) : QObject(parent), m_framework(GetFramework()) {}
 
 void BookmarkEditor::loadBookmark(quint64 id)
@@ -70,10 +59,9 @@ void BookmarkEditor::setTrackVisible(bool visible)
 
 int BookmarkEditor::createCategory(QString const & name)
 {
-  auto const id = m_framework.GetBookmarkManager().CreateBookmarkCategory(name.trimmed().toStdString());
+  auto const id = CreateBookmarkList(m_framework.GetBookmarkManager(), name);
   LoadCategories(m_groupId);
-  auto const it = std::find(m_categoryIds.begin(), m_categoryIds.end(), id);
-  return it != m_categoryIds.end() ? static_cast<int>(std::distance(m_categoryIds.begin(), it)) : -1;
+  return CategoryIndex(id);
 }
 
 void BookmarkEditor::LoadCategories(uint64_t groupId)
@@ -84,14 +72,14 @@ void BookmarkEditor::LoadCategories(uint64_t groupId)
   emit loaded();
 }
 
-QStringList BookmarkEditor::colors() const
-{
-  return PresetColors();
-}
-
 int BookmarkEditor::categoryIndex() const
 {
-  auto const it = std::find(m_categoryIds.begin(), m_categoryIds.end(), m_groupId);
+  return CategoryIndex(m_groupId);
+}
+
+int BookmarkEditor::CategoryIndex(uint64_t groupId) const
+{
+  auto const it = std::find(m_categoryIds.begin(), m_categoryIds.end(), groupId);
   return it != m_categoryIds.end() ? static_cast<int>(std::distance(m_categoryIds.begin(), it)) : -1;
 }
 
@@ -112,9 +100,9 @@ void BookmarkEditor::save(QString const & name, QString const & description, int
                             ? m_categoryIds[static_cast<size_t>(categoryIndex)]
                             : m_groupId;
   // The pickers of the other platforms store the presets as custom colors too.
-  bool const colorChanged = colorIndex >= 0 && colorIndex != m_colorIndex;
-  auto const color =
-      colorChanged ? kml::ColorFromPredefinedColor(kml::kOrderedPredefinedColors[colorIndex]) : dp::Color();
+  auto const preset = colorIndex != m_colorIndex ? PresetColor(colorIndex) : std::nullopt;
+  bool const colorChanged = preset.has_value();
+  auto const color = preset.value_or(dp::Color());
   {
     auto session = manager.GetEditSession();
     if (m_isTrack)

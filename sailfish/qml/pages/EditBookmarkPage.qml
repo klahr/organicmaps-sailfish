@@ -101,33 +101,10 @@ Dialog {
             SectionHeader {
                 text: appInfo.localized("choose_color")
             }
-            Grid {
-                id: colorGrid
-
-                readonly property real size: Theme.itemSizeExtraSmall
-
-                x: Theme.horizontalPageMargin
-                width: parent.width - 2 * x
-                spacing: Theme.paddingMedium
-                columns: Math.max(1, Math.floor((width + spacing) / (size + spacing)))
-
-                Repeater {
-                    model: editor.colors
-                    // A custom color (colorIndex -1) has no swatch here and stays until another one is chosen.
-                    Rectangle {
-                        width: colorGrid.size
-                        height: width
-                        radius: width / 2
-                        color: modelData
-                        border.width: index === dialog.colorIndex ? Theme.paddingSmall : 0
-                        border.color: Theme.highlightColor
-
-                        MouseArea {
-                            anchors.fill: parent
-                            onClicked: dialog.colorIndex = index
-                        }
-                    }
-                }
+            // A custom color (colorIndex -1) has no swatch here and stays until another one is chosen.
+            ColorGrid {
+                selectedIndex: dialog.colorIndex
+                onColorClicked: dialog.colorIndex = index
             }
             Item {
                 width: parent.width

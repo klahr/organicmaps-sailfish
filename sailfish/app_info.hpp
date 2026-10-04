@@ -32,12 +32,15 @@ class AppInfo : public QObject
   Q_PROPERTY(QString version READ version CONSTANT)
   // Date of the downloaded map data, like Framework.getDataVersion() on Android.
   Q_PROPERTY(QDate dataVersion READ dataVersion CONSTANT)
+  // The preset colors of bookmarks and tracks as "#rrggbb", for the color pickers.
+  Q_PROPERTY(QStringList bookmarkColors READ bookmarkColors CONSTANT)
 
 public:
   using QObject::QObject;
 
   QString version() const;
   QDate dataVersion() const;
+  QStringList bookmarkColors() const;
 
   Q_INVOKABLE QString localized(QString const & key, QStringList const & args = {}) const
   {

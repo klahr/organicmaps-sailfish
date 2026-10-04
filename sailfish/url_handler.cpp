@@ -10,6 +10,7 @@
 #include "base/logging.hpp"
 
 #include <QDBusConnection>
+#include <QDBusMessage>
 #include <QVariantMap>
 
 namespace sailfish
@@ -40,6 +41,13 @@ bool UrlHandler::RegisterOnDBus()
     return false;
   }
   return bus.registerObject(kPath, this, QDBusConnection::ExportScriptableSlots);
+}
+
+void UrlHandler::OpenInRunningApp(QStringList const & urls)
+{
+  auto message = QDBusMessage::createMethodCall(kService, kPath, kService, QStringLiteral("openUrl"));
+  message << urls;
+  QDBusConnection::sessionBus().call(message);
 }
 
 void UrlHandler::openUrl(QStringList const & urls)

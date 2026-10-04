@@ -17,10 +17,8 @@ class BookmarkEditor : public QObject
   Q_PROPERTY(bool isTrack READ isTrack NOTIFY loaded)
   Q_PROPERTY(QString name READ name NOTIFY loaded)
   Q_PROPERTY(QString description READ description NOTIFY loaded)
-  // Index in colors, or -1 for a custom color, which is kept unless another one is chosen.
+  // Index in appInfo.bookmarkColors, or -1 for a custom color, which is kept unless another one is chosen.
   Q_PROPERTY(int colorIndex READ colorIndex NOTIFY loaded)
-  // The preset colors as "#rrggbb", in the order of the other platforms.
-  Q_PROPERTY(QStringList colors READ colors CONSTANT)
   Q_PROPERTY(int categoryIndex READ categoryIndex NOTIFY loaded)
   Q_PROPERTY(QStringList categories READ categories NOTIFY loaded)
   // A track is shown on the map, like the toggle of the Android track editor.
@@ -42,7 +40,6 @@ public:
   QString name() const { return m_name; }
   QString description() const { return m_description; }
   int colorIndex() const { return m_colorIndex; }
-  QStringList colors() const;
   int categoryIndex() const;
   QStringList categories() const;
 
@@ -51,6 +48,8 @@ signals:
 
 private:
   void LoadCategories(uint64_t groupId);
+  // Index of a list in categories, -1 for none.
+  int CategoryIndex(uint64_t groupId) const;
   // Whether the place page shows the edited bookmark or track.
   bool IsSelected() const;
 

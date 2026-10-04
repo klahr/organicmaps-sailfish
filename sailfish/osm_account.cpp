@@ -1,6 +1,7 @@
 #include "sailfish/osm_account.hpp"
 
 #include "sailfish/app_info.hpp"
+#include "sailfish/helpers.hpp"
 
 #include "editor/osm_auth.hpp"
 #include "editor/osm_editor.hpp"
@@ -28,9 +29,7 @@ std::string_view constexpr kImageUrl = "SailfishOsmImageUrl";
 
 std::string Token()
 {
-  std::string token;
-  settings::TryGet(kToken, token);
-  return token;
+  return LoadSetting(kToken, std::string());
 }
 }  // namespace
 
@@ -53,16 +52,12 @@ bool OsmAccount::loggedIn() const
 
 QString OsmAccount::userName() const
 {
-  std::string name;
-  settings::TryGet(kUserName, name);
-  return QString::fromStdString(name);
+  return QString::fromStdString(LoadSetting(kUserName, std::string()));
 }
 
 int OsmAccount::changesets() const
 {
-  int count = -1;
-  settings::TryGet(kChangesets, count);
-  return count;
+  return LoadSetting(kChangesets, -1);
 }
 
 QString OsmAccount::historyUrl() const
@@ -77,9 +72,7 @@ QString OsmAccount::notesUrl() const
 
 QString OsmAccount::imageUrl() const
 {
-  std::string url;
-  settings::TryGet(kImageUrl, url);
-  return QString::fromStdString(url);
+  return QString::fromStdString(LoadSetting(kImageUrl, std::string()));
 }
 
 QString OsmAccount::registrationUrl() const
@@ -193,6 +186,8 @@ void OsmAccount::LoadProfile()
 
 void OsmAccount::uploadChanges()
 {
+  // A new edit or note counts even when it can't go up yet.
+  updateEdits();
   auto const token = Token();
   if (token.empty() || m_uploading)
     return;

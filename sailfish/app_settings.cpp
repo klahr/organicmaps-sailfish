@@ -2,6 +2,7 @@
 
 #include "sailfish/app_info.hpp"
 #include "sailfish/file_log.hpp"
+#include "sailfish/helpers.hpp"
 
 #include "map/framework.hpp"
 
@@ -31,13 +32,6 @@ std::string_view constexpr kAutoNightInNavigation = "AutoDarkNavigation";
 std::string_view constexpr kSearchHistory = "SailfishSearchHistory";
 std::string_view constexpr kAutoDownload = "SailfishAutoDownload";
 std::string_view constexpr kMobileData = "SailfishMobileData";
-
-template <typename T>
-T Load(std::string_view key, T defaultValue)
-{
-  T value;
-  return settings::Get(key, value) ? value : defaultValue;
-}
 }  // namespace
 
 MapStyle BaseMapStyle(bool dark, bool outdoors)
@@ -51,7 +45,7 @@ AppSettings::AppSettings(Framework & framework, QObject * parent) : QObject(pare
 
 int AppSettings::mapAppearance() const
 {
-  return Load<int>(kMapAppearance, AppearanceAuto);
+  return LoadSetting<int>(kMapAppearance, AppearanceAuto);
 }
 
 void AppSettings::setMapAppearance(int appearance)
@@ -83,7 +77,7 @@ void AppSettings::setUnits(int units)
 
 bool AppSettings::zoomButtons() const
 {
-  return Load(kZoomButtons, true);
+  return LoadSetting(kZoomButtons, true);
 }
 
 void AppSettings::setZoomButtons(bool enabled)
@@ -128,7 +122,7 @@ void AppSettings::setTransliteration(bool enabled)
 
 bool AppSettings::keepScreenOn() const
 {
-  return Load(kKeepScreenOn, false);
+  return LoadSetting(kKeepScreenOn, false);
 }
 
 void AppSettings::setKeepScreenOn(bool enabled)
@@ -139,7 +133,7 @@ void AppSettings::setKeepScreenOn(bool enabled)
 
 bool AppSettings::IsSearchHistoryEnabled()
 {
-  return Load(kSearchHistory, true);
+  return LoadSetting(kSearchHistory, true);
 }
 
 bool AppSettings::searchHistory() const
@@ -219,7 +213,7 @@ void AppSettings::setPerspectiveView(bool enabled)
 
 bool AppSettings::editsPublicNoticeShown() const
 {
-  return Load(kEditsPublicNoticeShown, false);
+  return LoadSetting(kEditsPublicNoticeShown, false);
 }
 
 void AppSettings::setEditsPublicNoticeShown(bool shown)
@@ -252,12 +246,12 @@ qint64 AppSettings::logSize() const
 
 void AppSettings::InitLogging()
 {
-  file_log::Enable(Load(kLogging, false));
+  file_log::Enable(LoadSetting(kLogging, false));
 }
 
 bool AppSettings::autoNightInNavigation() const
 {
-  return Load(kAutoNightInNavigation, false);
+  return LoadSetting(kAutoNightInNavigation, false);
 }
 
 void AppSettings::setAutoNightInNavigation(bool enabled)
@@ -280,7 +274,7 @@ void AppSettings::setAutoZoom(bool enabled)
 
 bool AppSettings::IsAutoDownloadEnabled()
 {
-  return Load(kAutoDownload, true);
+  return LoadSetting(kAutoDownload, true);
 }
 
 void AppSettings::setAutoDownload(bool enabled)
@@ -291,7 +285,7 @@ void AppSettings::setAutoDownload(bool enabled)
 
 int AppSettings::mobileData() const
 {
-  return Load(kMobileData, static_cast<int>(MobileDataAsk));
+  return LoadSetting(kMobileData, static_cast<int>(MobileDataAsk));
 }
 
 void AppSettings::setMobileData(int mobileData)
@@ -391,6 +385,6 @@ bool AppSettings::isWellFormedTilesUrl(QString const & url) const
 
 QString AppSettings::donateUrl() const
 {
-  return QString::fromStdString(Load<std::string>(settings::kDonateUrl, {}));
+  return QString::fromStdString(LoadSetting<std::string>(settings::kDonateUrl, {}));
 }
 }  // namespace sailfish

@@ -9,6 +9,7 @@ Dialog {
     property string title
     property string message
     property string acceptText
+    property string cancelText
     property var acceptAction
 
     allowedOrientations: Orientation.All
@@ -26,6 +27,7 @@ Dialog {
 
         DialogHeader {
             acceptText: dialog.acceptText !== "" ? dialog.acceptText : defaultAcceptText
+            cancelText: dialog.cancelText !== "" ? dialog.cancelText : defaultCancelText
         }
         Label {
             x: Theme.horizontalPageMargin

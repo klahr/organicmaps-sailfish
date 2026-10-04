@@ -47,7 +47,9 @@ Page {
             }
             MenuItem {
                 text: appInfo.localized("bookmarks_create_new_group")
-                onClicked: pageStack.push(Qt.resolvedUrl("NewListDialog.qml"), { categories: categories })
+                onClicked: pageStack.push(Qt.resolvedUrl("NewListDialog.qml"), {
+                    createAction: function(name) { categories.createCategory(name) }
+                })
             }
         }
 

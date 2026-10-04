@@ -3,8 +3,6 @@ import Sailfish.Silica 1.0
 
 // Reports a place as gone with a note and the reason, like "Place does not exist" on Android.
 Dialog {
-    id: dialog
-
     property QtObject placeEditor
     // Where to return to, past the editor.
     property Item returnPage
@@ -15,7 +13,6 @@ Dialog {
     onAccepted: {
         appSettings.editsPublicNoticeShown = true
         placeEditor.placeDoesntExist(commentField.text)
-        osmAccount.updateEdits()
         osmAccount.uploadChanges()
     }
 

@@ -21,9 +21,10 @@ class Storage;
 namespace sailfish
 {
 // A map that isn't downloaded yet, or is on its way, as {countryId, name, size, status, progress}; empty
-// otherwise. For the on-map and place page downloaders.
-QVariantMap MissingMapInfo(storage::Storage const & storage, storage::CountryId const & countryId);
-// Downloads the map, or retries it after an error.
+// otherwise. For the on-map and place page downloaders. withOutdated includes an outdated map, marked outdated.
+QVariantMap MissingMapInfo(storage::Storage const & storage, storage::CountryId const & countryId,
+                           bool withOutdated = false);
+// Downloads the map, retries it after an error, or updates an outdated one.
 void DownloadMap(storage::Storage & storage, storage::CountryId const & countryId);
 // MissingMapInfo() of the map at the position; empty without a position.
 QVariantMap PositionMapInfo();
@@ -114,18 +115,18 @@ public:
   QVariant data(QModelIndex const & index, int role) const override;
   QHash<int, QByteArray> roleNames() const override;
 
+  // Downloads, retries or updates, see DownloadMap().
   Q_INVOKABLE void download(QString const & countryId);
   Q_INVOKABLE void cancel(QString const & countryId);
   Q_INVOKABLE void remove(QString const & countryId);
-  Q_INVOKABLE void update(QString const & countryId);
-  Q_INVOKABLE void retry(QString const & countryId);
   Q_INVOKABLE void showOnMap(QString const & countryId);
   // Updates all outdated maps, like "Update all" on Android.
   Q_INVOKABLE void updateAll();
   // Cancels all downloads, like Cancel in the Android download notification.
   Q_INVOKABLE void cancelAll();
   // Checks before downloading, updating and deleting, like MapManagerHelper and DownloaderAdapter on Android.
-  Q_INVOKABLE bool hasSpaceToDownload(QString const & countryId) const;
+  // Space for download(): its download, or its update when outdated.
+  Q_INVOKABLE bool hasSpaceFor(QString const & countryId) const;
   Q_INVOKABLE bool hasSpaceToUpdate(QString const & countryId) const;
   Q_INVOKABLE bool hasUnsavedEdits(QString const & countryId) const;
   Q_INVOKABLE bool navigating() const;

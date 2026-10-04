@@ -11,9 +11,6 @@ class Framework;
 
 namespace sailfish
 {
-// The preset colors of bookmarks and tracks as "#rrggbb", in the order of the pickers of the other platforms.
-QStringList PresetColors();
-
 // Forwards BookmarkManager changes (edits, finished loading) to every bookmarks model.
 class BookmarksNotifier : public QObject
 {
@@ -94,7 +91,6 @@ class BookmarksModel : public QAbstractListModel
   Q_PROPERTY(QVariantList sortingTypes READ sortingTypes NOTIFY categoryInfoChanged)
   // Shows only the items with this text in their names.
   Q_PROPERTY(QString filter READ filter WRITE setFilter NOTIFY filterChanged)
-  Q_PROPERTY(QStringList colors READ colors CONSTANT)
   // Lists to move items to as {id, name}.
   Q_PROPERTY(QVariantList categories READ categories NOTIFY categoryInfoChanged)
 
@@ -141,7 +137,6 @@ public:
   QVariantList sortingTypes() const;
   QString filter() const { return m_filter; }
   void setFilter(QString const & filter);
-  QStringList colors() const { return PresetColors(); }
   QVariantList categories() const;
 
   Q_INVOKABLE void showOnMap(int row);
@@ -179,8 +174,10 @@ private:
   void Reset();
   void SetItems(std::vector<Item> && items);
   bool Matches(Item const & item) const;
+  // The item of a row, null for another row.
+  Item const * ItemAt(int row) const;
   QString ItemName(Item const & item) const;
-  // The bookmarks and tracks of rows, or of all items.
+  // The bookmarks and tracks of rows.
   void CollectIds(QVariantList const & rows, std::vector<uint64_t> & marks, std::vector<uint64_t> & tracks) const;
 
   Framework & m_framework;

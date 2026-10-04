@@ -2,6 +2,7 @@
 
 #include "sailfish/app_info.hpp"
 #include "sailfish/framework_access.hpp"
+#include "sailfish/helpers.hpp"
 
 #include "map/framework.hpp"
 #include "map/search_api.hpp"
@@ -42,40 +43,36 @@ static_assert(CountriesModel::UnknownError == static_cast<int>(NodeErrorCode::Un
 static_assert(CountriesModel::OutOfMemFailed == static_cast<int>(NodeErrorCode::OutOfMemFailed));
 static_assert(CountriesModel::NoInetConnection == static_cast<int>(NodeErrorCode::NoInetConnection));
 
-storage::NodeAttrs GetAttrs(storage::Storage const & storage, storage::CountryId const & countryId)
-{
-  storage::NodeAttrs attrs;
-  storage.GetNodeAttrs(countryId, attrs);
-  return attrs;
-}
-
 storage::CountryId ToCountryId(QString const & countryId)
 {
   return countryId.toStdString();
 }
 }  // namespace
 
-QVariantMap MissingMapInfo(storage::Storage const & storage, storage::CountryId const & countryId)
+QVariantMap MissingMapInfo(storage::Storage const & storage, storage::CountryId const & countryId, bool withOutdated)
 {
   QVariantMap country;
   if (countryId.empty())
     return country;
-  auto const attrs = GetAttrs(storage, countryId);
+  auto const attrs = MapAttrs(storage, countryId);
   switch (attrs.m_status)
   {
+  case NodeStatus::OnDiskOutOfDate:
+    if (!withOutdated)
+      break;
+    country["outdated"] = true;
+    [[fallthrough]];
   case NodeStatus::NotDownloaded:
   case NodeStatus::Downloading:
   case NodeStatus::Applying:
   case NodeStatus::InQueue:
   case NodeStatus::Error:
   {
-    auto const & progress = attrs.m_downloadingProgress;
     country["countryId"] = QString::fromStdString(countryId);
     country["name"] = QString::fromStdString(attrs.m_nodeLocalName);
     country["size"] = FormatSize(static_cast<qint64>(attrs.m_mwmSize));
     country["status"] = static_cast<int>(attrs.m_status);
-    country["progress"] =
-        progress.m_bytesTotal > 0 ? static_cast<double>(progress.m_bytesDownloaded) / progress.m_bytesTotal : 0.0;
+    country["progress"] = ProgressFraction(attrs.m_downloadingProgress);
     break;
   }
   default: break;
@@ -85,8 +82,11 @@ QVariantMap MissingMapInfo(storage::Storage const & storage, storage::CountryId 
 
 void DownloadMap(storage::Storage & storage, storage::CountryId const & countryId)
 {
-  if (GetAttrs(storage, countryId).m_status == NodeStatus::Error)
+  auto const status = MapAttrs(storage, countryId).m_status;
+  if (status == NodeStatus::Error)
     storage.RetryDownloadNode(countryId);
+  else if (status == NodeStatus::OnDiskOutOfDate)
+    storage.UpdateNode(countryId);
   else
     storage.DownloadNode(countryId);
 }
@@ -136,7 +136,7 @@ void CountriesModel::setParentId(QString const & parentId)
 
 QString CountriesModel::title() const
 {
-  return QString::fromStdString(GetAttrs(m_storage, m_parentId).m_nodeLocalName);
+  return QString::fromStdString(MapAttrs(m_storage, m_parentId).m_nodeLocalName);
 }
 
 bool CountriesModel::downloadInProgress() const
@@ -209,7 +209,7 @@ void CountriesModel::SetChildren(storage::CountriesVec && children)
   std::vector<std::pair<QString, storage::CountryId>> named;
   named.reserve(children.size());
   for (auto & id : children)
-    named.emplace_back(QString::fromStdString(GetAttrs(m_storage, id).m_nodeLocalName), std::move(id));
+    named.emplace_back(QString::fromStdString(MapAttrs(m_storage, id).m_nodeLocalName), std::move(id));
   std::sort(named.begin(), named.end(),
             [&collator](auto const & lhs, auto const & rhs) { return collator.compare(lhs.first, rhs.first) < 0; });
 
@@ -223,7 +223,7 @@ void CountriesModel::SetChildren(storage::CountriesVec && children)
       storage::CountriesVec near;
       framework.GetCountryInfoGetter().GetRegionsCountryId(*position, near);
       for (auto const & id : near)
-        if (!GetAttrs(m_storage, id).m_present)
+        if (!MapAttrs(m_storage, id).m_present)
           result.push_back(id);
     }
   }
@@ -238,17 +238,15 @@ void CountriesModel::SetChildren(storage::CountriesVec && children)
 
 void CountriesModel::OnProgress(storage::CountryId const & countryId, downloader::Progress const & progress)
 {
-  m_downloadingName = QString::fromStdString(GetAttrs(m_storage, countryId).m_nodeLocalName);
-  m_downloadingProgress = progress.IsUnknown() || progress.m_bytesTotal <= 0
-                            ? 0.0
-                            : static_cast<double>(progress.m_bytesDownloaded) / progress.m_bytesTotal;
+  m_downloadingName = QString::fromStdString(MapAttrs(m_storage, countryId).m_nodeLocalName);
+  m_downloadingProgress = ProgressFraction(progress);
   emit downloadingChanged();
 }
 
 void CountriesModel::OnCountryChanged(storage::CountryId const & countryId)
 {
   // A map that finished downloading or was deleted moves between the downloaded and available lists.
-  auto const attrs = GetAttrs(m_storage, countryId);
+  auto const attrs = MapAttrs(m_storage, countryId);
   auto const status = attrs.m_status;
   if (status == NodeStatus::Error)
     emit downloadFailed(QString::fromStdString(attrs.m_nodeLocalName));
@@ -298,8 +296,7 @@ void CountriesModel::updateAll()
 
 bool CountriesModel::shouldOfferUpdate() const
 {
-  int64_t offered = 0;
-  settings::TryGet(kUpdateOfferedSetting, offered);
+  auto const offered = LoadSetting<int64_t>(kUpdateOfferedSetting, 0);
   return updateCount() > 0 && offered != m_storage.GetCurrentDataVersion() &&
          storage::IsEnoughSpaceForUpdate(m_storage.GetRootId(), m_storage);
 }
@@ -325,7 +322,7 @@ QVariant CountriesModel::data(QModelIndex const & index, int role) const
   if (role == IsGroupRole)
     return !m_storage.IsLeaf(countryId);
 
-  auto const attrs = GetAttrs(m_storage, countryId);
+  auto const attrs = MapAttrs(m_storage, countryId);
   switch (role)
   {
   case NameRole: return QString::fromStdString(attrs.m_nodeLocalName);
@@ -351,13 +348,7 @@ QVariant CountriesModel::data(QModelIndex const & index, int role) const
   case ParentNameRole:
     return attrs.m_topmostParentInfo.empty() ? QString()
                                              : QString::fromStdString(attrs.m_topmostParentInfo.front().m_localName);
-  case ProgressRole:
-  {
-    auto const & progress = attrs.m_downloadingProgress;
-    if (progress.IsUnknown() || progress.m_bytesTotal <= 0)
-      return 0.0;
-    return static_cast<double>(progress.m_bytesDownloaded) / progress.m_bytesTotal;
-  }
+  case ProgressRole: return ProgressFraction(attrs.m_downloadingProgress);
   default: return {};
   }
 }
@@ -384,12 +375,15 @@ QHash<int, QByteArray> CountriesModel::roleNames() const
 
 void CountriesModel::download(QString const & countryId)
 {
-  m_storage.DownloadNode(ToCountryId(countryId));
+  DownloadMap(m_storage, ToCountryId(countryId));
 }
 
-bool CountriesModel::hasSpaceToDownload(QString const & countryId) const
+bool CountriesModel::hasSpaceFor(QString const & countryId) const
 {
-  return storage::IsEnoughSpaceForDownload(ToCountryId(countryId), m_storage);
+  auto const id = ToCountryId(countryId);
+  if (MapAttrs(m_storage, id).m_status == NodeStatus::OnDiskOutOfDate)
+    return storage::IsEnoughSpaceForUpdate(id, m_storage);
+  return storage::IsEnoughSpaceForDownload(id, m_storage);
 }
 
 bool CountriesModel::hasSpaceToUpdate(QString const & countryId) const
@@ -409,7 +403,7 @@ bool CountriesModel::navigating() const
 
 int CountriesModel::parentStatus() const
 {
-  return static_cast<int>(GetAttrs(m_storage, m_parentId).m_status);
+  return static_cast<int>(MapAttrs(m_storage, m_parentId).m_status);
 }
 
 void CountriesModel::cancelAll()
@@ -425,16 +419,6 @@ void CountriesModel::cancel(QString const & countryId)
 void CountriesModel::remove(QString const & countryId)
 {
   m_storage.DeleteNode(ToCountryId(countryId));
-}
-
-void CountriesModel::update(QString const & countryId)
-{
-  m_storage.UpdateNode(ToCountryId(countryId));
-}
-
-void CountriesModel::retry(QString const & countryId)
-{
-  m_storage.RetryDownloadNode(ToCountryId(countryId));
 }
 
 void CountriesModel::showOnMap(QString const & countryId)

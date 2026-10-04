@@ -23,6 +23,8 @@ set(SRC
   file_log.cpp
   file_log.hpp
   framework_access.hpp
+  helpers.cpp
+  helpers.hpp
   map_item.cpp
   maps_storage.cpp
   maps_storage.hpp

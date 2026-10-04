@@ -240,6 +240,10 @@ signals:
 
 private:
   void AddPlacePoint(int type);
+  // The place of the place page as a route point, which closes the place page; false without a place.
+  bool TakePlacePoint(RouteMarkData & point);
+  // Makes the router type current and the default of new routes.
+  void UseRouter(int type);
   // Adds or replaces a route point; a finish without a start starts from the position, like on Android.
   void AddPoint(RouteMarkData && point);
   // Puts the point into the picked slot.

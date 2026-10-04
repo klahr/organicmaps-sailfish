@@ -6,7 +6,6 @@ Page {
     id: page
 
     property string title
-    property var colors: []
     property var chosen
 
     allowedOrientations: Orientation.All
@@ -22,33 +21,12 @@ Page {
             PageHeader {
                 title: page.title
             }
-            Grid {
-                id: grid
-
-                readonly property real size: Theme.itemSizeSmall
-
-                x: Theme.horizontalPageMargin
-                width: parent.width - 2 * x
+            ColorGrid {
+                size: Theme.itemSizeSmall
                 spacing: Theme.paddingLarge
-                columns: Math.max(1, Math.floor((width + spacing) / (size + spacing)))
-
-                Repeater {
-                    model: page.colors
-
-                    Rectangle {
-                        width: grid.size
-                        height: width
-                        radius: width / 2
-                        color: modelData
-
-                        MouseArea {
-                            anchors.fill: parent
-                            onClicked: {
-                                page.chosen(index)
-                                pageStack.pop()
-                            }
-                        }
-                    }
+                onColorClicked: {
+                    page.chosen(index)
+                    pageStack.pop()
                 }
             }
         }

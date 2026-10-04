@@ -50,8 +50,7 @@ Dialog {
                         var option = modelData
                         pageStack.push(Qt.resolvedUrl("ColorPickerPage.qml"), {
                             title: option.text,
-                            colors: bookmarks.colors,
-                            chosen: function(colorIndex) {
+                                    chosen: function(colorIndex) {
                                 bookmarks.setAllColor(option.tracks, colorIndex)
                                 Notices.show(option.done, Notice.Short, Notice.Center)
                             }

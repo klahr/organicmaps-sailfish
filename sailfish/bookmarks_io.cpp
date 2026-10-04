@@ -2,6 +2,7 @@
 
 #include "sailfish/app_info.hpp"
 #include "sailfish/bookmarks_model.hpp"
+#include "sailfish/helpers.hpp"
 
 #include "map/bookmark_helpers.hpp"
 #include "map/bookmark_manager.hpp"
@@ -83,9 +84,7 @@ void BookmarksIO::setBackupFolder(QString const & folder)
 
 int BookmarksIO::backupPeriod() const
 {
-  int days = kDefaultBackupPeriodDays;
-  settings::TryGet(kBackupPeriodSetting, days);
-  return days;
+  return LoadSetting(kBackupPeriodSetting, kDefaultBackupPeriodDays);
 }
 
 void BookmarksIO::setBackupPeriod(int days)

@@ -4,8 +4,6 @@ import Sailfish.Silica 1.0
 // A track's statistics and elevation profile, like the Android elevation profile on the track place page.
 // Tapping the chart marks that point of the track on the map.
 Column {
-    id: root
-
     // MapItem.placePage.
     property QtObject placePage
 

@@ -14,23 +14,12 @@ Page {
         Notices.show(appInfo.localized("downloader_no_space_title") + ". " + appInfo.localized("downloader_no_space_message"),
                      Notice.Long, Notice.Center)
     }
+    // Downloads, retries or updates.
     function download(id) {
-        if (!countries.hasSpaceToDownload(id))
+        if (!countries.hasSpaceFor(id))
             noSpace()
         else
             Downloads.start(pageStack, function() { countries.download(id) })
-    }
-    function retry(id) {
-        if (!countries.hasSpaceToDownload(id))
-            noSpace()
-        else
-            Downloads.start(pageStack, function() { countries.retry(id) })
-    }
-    function update(id) {
-        if (!countries.hasSpaceToUpdate(id))
-            noSpace()
-        else
-            Downloads.start(pageStack, function() { countries.update(id) })
     }
     // Maps can't be deleted while navigating, and edits not uploaded yet would go with them, as on Android.
     function remove(item, countryId) {
@@ -161,9 +150,7 @@ Page {
         delegate: ListItem {
             id: item
 
-            readonly property bool busy: model.status === CountriesModel.Downloading
-                                         || model.status === CountriesModel.InQueue
-                                         || model.status === CountriesModel.Applying
+            readonly property bool busy: Downloads.busy(model.status)
             readonly property bool hasLocal: model.status === CountriesModel.OnDisk
                                              || model.status === CountriesModel.OnDiskOutOfDate
                                              || model.status === CountriesModel.Partly
@@ -176,10 +163,8 @@ Page {
                 if (model.isGroup)
                     pageStack.push(Qt.resolvedUrl("MapsPage.qml"),
                                    { parentId: model.countryId, downloadedOnly: page.downloadedOnly && !page.searching })
-                else if (model.status === CountriesModel.NotDownloaded)
+                else if (model.status === CountriesModel.NotDownloaded || model.status === CountriesModel.Error)
                     page.download(model.countryId)
-                else if (model.status === CountriesModel.Error)
-                    page.retry(model.countryId)
                 else if (model.status === CountriesModel.OnDisk)
                     page.showOnMap(model.countryId)
                 else
@@ -276,12 +261,12 @@ Page {
                     MenuItem {
                         text: appInfo.localized("downloader_retry")
                         visible: model.status === CountriesModel.Error
-                        onClicked: page.retry(model.countryId)
+                        onClicked: page.download(model.countryId)
                     }
                     MenuItem {
                         text: appInfo.localized("downloader_update_map")
                         visible: model.status === CountriesModel.OnDiskOutOfDate
-                        onClicked: page.update(model.countryId)
+                        onClicked: page.download(model.countryId)
                     }
                     MenuItem {
                         text: appInfo.localized("cancel_download")
@@ -309,33 +294,15 @@ Page {
             hintText: appInfo.localized("downloader_no_downloaded_maps_message")
         }
         // The map of the position, or the list of all maps, like the Android "no maps" screen.
-        Column {
-            readonly property var map: countries.positionMap
-            readonly property bool busy: map.status === CountriesModel.Downloading
-                                         || map.status === CountriesModel.InQueue
-                                         || map.status === CountriesModel.Applying
+        PositionMapButtons {
             anchors {
                 bottom: parent.bottom
                 bottomMargin: Theme.itemSizeLarge
-                horizontalCenter: parent.horizontalCenter
             }
+            width: parent.width
             visible: noMapsPlaceholder.enabled
-            spacing: Theme.paddingLarge
-
-            Button {
-                anchors.horizontalCenter: parent.horizontalCenter
-                visible: !!parent.map.countryId
-                enabled: !parent.busy
-                text: parent.busy ? appInfo.localized("downloader_downloading") + " "
-                                    + Math.round((parent.map.progress || 0) * 100) + "%"
-                                  : appInfo.localized("downloader_download_map") + " (" + parent.map.size + ")"
-                onClicked: page.download(parent.map.countryId)
-            }
-            Button {
-                anchors.horizontalCenter: parent.horizontalCenter
-                text: appInfo.localized("search_select_map")
-                onClicked: pageStack.push(Qt.resolvedUrl("MapsPage.qml"), { downloadedOnly: false })
-            }
+            map: countries.positionMap
+            onDownloadClicked: page.download(countryId)
         }
 
         VerticalScrollDecorator {}

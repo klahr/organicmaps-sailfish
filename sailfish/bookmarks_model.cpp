@@ -1,6 +1,7 @@
 #include "sailfish/bookmarks_model.hpp"
 
 #include "sailfish/framework_access.hpp"
+#include "sailfish/helpers.hpp"
 
 #include "map/bookmark_helpers.hpp"
 #include "map/bookmark_manager.hpp"
@@ -30,24 +31,15 @@ static_assert(BookmarksModel::ByDistance == static_cast<int>(BookmarkManager::So
 static_assert(BookmarksModel::ByTime == static_cast<int>(BookmarkManager::SortingType::ByTime));
 static_assert(BookmarksModel::ByName == static_cast<int>(BookmarkManager::SortingType::ByName));
 
-QString ColorName(dp::Color const & color)
+std::vector<std::string> ToStdStrings(QStringList const & strings)
 {
-  return QStringLiteral("#%1").arg(color.GetRGBA() >> 8, 6, 16, QLatin1Char('0'));
+  std::vector<std::string> result;
+  for (auto const & s : strings)
+    result.push_back(s.toStdString());
+  return result;
 }
 
-dp::Color PresetColor(int index)
-{
-  return kml::ColorFromPredefinedColor(kml::kOrderedPredefinedColors[static_cast<size_t>(index)]);
-}
 }  // namespace
-
-QStringList PresetColors()
-{
-  QStringList colors;
-  for (auto const preset : kml::kOrderedPredefinedColors)
-    colors.append(ColorName(kml::ColorFromPredefinedColor(preset)));
-  return colors;
-}
 
 BookmarksNotifier & BookmarksNotifier::Instance()
 {
@@ -147,9 +139,7 @@ void BookmarkCategoriesModel::setVisible(int row, bool visible)
 
 void BookmarkCategoriesModel::createCategory(QString const & name)
 {
-  auto & manager = m_framework.GetBookmarkManager();
-  // New bookmarks go to the newest list, like on Android.
-  manager.SetLastEditedBmCategory(manager.CreateBookmarkCategory(name.trimmed().toStdString()));
+  CreateBookmarkList(m_framework.GetBookmarkManager(), name);
   Reset();
 }
 
@@ -188,20 +178,14 @@ QVariantList BookmarkCategoriesModel::recentlyDeleted() const
 
 void BookmarkCategoriesModel::recoverDeleted(QStringList const & paths)
 {
-  std::vector<std::string> files;
-  for (auto const & path : paths)
-    files.push_back(path.toStdString());
   // The recovered lists load in the background; the changed callback follows.
-  m_framework.GetBookmarkManager().RecoverRecentlyDeletedCategoriesAtPaths(files);
+  m_framework.GetBookmarkManager().RecoverRecentlyDeletedCategoriesAtPaths(ToStdStrings(paths));
   emit recentlyDeletedChanged();
 }
 
 void BookmarkCategoriesModel::deleteForever(QStringList const & paths)
 {
-  std::vector<std::string> files;
-  for (auto const & path : paths)
-    files.push_back(path.toStdString());
-  m_framework.GetBookmarkManager().DeleteRecentlyDeletedCategoriesAtPaths(files);
+  m_framework.GetBookmarkManager().DeleteRecentlyDeletedCategoriesAtPaths(ToStdStrings(paths));
   emit recentlyDeletedChanged();
 }
 
@@ -443,50 +427,52 @@ QHash<int, QByteArray> BookmarksModel::roleNames() const
           {BlockRole, "block"}, {ColorRole, "color"},     {DistanceRole, "distance"}, {VisibleRole, "isVisible"}};
 }
 
+BookmarksModel::Item const * BookmarksModel::ItemAt(int row) const
+{
+  return row >= 0 && row < rowCount() ? &m_items[static_cast<size_t>(row)] : nullptr;
+}
+
 void BookmarksModel::showOnMap(int row)
 {
-  if (row < 0 || row >= rowCount())
+  auto const * item = ItemAt(row);
+  if (!item)
     return;
-  auto const & item = m_items[static_cast<size_t>(row)];
-  if (item.m_isTrack)
-    m_framework.ShowTrack(item.m_id);
+  if (item->m_isTrack)
+    m_framework.ShowTrack(item->m_id);
   else
-    m_framework.ShowBookmark(item.m_id);
+    m_framework.ShowBookmark(item->m_id);
 }
 
 QString BookmarksModel::shareText(int row) const
 {
-  if (row < 0 || row >= rowCount() || m_items[static_cast<size_t>(row)].m_isTrack)
+  auto const * item = ItemAt(row);
+  if (!item || item->m_isTrack)
     return {};
-  return QString::fromStdString(m_framework.GetShareDataForBookmark(m_items[static_cast<size_t>(row)].m_id).m_text);
+  return QString::fromStdString(m_framework.GetShareDataForBookmark(item->m_id).m_text);
 }
 
 void BookmarksModel::remove(int row)
 {
-  if (row < 0 || row >= rowCount())
+  auto const * item = ItemAt(row);
+  if (!item)
     return;
-  auto const & item = m_items[static_cast<size_t>(row)];
   auto session = m_framework.GetBookmarkManager().GetEditSession();
-  if (item.m_isTrack)
-    session.DeleteTrack(item.m_id);
+  if (item->m_isTrack)
+    session.DeleteTrack(item->m_id);
   else
-    session.DeleteBookmark(item.m_id);
+    session.DeleteBookmark(item->m_id);
 }
 QVariantList BookmarksModel::categories() const
 {
-  QVariantList result;
-  auto const & manager = m_framework.GetBookmarkManager();
-  for (auto const id : manager.GetSortedBmGroupIdList())
-    result.append(QVariantMap{{"id", QVariant::fromValue<quint64>(id)},
-                              {"name", QString::fromStdString(manager.GetCategoryName(id))}});
-  return result;
+  return BookmarkLists(m_framework.GetBookmarkManager());
 }
 
 void BookmarksModel::setTrackVisible(int row, bool visible)
 {
-  if (row < 0 || row >= rowCount() || !m_items[static_cast<size_t>(row)].m_isTrack)
+  auto const * item = ItemAt(row);
+  if (!item || !item->m_isTrack)
     return;
-  m_framework.SetTrackVisibility(m_items[static_cast<size_t>(row)].m_id, visible);
+  m_framework.SetTrackVisibility(item->m_id, visible);
   // Visibility doesn't trigger the changed callback.
   emit dataChanged(index(row), index(row), {VisibleRole});
 }
@@ -495,13 +481,8 @@ void BookmarksModel::CollectIds(QVariantList const & rows, std::vector<uint64_t>
                                 std::vector<uint64_t> & tracks) const
 {
   for (auto const & row : rows)
-  {
-    auto const r = row.toInt();
-    if (r < 0 || r >= rowCount())
-      continue;
-    auto const & item = m_items[static_cast<size_t>(r)];
-    (item.m_isTrack ? tracks : marks).push_back(item.m_id);
-  }
+    if (auto const * item = ItemAt(row.toInt()))
+      (item->m_isTrack ? tracks : marks).push_back(item->m_id);
 }
 
 void BookmarksModel::removeRows(QVariantList const & rows)
@@ -523,17 +504,19 @@ void BookmarksModel::moveRows(QVariantList const & rows, quint64 categoryId)
 
 void BookmarksModel::setRowsColor(QVariantList const & rows, int colorIndex)
 {
-  if (colorIndex < 0 || colorIndex >= static_cast<int>(kml::kOrderedPredefinedColors.size()))
+  auto const color = PresetColor(colorIndex);
+  if (!color)
     return;
   kml::MarkIdCollection marks;
   kml::TrackIdCollection tracks;
   CollectIds(rows, marks, tracks);
-  m_framework.GetBookmarkManager().GetEditSession().SetBookmarksAndTracksColor(marks, tracks, PresetColor(colorIndex));
+  m_framework.GetBookmarkManager().GetEditSession().SetBookmarksAndTracksColor(marks, tracks, *color);
 }
 
 void BookmarksModel::setAllColor(bool tracks, int colorIndex)
 {
-  if (colorIndex < 0 || colorIndex >= static_cast<int>(kml::kOrderedPredefinedColors.size()))
+  auto const color = PresetColor(colorIndex);
+  if (!color)
     return;
   auto const & manager = m_framework.GetBookmarkManager();
   kml::MarkIdCollection marks;
@@ -548,14 +531,11 @@ void BookmarksModel::setAllColor(bool tracks, int colorIndex)
     auto const & ids = manager.GetUserMarkIds(m_categoryId);
     marks.assign(ids.begin(), ids.end());
   }
-  m_framework.GetBookmarkManager().GetEditSession().SetBookmarksAndTracksColor(marks, trackIds,
-                                                                               PresetColor(colorIndex));
+  m_framework.GetBookmarkManager().GetEditSession().SetBookmarksAndTracksColor(marks, trackIds, *color);
 }
 void BookmarksModel::moveRowsToNewList(QVariantList const & rows, QString const & name)
 {
-  auto & manager = m_framework.GetBookmarkManager();
-  auto const id = manager.CreateBookmarkCategory(name.trimmed().toStdString());
-  moveRows(rows, id);
+  moveRows(rows, CreateBookmarkList(m_framework.GetBookmarkManager(), name));
 }
 
 void BookmarksModel::showListOnMap()

@@ -140,7 +140,16 @@ Page {
             MenuItem {
                 visible: !page.selecting
                 text: appInfo.localized("sort_bookmarks")
-                onClicked: pageStack.push(sortPage)
+                onClicked: {
+                    var types = [-1].concat(bookmarks.sortingTypes)
+                    pageStack.push(Qt.resolvedUrl("ListPickerPage.qml"), {
+                        title: appInfo.localized("sort_bookmarks"),
+                        items: types.map(function(type) {
+                            return { name: page.sortingName(type), selected: type === bookmarks.sortingType }
+                        }),
+                        picked: function(index) { bookmarks.sortingType = types[index] }
+                    })
+                }
             }
         }
 
@@ -169,13 +178,10 @@ Page {
             }
 
             // The item color, like the Android list icons; a check mark while selected.
-            Rectangle {
+            ColorDot {
                 id: colorDot
                 x: Theme.horizontalPageMargin
                 anchors.verticalCenter: parent.verticalCenter
-                width: Theme.iconSizeSmall
-                height: width
-                radius: width / 2
                 color: model.color || "transparent"
 
                 Icon {
@@ -276,42 +282,8 @@ Page {
         VerticalScrollDecorator {}
     }
 
-    // The sortings offered for the list, like the Android sorting sheet.
-    Component {
-        id: sortPage
-
-        Page {
-            allowedOrientations: Orientation.All
-
-            SilicaListView {
-                anchors.fill: parent
-                header: PageHeader {
-                    title: appInfo.localized("sort_bookmarks")
-                }
-                model: [-1].concat(bookmarks.sortingTypes)
-
-                delegate: ListItem {
-                    highlighted: down || modelData === bookmarks.sortingType
-                    onClicked: {
-                        bookmarks.sortingType = modelData
-                        pageStack.pop()
-                    }
-
-                    Label {
-                        x: Theme.horizontalPageMargin
-                        width: parent.width - 2 * x
-                        anchors.verticalCenter: parent.verticalCenter
-                        text: page.sortingName(modelData)
-                        highlighted: parent.highlighted
-                    }
-                }
-            }
-        }
-    }
-
     // Actions on the selected items.
     DockedPanel {
-        id: selectionPanel
         width: parent.width
         height: selectionButtons.height + 2 * Theme.paddingLarge
         dock: Dock.Bottom
@@ -324,13 +296,32 @@ Page {
 
             Button {
                 text: appInfo.localized("move")
-                onClicked: pageStack.push(movePage)
+                onClicked: {
+                    var rows = page.selected
+                    var lists = bookmarks.categories.filter(function(list) { return list.id !== bookmarks.categoryId })
+                    pageStack.push(Qt.resolvedUrl("ListPickerPage.qml"), {
+                        title: appInfo.localized("select_list"),
+                        items: lists,
+                        picked: function(index) {
+                            bookmarks.moveRows(rows, lists[index].id)
+                            page.selecting = false
+                        },
+                        addText: appInfo.localized("add_new_set"),
+                        addAction: function() {
+                            pageStack.replace(Qt.resolvedUrl("NewListDialog.qml"), {
+                                createAction: function(name) {
+                                    bookmarks.moveRowsToNewList(rows, name)
+                                    page.selecting = false
+                                }
+                            })
+                        }
+                    })
+                }
             }
             Button {
                 text: appInfo.localized("change_color")
                 onClicked: pageStack.push(Qt.resolvedUrl("ColorPickerPage.qml"), {
                     title: appInfo.localized("change_color"),
-                    colors: bookmarks.colors,
                     chosen: function(colorIndex) {
                         bookmarks.setRowsColor(page.selected, colorIndex)
                         page.selecting = false
@@ -345,56 +336,6 @@ Page {
                         bookmarks.removeRows(rows)
                         page.selecting = false
                     })
-                }
-            }
-        }
-    }
-
-    // The lists to move the selected items to.
-    Component {
-        id: movePage
-
-        Page {
-            allowedOrientations: Orientation.All
-
-            SilicaListView {
-                anchors.fill: parent
-                header: PageHeader {
-                    title: appInfo.localized("select_list")
-                }
-                model: bookmarks.categories.filter(function(category) { return category.id !== bookmarks.categoryId })
-
-                // Like "Add a New List" in the Android list chooser.
-                PullDownMenu {
-                    MenuItem {
-                        text: appInfo.localized("add_new_set")
-                        onClicked: {
-                            var rows = page.selected
-                            pageStack.replace(Qt.resolvedUrl("NewListDialog.qml"), {
-                                createAction: function(name) {
-                                    bookmarks.moveRowsToNewList(rows, name)
-                                    page.selecting = false
-                                }
-                            })
-                        }
-                    }
-                }
-
-                delegate: ListItem {
-                    onClicked: {
-                        bookmarks.moveRows(page.selected, modelData.id)
-                        page.selecting = false
-                        pageStack.pop()
-                    }
-
-                    Label {
-                        x: Theme.horizontalPageMargin
-                        width: parent.width - 2 * x
-                        anchors.verticalCenter: parent.verticalCenter
-                        text: modelData.name
-                        truncationMode: TruncationMode.Fade
-                        highlighted: parent.highlighted
-                    }
                 }
             }
         }

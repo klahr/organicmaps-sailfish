@@ -114,7 +114,6 @@ Page {
                 onClicked: {
                     appSettings.editsPublicNoticeShown = true
                     editor.createStandaloneNote(page.lat, page.lon, noteArea.text)
-                    osmAccount.updateEdits()
                     osmAccount.uploadChanges()
                     Notices.show(appInfo.localized("osm_note_toast"), Notice.Short, Notice.Center)
                     pageStack.pop()

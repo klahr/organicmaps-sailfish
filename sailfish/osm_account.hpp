@@ -53,7 +53,7 @@ public:
   Q_INVOKABLE void loginInBrowser();
   void loginWithCode(QString const & code);
   Q_INVOKABLE void logout();
-  // Uploads pending edits and notes when logged in.
+  // Counts the pending edits again and uploads them and the notes when logged in.
   Q_INVOKABLE void uploadChanges();
   // Rereads the local edits, e.g. after saving one.
   Q_INVOKABLE void updateEdits();

@@ -3,11 +3,14 @@ import Sailfish.Silica 1.0
 import app.organicmaps 1.0
 import "colors.js" as Colors
 import "downloads.js" as Downloads
+import "icons.js" as Icons
 
 Page {
     id: page
 
     property SearchModel search
+    // The MapItem, for map downloads.
+    property QtObject map
     // A result was chosen and is shown in the place page.
     signal resultActivated()
 
@@ -61,9 +64,6 @@ Page {
             // Without maps there is nothing to find: the map of the position is offered, like on Android.
             Column {
                 readonly property var map: search.suggestedMap
-                readonly property bool busy: map.status === CountriesModel.Downloading
-                                             || map.status === CountriesModel.InQueue
-                                             || map.status === CountriesModel.Applying
                 width: parent.width
                 visible: search.noMaps
                 spacing: Theme.paddingMedium
@@ -85,19 +85,10 @@ Page {
                     font.pixelSize: Theme.fontSizeSmall
                     color: Theme.secondaryHighlightColor
                 }
-                Button {
-                    anchors.horizontalCenter: parent.horizontalCenter
-                    visible: !!parent.map.countryId
-                    enabled: !parent.busy
-                    text: parent.busy ? appInfo.localized("downloader_downloading") + " "
-                                        + Math.round((parent.map.progress || 0) * 100) + "%"
-                                      : appInfo.localized("downloader_download_map") + " (" + parent.map.size + ")"
-                    onClicked: Downloads.start(pageStack, function() { search.downloadSuggestedMap() })
-                }
-                Button {
-                    anchors.horizontalCenter: parent.horizontalCenter
-                    text: appInfo.localized("search_select_map")
-                    onClicked: pageStack.push(Qt.resolvedUrl("MapsPage.qml"), { downloadedOnly: false })
+                PositionMapButtons {
+                    width: parent.width
+                    map: parent.map
+                    onDownloadClicked: Downloads.start(pageStack, function() { page.map.downloadMap(countryId) })
                 }
             }
 
@@ -126,8 +117,7 @@ Page {
         }
 
         delegate: MenuRow {
-            icon: Qt.resolvedUrl("../../icons/categories/ic_" + modelData.key
-                                 + (Theme.colorScheme === Theme.LightOnDark ? "_night" : "") + ".svg")
+            icon: Icons.category(modelData.key, Theme.colorScheme === Theme.LightOnDark)
             text: modelData.name
             onClicked: search.searchCategory(modelData.name)
         }

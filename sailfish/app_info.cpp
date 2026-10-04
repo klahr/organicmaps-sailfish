@@ -1,6 +1,7 @@
 #include "sailfish/app_info.hpp"
 
 #include "sailfish/framework_access.hpp"
+#include "sailfish/helpers.hpp"
 
 #include "map/framework.hpp"
 
@@ -86,6 +87,11 @@ std::string GetInputLocale()
 QString AppInfo::version() const
 {
   return QString::fromStdString(GetPlatform().Version());
+}
+
+QStringList AppInfo::bookmarkColors() const
+{
+  return PresetColors();
 }
 
 QDate AppInfo::dataVersion() const

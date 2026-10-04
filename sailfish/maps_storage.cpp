@@ -1,6 +1,7 @@
 #include "sailfish/maps_storage.hpp"
 
 #include "sailfish/app_info.hpp"
+#include "sailfish/helpers.hpp"
 
 #include "map/framework.hpp"
 
@@ -118,9 +119,7 @@ QVariantList MapsStorage::locations() const
 QString MapsStorage::downloadedSize() const
 {
   auto const & storage = m_framework.GetStorage();
-  storage::NodeAttrs attrs;
-  storage.GetNodeAttrs(storage.GetRootId(), attrs);
-  return FormatSize(static_cast<qint64>(attrs.m_localMwmSize));
+  return FormatSize(static_cast<qint64>(MapAttrs(storage, storage.GetRootId()).m_localMwmSize));
 }
 
 bool MapsStorage::downloading() const

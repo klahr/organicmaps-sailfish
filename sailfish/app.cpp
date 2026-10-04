@@ -23,8 +23,6 @@
 #include "base/logging.hpp"
 
 #include <qqml.h>
-#include <QDBusConnection>
-#include <QDBusMessage>
 #include <QDir>
 #include <QGuiApplication>
 #include <QQmlContext>
@@ -118,11 +116,7 @@ __attribute__((visibility("default"))) int OrganicMapsMain(int argc, char * argv
   if (!urlHandler.RegisterOnDBus() && !urls.isEmpty())
   {
     // Another instance runs: hand it the files and links, like the launcher does.
-    auto message = QDBusMessage::createMethodCall(
-        QStringLiteral("app.organicmaps.organicmaps"), QStringLiteral("/app/organicmaps"),
-        QStringLiteral("app.organicmaps.organicmaps"), QStringLiteral("openUrl"));
-    message << urls;
-    QDBusConnection::sessionBus().call(message);
+    sailfish::UrlHandler::OpenInRunningApp(urls);
     return 0;
   }
   std::unique_ptr<QQuickView> view(SailfishApp::createView());

@@ -34,7 +34,6 @@ class PlaceEditor : public QObject
   // Editable fields as {id, kind, section, icon, label, value, inputHint} in the Android order, see Kind,
   // Section and setField().
   Q_PROPERTY(QVariantList fields READ fields NOTIFY changed)
-  // Local changes or a created place that are not uploaded yet, which can be discarded.
   // The ResetAction at the bottom of the editor, as on Android.
   Q_PROPERTY(int resetAction READ resetAction NOTIFY changed)
 
@@ -121,7 +120,6 @@ public:
   Q_INVOKABLE void createNote(QString const & note);
   // A note at a position without a place, when no category fits, like on Android.
   Q_INVOKABLE void createStandaloneNote(double lat, double lon, QString const & note);
-  // Discards the local changes of the place, or deletes a created place.
   // Discards the local edits, or removes a place added here.
   Q_INVOKABLE void reset();
   // Reports the place as gone with a note, which needs a comment.

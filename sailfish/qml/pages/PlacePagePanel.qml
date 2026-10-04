@@ -2,6 +2,7 @@ import QtQuick 2.6
 import Sailfish.Silica 1.0
 import Sailfish.Share 1.0
 import app.organicmaps 1.0
+import "clipboard.js" as ClipboardHelper
 import "colors.js" as Colors
 import "downloads.js" as Downloads
 
@@ -11,8 +12,9 @@ MapPanel {
 
     // The MapItem.placePage object; the uncreatable C++ type cannot be named as a property type in Qt 5.6.
     property QtObject placePage
-    // MapItem.routing, for the route buttons.
+    // MapItem.routing, for the route buttons, and the MapItem, for map downloads.
     property QtObject routing
+    property QtObject map
 
     signal addPlaceClicked()
     signal addBusinessClicked()
@@ -43,12 +45,6 @@ MapPanel {
 
     property bool hoursExpanded
     property bool wikiExpanded
-
-    // Press and hold copies texts of the page, like on Android.
-    function copy(text) {
-        Clipboard.text = text
-        Notices.show(appInfo.localized("copied_to_clipboard", [text]), Notice.Short, Notice.Center)
-    }
 
     // Long pages scroll inside the sheet, which takes at most about the lower 60% of the map like the
     // half expanded Android sheet.
@@ -85,7 +81,7 @@ MapPanel {
 
                         MouseArea {
                             anchors.fill: parent
-                            onPressAndHold: panel.copy(placePage.title)
+                            onPressAndHold: ClipboardHelper.copy(placePage.title)
                         }
                         // Several tracks under the tap: choose another one, like the Android title chevron.
                         IconButton {
@@ -96,7 +92,13 @@ MapPanel {
                             }
                             visible: placePage.trackCandidates.length > 1
                             icon.source: "image://theme/icon-m-down"
-                            onClicked: pageStack.push(candidatesPage)
+                            onClicked: pageStack.push(Qt.resolvedUrl("ListPickerPage.qml"), {
+                                title: appInfo.localized("tracks_title"),
+                                items: placePage.trackCandidates.map(function(track) {
+                                    return { name: track.title, color: track.color, selected: track.selected }
+                                }),
+                                picked: function(index) { placePage.selectTrackCandidate(index) }
+                            })
                         }
                     }
                     Label {
@@ -125,7 +127,7 @@ MapPanel {
 
                         MouseArea {
                             anchors.fill: parent
-                            onPressAndHold: panel.copy(placePage.address)
+                            onPressAndHold: ClipboardHelper.copy(placePage.address)
                         }
                     }
                 }
@@ -195,15 +197,28 @@ MapPanel {
                 id: categoryRow
                 visible: placePage.category !== ""
                 contentHeight: Theme.itemSizeSmall
-                onClicked: pageStack.push(categoryPage)
+                onClicked: {
+                    var lists = placePage.categories()
+                    pageStack.push(Qt.resolvedUrl("ListPickerPage.qml"), {
+                        title: appInfo.localized("select_list"),
+                        items: lists.map(function(list) {
+                            return { name: list.name, selected: list.name === placePage.category }
+                        }),
+                        picked: function(index) { placePage.setCategory(lists[index].id) },
+                        addText: appInfo.localized("add_new_set"),
+                        addAction: function() {
+                            pageStack.replace(Qt.resolvedUrl("NewListDialog.qml"), {
+                                createAction: function(name) { placePage.moveToNewCategory(name) }
+                            })
+                        }
+                    })
+                }
 
-                Rectangle {
+                ColorDot {
                     id: colorDot
                     x: Theme.horizontalPageMargin
                     anchors.verticalCenter: parent.verticalCenter
                     width: Theme.iconSizeSmallPlus
-                    height: width
-                    radius: width / 2
                     color: placePage.color || "transparent"
 
                     MouseArea {
@@ -213,8 +228,7 @@ MapPanel {
                         }
                         onClicked: pageStack.push(Qt.resolvedUrl("ColorPickerPage.qml"), {
                             title: appInfo.localized("choose_color"),
-                            colors: placePage.colors,
-                            chosen: function(colorIndex) { placePage.setColor(colorIndex) }
+                                    chosen: function(colorIndex) { placePage.setColor(colorIndex) }
                         })
                     }
                 }
@@ -253,17 +267,10 @@ MapPanel {
             ListItem {
                 id: countryRow
                 readonly property var country: placePage.country
-                readonly property bool busy: country.status === CountriesModel.Downloading
-                                             || country.status === CountriesModel.InQueue
-                                             || country.status === CountriesModel.Applying
+                readonly property bool busy: Downloads.busy(country.status)
                 visible: !!country.countryId
                 contentHeight: Theme.itemSizeMedium
-                onClicked: {
-                    if (busy)
-                        placePage.cancelCountry()
-                    else
-                        Downloads.start(pageStack, function() { placePage.downloadCountry() })
-                }
+                onClicked: Downloads.toggle(pageStack, panel.map, country)
 
                 Icon {
                     id: countryIcon
@@ -670,97 +677,6 @@ MapPanel {
             icon: "../../icons/routing/ic_route_to.webp"
             text: appInfo.localized("p2p_to_here")
             onClicked: routing.routeToPlace()
-        }
-    }
-
-    // The tracks under the tap.
-    Component {
-        id: candidatesPage
-
-        Page {
-            allowedOrientations: Orientation.All
-
-            SilicaListView {
-                anchors.fill: parent
-                header: PageHeader {
-                    title: appInfo.localized("tracks_title")
-                }
-                model: placePage.trackCandidates
-
-                delegate: ListItem {
-                    highlighted: down || modelData.selected
-                    onClicked: {
-                        placePage.selectTrackCandidate(index)
-                        pageStack.pop()
-                    }
-
-                    Rectangle {
-                        id: candidateColor
-                        x: Theme.horizontalPageMargin
-                        anchors.verticalCenter: parent.verticalCenter
-                        width: Theme.iconSizeSmall
-                        height: width
-                        radius: width / 2
-                        color: modelData.color
-                    }
-                    Label {
-                        anchors {
-                            left: candidateColor.right
-                            leftMargin: Theme.paddingLarge
-                            right: parent.right
-                            rightMargin: Theme.horizontalPageMargin
-                            verticalCenter: parent.verticalCenter
-                        }
-                        text: modelData.title
-                        truncationMode: TruncationMode.Fade
-                        highlighted: parent.highlighted
-                    }
-                }
-            }
-        }
-    }
-
-    // Lists to move the bookmark or track to.
-    Component {
-        id: categoryPage
-
-        Page {
-            allowedOrientations: Orientation.All
-
-            SilicaListView {
-                anchors.fill: parent
-                header: PageHeader {
-                    title: appInfo.localized("select_list")
-                }
-                model: placePage.categories()
-
-                // Like "Add a New List" in the Android list chooser.
-                PullDownMenu {
-                    MenuItem {
-                        text: appInfo.localized("add_new_set")
-                        onClicked: pageStack.replace(Qt.resolvedUrl("NewListDialog.qml"), {
-                            createAction: function(name) { placePage.moveToNewCategory(name) }
-                        })
-                    }
-                }
-
-                delegate: ListItem {
-                    highlighted: down || modelData.name === placePage.category
-                    onClicked: {
-                        placePage.setCategory(modelData.id)
-                        pageStack.pop()
-                    }
-
-                    Label {
-                        x: Theme.horizontalPageMargin
-                        width: parent.width - 2 * x
-                        anchors.verticalCenter: parent.verticalCenter
-                        text: modelData.name
-                        truncationMode: TruncationMode.Fade
-                        highlighted: parent.highlighted
-                    }
-                }
-            }
         }
     }
 

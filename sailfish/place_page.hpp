@@ -32,7 +32,6 @@ class PlacePage : public QObject
   // The list of a bookmark or track and its color as "#rrggbb", like the Android category row; empty otherwise.
   Q_PROPERTY(QString category READ category NOTIFY changed)
   Q_PROPERTY(QString color READ color NOTIFY changed)
-  Q_PROPERTY(QStringList colors READ colors CONSTANT)
   // A route point is selected: it can be removed, like on Android.
   Q_PROPERTY(bool isRoutePoint READ isRoutePoint NOTIFY changed)
   // A warning on the route, as the Routing::Road to avoid, 0 for none or one that can't be avoided.
@@ -119,7 +118,6 @@ public:
   QString notes() const { return m_notes; }
   QString category() const { return m_category; }
   QString color() const { return m_color; }
-  QStringList colors() const;
   bool isRoutePoint() const { return m_isRoutePoint; }
   int roadToAvoid() const { return m_roadToAvoid; }
   QVariantMap country() const { return m_country; }
@@ -176,8 +174,6 @@ public:
   // A preset of colors, like the Android color picker of the place page.
   Q_INVOKABLE void setColor(int colorIndex);
   Q_INVOKABLE void selectTrackCandidate(int index);
-  Q_INVOKABLE void downloadCountry();
-  Q_INVOKABLE void cancelCountry();
 
   // Called on every location update; does nothing without a selected place.
   void UpdateDistance();

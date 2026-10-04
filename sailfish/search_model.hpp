@@ -82,7 +82,6 @@ public:
   // Fits the viewport to the results, like the search key on Android.
   Q_INVOKABLE void showOnMap();
   Q_INVOKABLE void clearHistory();
-  Q_INVOKABLE void downloadSuggestedMap();
 
 signals:
   void queryChanged();

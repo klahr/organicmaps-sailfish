@@ -81,7 +81,6 @@ Dialog {
         appSettings.editsPublicNoticeShown = true
         if (editor.save()) {
             editor.createNote(noteField.text)
-            osmAccount.updateEdits()
             osmAccount.uploadChanges()
         }
     }

@@ -2,6 +2,7 @@
 
 #include "sailfish/app_info.hpp"
 #include "sailfish/app_settings.hpp"
+#include "sailfish/helpers.hpp"
 #include "sailfish/voice_guide.hpp"
 
 #include "map/elevation_info.hpp"
@@ -38,8 +39,6 @@
 #include <QColor>
 #include <QDateTime>
 #include <QGuiApplication>
-#include <QLocale>
-#include <QUrl>
 #include <QVariantMap>
 
 #include <algorithm>
@@ -77,8 +76,11 @@ std::string_view constexpr kDisclaimerSetting = "IsDisclaimerApproved";
 
 qint64 constexpr kDarkOutsideCheckIntervalMs = 60 * 1000;
 
-// Enough points for a phone wide chart, as on the track place page.
-size_t constexpr kMaxElevationPoints = 600;
+// The arrival time when setting off now.
+QString ArrivalIn(int seconds)
+{
+  return FormatTime(QTime::currentTime().addSecs(seconds));
+}
 
 // Empty for a language without turn notifications.
 QString VoiceLanguageName(std::string const & code)
@@ -277,12 +279,8 @@ Routing::Routing(Framework & framework, QObject * parent)
       return;
     auto & storage = m_framework.GetStorage();
     for (auto const & missing : m_missingMaps)
-    {
-      storage::NodeStatuses statuses;
-      storage.GetNodeStatuses(missing.toStdString(), statuses);
-      if (statuses.m_status != storage::NodeStatus::OnDisk)
+      if (MapAttrs(storage, missing.toStdString()).m_status != storage::NodeStatus::OnDisk)
         return;
-    }
     Build();
   }, [](storage::CountryId const &, downloader::Progress const &) {});
 
@@ -325,12 +323,17 @@ void Routing::setRouterType(int type)
 {
   if (type == routerType())
     return;
+  UseRouter(type);
+  Build();
+}
+
+void Routing::UseRouter(int type)
+{
   auto & manager = m_framework.GetRoutingManager();
   auto const router = static_cast<routing::RouterType>(type);
   manager.SetRouter(router);
   manager.SetLastUsedRouter(router);
   emit routerTypeChanged();
-  Build();
 }
 
 QVariantList Routing::points() const
@@ -352,11 +355,7 @@ QString Routing::missingMapsSize() const
 {
   qint64 size = 0;
   for (auto const & id : m_missingMaps)
-  {
-    storage::NodeAttrs attrs;
-    m_framework.GetStorage().GetNodeAttrs(id.toStdString(), attrs);
-    size += static_cast<qint64>(attrs.m_mwmSize);
-  }
+    size += static_cast<qint64>(MapAttrs(m_framework.GetStorage(), id.toStdString()).m_mwmSize);
   return FormatSize(size);
 }
 
@@ -399,9 +398,7 @@ bool Routing::startIsMyPosition() const
 
 bool Routing::disclaimerAccepted() const
 {
-  bool accepted = false;
-  settings::TryGet(kDisclaimerSetting, accepted);
-  return accepted;
+  return LoadSetting(kDisclaimerSetting, false);
 }
 
 void Routing::acceptDisclaimer()
@@ -514,9 +511,7 @@ void Routing::SetupVoice()
       manager.EnableTurnNotifications(voiceEnabled());
     emit voiceChanged();
   });
-  std::string preferred;
-  settings::TryGet(kVoiceLanguageSetting, preferred);
-  m_voice->SetPreferredLanguage(preferred, AppVoiceLanguage());
+  m_voice->SetPreferredLanguage(LoadSetting(kVoiceLanguageSetting, std::string()), AppVoiceLanguage());
   m_voice->SetVolume(voiceVolume());
   m_voice->Refresh();
 }
@@ -528,9 +523,7 @@ bool Routing::voiceAvailable() const
 
 bool Routing::voiceEnabled() const
 {
-  bool enabled = true;
-  settings::TryGet(kVoiceEnabledSetting, enabled);
-  return enabled && m_voice->IsAvailable();
+  return LoadSetting(kVoiceEnabledSetting, true) && m_voice->IsAvailable();
 }
 
 void Routing::setVoiceEnabled(bool enabled)
@@ -586,8 +579,7 @@ bool Routing::speechNoteInstalled() const
 
 std::string Routing::WantedVoiceLanguage() const
 {
-  std::string preferred;
-  settings::TryGet(kVoiceLanguageSetting, preferred);
+  auto const preferred = LoadSetting(kVoiceLanguageSetting, std::string());
   return preferred.empty() ? AppVoiceLanguage() : preferred;
 }
 
@@ -603,9 +595,7 @@ bool Routing::wantedHasSpeechNoteVoice() const
 
 bool Routing::announceStreets() const
 {
-  bool announce = false;
-  settings::TryGet(kAnnounceStreetsSetting, announce);
-  return announce;
+  return LoadSetting(kAnnounceStreetsSetting, false);
 }
 
 void Routing::setAnnounceStreets(bool announce)
@@ -616,9 +606,7 @@ void Routing::setAnnounceStreets(bool announce)
 
 int Routing::voiceVolume() const
 {
-  double volume = 1.0;
-  settings::TryGet(kVoiceVolumeSetting, volume);
-  return qRound(std::clamp(volume, 0.0, 1.0) * 100);
+  return qRound(std::clamp(LoadSetting(kVoiceVolumeSetting, 1.0), 0.0, 1.0) * 100);
 }
 
 void Routing::setVoiceVolume(int volume)
@@ -742,7 +730,7 @@ void Routing::UpdateNavigation(double speedMps)
   nav["minutesLeft"] = minutes % 60;
   nav["hourUnits"] = Localized("hour");
   nav["minuteUnits"] = Localized("minute");
-  nav["arrival"] = FormatTime(QTime::currentTime().addSecs(info.m_time));
+  nav["arrival"] = ArrivalIn(info.m_time);
   nav["speed"] = speedMps >= 0 ? QString::fromStdString(measurement_utils::FormatSpeedNumeric(speedMps, units))
                                : QStringLiteral("0");
   nav["speedLimit"] = info.m_speedLimitMps > 0
@@ -788,19 +776,25 @@ void Routing::setStartToMyPosition()
 
 void Routing::AddPlacePoint(int type)
 {
-  if (!m_framework.HasPlacePageInfo())
-    return;
-
-  auto const & info = m_framework.GetCurrentPlacePageInfo();
   RouteMarkData point;
+  if (!TakePlacePoint(point))
+    return;
   point.m_pointType = static_cast<RouteMarkType>(type);
+  AddPoint(std::move(point));
+}
+
+bool Routing::TakePlacePoint(RouteMarkData & point)
+{
+  if (!m_framework.HasPlacePageInfo())
+    return false;
+  auto const & info = m_framework.GetCurrentPlacePageInfo();
   point.m_title = info.GetTitle();
   point.m_subTitle = info.GetSubtitle();
   point.m_isMyPosition = info.IsMyPosition();
   point.m_position = info.GetMercator();
   // The route panel takes the place of the place page.
   m_framework.DeactivateMapSelection();
-  AddPoint(std::move(point));
+  return true;
 }
 
 void Routing::AddPoint(RouteMarkData && point)
@@ -870,16 +864,9 @@ void Routing::PickPoint(RouteMarkData && point)
 
 void Routing::pickPlace()
 {
-  if (!m_framework.HasPlacePageInfo())
-    return;
-  auto const & info = m_framework.GetCurrentPlacePageInfo();
   RouteMarkData point;
-  point.m_title = info.GetTitle();
-  point.m_subTitle = info.GetSubtitle();
-  point.m_isMyPosition = info.IsMyPosition();
-  point.m_position = info.GetMercator();
-  m_framework.DeactivateMapSelection();
-  PickPoint(std::move(point));
+  if (TakePlacePoint(point))
+    PickPoint(std::move(point));
 }
 
 void Routing::pickPosition(double lat, double lon)
@@ -889,7 +876,7 @@ void Routing::pickPosition(double lat, double lon)
   // Named by the address there, else by the coordinates.
   point.m_title = m_framework.GetAddressAtPoint(point.m_position).FormatAddress();
   if (point.m_title.empty())
-    point.m_title = QStringLiteral("%1, %2").arg(lat, 0, 'f', 5).arg(lon, 0, 'f', 5).toStdString();
+    point.m_title = FormatLatLon(lat, lon).toStdString();
   PickPoint(std::move(point));
 }
 
@@ -910,10 +897,7 @@ void Routing::planRoute(int routerType, QVariantList const & points)
     EndNavigation();
   auto & manager = m_framework.GetRoutingManager();
   manager.CloseRouting(true /* removeRoutePoints */);
-  auto const router = static_cast<routing::RouterType>(routerType);
-  manager.SetRouter(router);
-  manager.SetLastUsedRouter(router);
-  emit routerTypeChanged();
+  UseRouter(routerType);
   for (int i = 0; i < points.size(); ++i)
   {
     auto const point = points[i].toMap();
@@ -1024,17 +1008,7 @@ void Routing::LoadElevation()
                         .arg(QString::fromStdString(platform::Distance::FormatAltitude(info.GetTotalAscent())),
                              QString::fromStdString(platform::Distance::FormatAltitude(info.GetTotalDescent())));
 
-  size_t const count = elevation.GetSize();
-  size_t const step = count / kMaxElevationPoints + 1;
-  size_t i = 0;
-  elevation.ForEachPoint([&](double distance, geometry::Altitude altitude)
-  {
-    // Keeps the last point, so that the profile ends with the route.
-    if (i % step == 0 || i + 1 == count)
-      m_elevationProfile << distance << altitude;
-    ++i;
-    m_elevationLength = distance;
-  });
+  m_elevationProfile = ElevationProfile(elevation, &m_elevationLength);
 }
 
 void Routing::close()
@@ -1123,7 +1097,7 @@ void Routing::OnRouteBuilt(int code, QStringList const & absentCountries)
       // Total time, the walking distance and the legs, as RoutingBottomMenuController.showTransitInfo().
       auto const transit = m_framework.GetRoutingManager().GetTransitRouteInfo();
       m_summary = FormatDuration(transit.m_totalTimeInSec);
-      m_arrival = FormatTime(QTime::currentTime().addSecs(transit.m_totalTimeInSec));
+      m_arrival = ArrivalIn(transit.m_totalTimeInSec);
       if (transit.m_totalPedestrianTimeInSec > 0)
       {
         m_walkingDistance =
@@ -1144,7 +1118,7 @@ void Routing::OnRouteBuilt(int code, QStringList const & absentCountries)
       m_summary = routerType() == Ruler ? Localized("placepage_distance") + ": " + distance
                                         : FormatDuration(info.m_time) + QStringLiteral(" • ") + distance;
       if (routerType() != Ruler)
-        m_arrival = FormatTime(QTime::currentTime().addSecs(info.m_time));
+        m_arrival = ArrivalIn(info.m_time);
       LoadElevation();
     }
     break;

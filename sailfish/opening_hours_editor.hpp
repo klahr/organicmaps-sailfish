@@ -4,6 +4,7 @@
 #include <QString>
 #include <QVariantList>
 
+#include <functional>
 #include <memory>
 
 // Nested namespaces spelled out for the Qt 5.6 moc.
@@ -11,6 +12,7 @@ namespace editor
 {
 namespace ui
 {
+class TimeTable;
 class TimeTableSet;
 }  // namespace ui
 }  // namespace editor
@@ -59,6 +61,9 @@ signals:
   void changed();
 
 private:
+  // Changes a schedule and keeps the change when change returns true; the view shows the result either way.
+  void Edit(int index, std::function<bool(editor::ui::TimeTable &)> const & change);
+
   std::unique_ptr<editor::ui::TimeTableSet> m_timetables;
   bool m_simple = true;
   // The value when it isn't simple.

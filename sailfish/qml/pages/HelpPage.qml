@@ -1,6 +1,7 @@
 import QtQuick 2.6
 import Sailfish.Silica 1.0
 import Sailfish.Share 1.0
+import "clipboard.js" as ClipboardHelper
 
 // About and help links in the order of the Android about.xml. Texts come from the shared data/strings; the
 // FAQ and copyright pages are the bundled ones, opened in the browser.
@@ -40,10 +41,7 @@ Page {
                 MouseArea {
                     anchors.fill: parent
                     onClicked: {
-                        var versions = appInfo.version + " • " + Qt.formatDate(appInfo.dataVersion, "yyMMdd")
-                        Clipboard.text = versions
-                        Notices.show(appInfo.localized("copied_to_clipboard", [versions]), Notice.Short,
-                                     Notice.Center)
+                        ClipboardHelper.copy(appInfo.version + " • " + Qt.formatDate(appInfo.dataVersion, "yyMMdd"))
                     }
                 }
             }

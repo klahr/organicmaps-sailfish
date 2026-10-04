@@ -4,7 +4,9 @@ import Sailfish.Share 1.0
 import Nemo.KeepAlive 1.2
 import Nemo.Notifications 1.0
 import app.organicmaps 1.0
+import "clipboard.js" as ClipboardHelper
 import "downloads.js" as Downloads
+import "icons.js" as Icons
 import "notifications.js" as Notifications
 
 Page {
@@ -61,7 +63,6 @@ Page {
     }
 
     readonly property bool navigating: map.routing.navigating
-    readonly property QtObject routing: map.routing
     readonly property QtObject mapItem: map
     // Downloaded maps with updates, from the app's CountriesModel.
     property int mapUpdateCount
@@ -113,7 +114,7 @@ Page {
     }
 
     function openSearch() {
-        var searchPage = pageStack.push(Qt.resolvedUrl("SearchPage.qml"), { search: search })
+        var searchPage = pageStack.push(Qt.resolvedUrl("SearchPage.qml"), { search: search, map: map })
         searchPage.resultActivated.connect(function() {
             page.searchResultTitle = ""
             page.placeFromSearch = true
@@ -447,8 +448,7 @@ Page {
         onExpandedChanged: if (expanded) collapseTimer.restart()
 
         function icon(categoryKey) {
-            return Qt.resolvedUrl("../../icons/categories/ic_" + categoryKey
-                                  + (Theme.colorScheme === Theme.LightOnDark ? "_night" : "") + ".svg")
+            return Icons.category(categoryKey, Theme.colorScheme === Theme.LightOnDark)
         }
         function start(categoryKey) {
             var categories = search.categories()
@@ -488,9 +488,7 @@ Page {
     Rectangle {
         id: onMapDownloader
         readonly property var country: map.currentCountry
-        readonly property bool busy: country.status === CountriesModel.Downloading
-                                     || country.status === CountriesModel.InQueue
-                                     || country.status === CountriesModel.Applying
+        readonly property bool busy: Downloads.busy(country.status)
 
         visible: !!country.countryId && !page.navigating && !page.choosingPosition
                  && placePagePanel.visibleSize === 0 && routePanel.visibleSize === 0
@@ -534,12 +532,7 @@ Page {
                 text: onMapDownloader.busy ? appInfo.localized("cancel")
                     : onMapDownloader.country.status === CountriesModel.Error ? appInfo.localized("downloader_retry")
                     : appInfo.localized("downloader_download_map")
-                onClicked: {
-                    if (onMapDownloader.busy)
-                        map.cancelCurrentCountry()
-                    else
-                        Downloads.start(pageStack, function() { map.downloadCurrentCountry() })
-                }
+                onClicked: Downloads.toggle(pageStack, map, onMapDownloader.country)
             }
         }
     }
@@ -623,8 +616,7 @@ Page {
                 if (page.choosingApiPoint) {
                     var chosen = map.confirmChosenPosition(false)
                     var ll = chosen[0].toFixed(6) + "," + chosen[1].toFixed(6)
-                    Clipboard.text = ll
-                    Notices.show(appInfo.localized("copied_to_clipboard", [ll]), Notice.Short, Notice.Center)
+                    ClipboardHelper.copy(ll)
                     if (page.apiBackUrl !== "")
                         Qt.openUrlExternally(page.apiBackUrl + (page.apiBackUrl.indexOf("?") >= 0 ? "&" : "?")
                                              + "ll=" + ll)
@@ -653,6 +645,7 @@ Page {
         id: placePagePanel
         placePage: map.placePage
         routing: map.routing
+        map: page.mapItem
         onAddPlaceClicked: map.startChoosingPosition(false)
         onAddBusinessClicked: map.startChoosingPosition(true)
         onDirectionClicked: directionOverlay.shown = true
@@ -667,7 +660,7 @@ Page {
 
     TrackRecordingPanel {
         id: recordingPanel
-        map: map
+        map: page.mapItem
         onSaveClicked: {
             open = false
             page.stopTrackRecording()
@@ -777,7 +770,7 @@ Page {
                         message: appInfo.localized("contribute_to_osm_update_map_description", [outdated.name]),
                         acceptText: appInfo.localized("download"),
                         acceptAction: function() {
-                            Downloads.start(pageStack, function() { map.updateMap(outdated.countryId) })
+                            Downloads.start(pageStack, function() { map.downloadMap(outdated.countryId) })
                         }
                     })
                     return

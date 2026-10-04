@@ -110,10 +110,6 @@ public:
   // [lat, lon] of the cross, empty outside downloaded maps when they are required (for a new place).
   Q_INVOKABLE QVariantList confirmChosenPosition(bool requireMaps = true);
 
-  // Downloads or retries the map of currentCountry, or cancels its download.
-  Q_INVOKABLE void downloadCurrentCountry();
-  Q_INVOKABLE void cancelCurrentCountry();
-
   int myPositionMode() const { return m_myPositionMode; }
   PlacePage * placePage() const { return m_placePage.get(); }
   Routing * routing() const { return m_routing.get(); }
@@ -122,10 +118,12 @@ public:
   QString recordingSummary() const { return m_recordingSummary; }
   QVariantMap positionInfo() const { return m_positionInfo; }
   bool locationLost() const { return m_locationLost; }
-  // The map in the middle of the map is too old to edit, as {countryId, name}; empty otherwise. Like the iOS
+  // The map in the middle of the map is too old to edit, see MissingMapInfo(); empty otherwise. Like the iOS
   // "Update the Map to Contribute".
   Q_INVOKABLE QVariantMap mapToUpdateForEditing() const;
-  Q_INVOKABLE void updateMap(QString const & countryId);
+  // Downloads, retries or updates a map, see DownloadMap(), or cancels its download.
+  Q_INVOKABLE void downloadMap(QString const & countryId);
+  Q_INVOKABLE void cancelMap(QString const & countryId);
   // Hiking and cycling routes need newer maps here, like on iOS.
   Q_INVOKABLE bool needUpdateForRoutes() const;
   // Contour lines are on but not shown at this zoom, like the Android hint.

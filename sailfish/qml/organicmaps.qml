@@ -63,8 +63,21 @@ ApplicationWindow {
         interval: 3000
         onTriggered: {
             if (pageStack.depth === 1 && !pageStack.busy && downloads.shouldOfferUpdate()
-                    && appSettings.downloadPermission() !== AppSettings.DownloadDenied)
-                pageStack.push(Qt.resolvedUrl("pages/UpdateMapsDialog.qml"), { countries: downloads })
+                    && appSettings.downloadPermission() !== AppSettings.DownloadDenied) {
+                // Once per new map data, like the Android map update dialog. Accepting also confirms a download
+                // over mobile data, which is explained then.
+                downloads.setUpdateOffered()
+                var mobile = appSettings.downloadPermission() === AppSettings.DownloadAsk
+                pageStack.push(Qt.resolvedUrl("pages/MessageDialog.qml"), {
+                    title: appInfo.localized("whats_new_auto_update_title"),
+                    message: appInfo.localized("whats_new_auto_update_message")
+                             + (mobile ? "\n\n" + appInfo.localized("download_over_mobile_header") + " "
+                                         + appInfo.localized("download_over_mobile_message") : ""),
+                    acceptText: appInfo.localized("whats_new_auto_update_button_size", [downloads.updateSize]),
+                    cancelText: appInfo.localized("later"),
+                    acceptAction: function() { downloads.updateAll() }
+                })
+            }
         }
     }
 

@@ -3,6 +3,7 @@
 #include "sailfish/app_info.hpp"
 #include "sailfish/bookmarks_model.hpp"
 #include "sailfish/countries_model.hpp"
+#include "sailfish/helpers.hpp"
 
 #include "map/bookmark_helpers.hpp"
 #include "map/bookmark_manager.hpp"
@@ -32,7 +33,6 @@
 
 #include "platform/distance.hpp"
 #include "platform/localization.hpp"
-#include "platform/measurement_utils.hpp"
 #include "platform/settings.hpp"
 
 #include "geometry/angles.hpp"
@@ -57,9 +57,6 @@ using feature::Metadata;
 
 // Same setting and default as the desktop place page.
 std::string_view constexpr kCoordinatesFormatSetting = "CoordinatesFormat";
-
-// Enough points for a phone wide chart.
-size_t constexpr kMaxProfilePoints = 600;
 
 QString FormatHourMinutes(osmoh::HourMinutes const & hm)
 {
@@ -151,9 +148,7 @@ QVariantList MakeWeekSchedule(editor::ui::TimeTableSet & tts)
 
 int32_t SavedCoordinatesFormat()
 {
-  auto saved = static_cast<int32_t>(place_page::CoordinatesFormat::LatLonDecimal);
-  settings::TryGet(kCoordinatesFormatSetting, saved);
-  return saved;
+  return LoadSetting(kCoordinatesFormatSetting, static_cast<int32_t>(place_page::CoordinatesFormat::LatLonDecimal));
 }
 }  // namespace
 
@@ -291,10 +286,9 @@ void PlacePage::Update()
     {
       bool const selected = info.IsRelationTrack() ? candidate.m_relationId == info.GetTrackRelationId()
                                                    : candidate.m_trackId == info.GetTrackId();
-      m_trackCandidates.append(
-          QVariantMap{{"title", QString::fromStdString(candidate.m_title)},
-                      {"color", QStringLiteral("#%1").arg(candidate.m_color.GetRGBA() >> 8, 6, 16, QLatin1Char('0'))},
-                      {"selected", selected}});
+      m_trackCandidates.append(QVariantMap{{"title", QString::fromStdString(candidate.m_title)},
+                                           {"color", ColorName(candidate.m_color)},
+                                           {"selected", selected}});
     }
   }
 
@@ -435,7 +429,7 @@ void PlacePage::UpdateCategory()
     if (!bookmark)
       return;
     m_category = QString::fromStdString(manager.GetCategoryName(bookmark->GetGroupId()));
-    m_color = QStringLiteral("#%1").arg(bookmark->GetColorForRendering().GetRGBA() >> 8, 6, 16, QLatin1Char('0'));
+    m_color = ColorName(bookmark->GetColorForRendering());
     m_notes = QString::fromStdString(bookmark->GetDescription());
   }
   else if (m_isTrack)
@@ -445,28 +439,15 @@ void PlacePage::UpdateCategory()
     if (!track || track->GetGroupId() == kml::kInvalidMarkGroupId)
       return;
     m_category = QString::fromStdString(manager.GetCategoryName(track->GetGroupId()));
-    m_color = QStringLiteral("#%1").arg(track->GetColor(0).GetRGBA() >> 8, 6, 16, QLatin1Char('0'));
+    m_color = ColorName(track->GetColor(0));
     m_notes = QString::fromStdString(kml::GetDefaultStr(track->GetData().m_description));
   }
 }
 
 void PlacePage::UpdateCountry()
 {
-  auto country = MissingMapInfo(m_framework.GetStorage(), m_countryId);
   // An outdated map is offered for update too, like the iOS place page.
-  if (country.isEmpty() && !m_countryId.empty())
-  {
-    storage::NodeAttrs attrs;
-    m_framework.GetStorage().GetNodeAttrs(m_countryId, attrs);
-    if (attrs.m_status == storage::NodeStatus::OnDiskOutOfDate)
-    {
-      country = {{"countryId", QString::fromStdString(m_countryId)},
-                 {"name", QString::fromStdString(attrs.m_nodeLocalName)},
-                 {"size", FormatSize(static_cast<qint64>(attrs.m_mwmSize))},
-                 {"status", static_cast<int>(attrs.m_status)},
-                 {"outdated", true}};
-    }
-  }
+  auto country = MissingMapInfo(m_framework.GetStorage(), m_countryId, true /* withOutdated */);
   if (country != m_country)
   {
     m_country = std::move(country);
@@ -474,19 +455,9 @@ void PlacePage::UpdateCountry()
   }
 }
 
-QStringList PlacePage::colors() const
-{
-  return PresetColors();
-}
-
 QVariantList PlacePage::categories() const
 {
-  QVariantList result;
-  auto const & manager = m_framework.GetBookmarkManager();
-  for (auto const id : manager.GetSortedBmGroupIdList())
-    result.append(QVariantMap{{"id", QVariant::fromValue<quint64>(id)},
-                              {"name", QString::fromStdString(manager.GetCategoryName(id))}});
-  return result;
+  return BookmarkLists(m_framework.GetBookmarkManager());
 }
 
 void PlacePage::setCategory(quint64 categoryId)
@@ -507,16 +478,16 @@ void PlacePage::setCategory(quint64 categoryId)
 
 void PlacePage::setColor(int colorIndex)
 {
-  if (colorIndex < 0 || colorIndex >= static_cast<int>(kml::kOrderedPredefinedColors.size()))
+  auto const color = PresetColor(colorIndex);
+  if (!color)
     return;
-  auto const color = kml::ColorFromPredefinedColor(kml::kOrderedPredefinedColors[static_cast<size_t>(colorIndex)]);
   auto & manager = m_framework.GetBookmarkManager();
   {
     auto session = manager.GetEditSession();
     if (m_isBookmark)
-      session.SetBookmarksAndTracksColor({m_userMarkId}, {}, color);
+      session.SetBookmarksAndTracksColor({m_userMarkId}, {}, *color);
     else if (m_isTrack)
-      session.ChangeTrackColor(m_userMarkId, color);
+      session.ChangeTrackColor(m_userMarkId, *color);
   }
   m_framework.UpdatePlacePageInfoForCurrentSelection();
 }
@@ -532,28 +503,9 @@ void PlacePage::selectTrackCandidate(int index)
   m_framework.SelectTrackCandidate(candidate.m_trackId, candidate.m_relationId);
 }
 
-void PlacePage::downloadCountry()
-{
-  if (m_countryId.empty())
-    return;
-  if (m_country.value("outdated").toBool())
-    m_framework.GetStorage().UpdateNode(m_countryId);
-  else
-    DownloadMap(m_framework.GetStorage(), m_countryId);
-}
-
 void PlacePage::moveToNewCategory(QString const & name)
 {
-  auto & manager = m_framework.GetBookmarkManager();
-  auto const id = manager.CreateBookmarkCategory(name.trimmed().toStdString());
-  manager.SetLastEditedBmCategory(id);
-  setCategory(id);
-}
-
-void PlacePage::cancelCountry()
-{
-  if (!m_countryId.empty())
-    m_framework.GetStorage().CancelDownloadNode(m_countryId);
+  setCategory(CreateBookmarkList(m_framework.GetBookmarkManager(), name));
 }
 
 void PlacePage::UpdateMyPosition(bool hasAltitude, double altitude, double speed)
@@ -562,14 +514,12 @@ void PlacePage::UpdateMyPosition(bool hasAltitude, double altitude, double speed
     return;
   QString subtitle;
   if (hasAltitude)
-    subtitle = QStringLiteral("▲") + QString::fromStdString(platform::Distance::FormatAltitude(altitude));
+    subtitle = FormatAltitude(altitude);
   if (speed >= 0)
   {
-    auto const units = measurement_utils::GetMeasurementUnits();
     if (!subtitle.isEmpty())
       subtitle += QStringLiteral("   ");
-    subtitle += QString::fromStdString(measurement_utils::FormatSpeedNumeric(speed, units) + " " +
-                                       platform::GetLocalizedSpeedUnits(units));
+    subtitle += FormatSpeed(speed);
   }
   if (subtitle != m_subtitle)
   {
@@ -619,40 +569,29 @@ void PlacePage::UpdateTrack()
   if (!track)
     return;
 
-  auto const add = [this](char const * label, std::string const & value)
-  { m_trackStats.append(QVariantMap{{"label", Localized(label)}, {"value", QString::fromStdString(value)}}); };
+  auto const add = [this](char const * label, QString const & value)
+  { m_trackStats.append(QVariantMap{{"label", Localized(label)}, {"value", value}}); };
   auto const stats = track->GetStatistics();
   m_trackLength = stats.m_length;
-  add("elevation_profile_distance", stats.GetFormattedLength());
+  add("elevation_profile_distance", QString::fromStdString(stats.GetFormattedLength()));
   if (stats.m_duration > 0)
-    m_trackStats.append(QVariantMap{{"label", Localized("elevation_profile_time")},
-                                    {"value", FormatDuration(static_cast<long>(stats.m_duration))}});
+    add("elevation_profile_time", FormatDuration(static_cast<long>(stats.m_duration)));
 
   auto const * elevation = track->GetElevationInfo();
   if (!elevation || elevation->IsEmpty())
     return;
-  add("elevation_profile_ascent", stats.GetFormattedAscent());
-  add("elevation_profile_descent", stats.GetFormattedDescent());
-  add("elevation_profile_max_elevation", stats.GetFormattedMaxElevation());
-  add("elevation_profile_min_elevation", stats.GetFormattedMinElevation());
+  add("elevation_profile_ascent", QString::fromStdString(stats.GetFormattedAscent()));
+  add("elevation_profile_descent", QString::fromStdString(stats.GetFormattedDescent()));
+  add("elevation_profile_max_elevation", QString::fromStdString(stats.GetFormattedMaxElevation()));
+  add("elevation_profile_min_elevation", QString::fromStdString(stats.GetFormattedMinElevation()));
   char const * const difficulties[] = {nullptr, "elevation_profile_diff_level_easy",
                                        "elevation_profile_diff_level_moderate", "elevation_profile_diff_level_hard"};
   if (auto const difficulty = elevation->GetDifficulty(); difficulty > 0 && difficulty < std::size(difficulties))
-    add("elevation_profile_difficulty", Localized(difficulties[difficulty]).toStdString());
+    add("elevation_profile_difficulty", Localized(difficulties[difficulty]));
   m_minElevation = QString::fromStdString(stats.GetFormattedMinElevation());
   m_maxElevation = QString::fromStdString(stats.GetFormattedMaxElevation());
 
-  size_t const count = elevation->GetSize();
-  size_t const step = count / kMaxProfilePoints + 1;
-  size_t i = 0;
-  elevation->ForEachPoint([&](double distance, geometry::Altitude altitude)
-  {
-    // Keeps the last point, so that the profile ends with the track.
-    if (i % step == 0 || i + 1 == count)
-      m_elevationProfile << distance << altitude;
-    ++i;
-    m_trackLength = distance;
-  });
+  m_elevationProfile = ElevationProfile(*elevation, &m_trackLength);
   // The position marker follows location updates along the track.
   manager.UpdateElevationMyPosition(m_userMarkId);
 }

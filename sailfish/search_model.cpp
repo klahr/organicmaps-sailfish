@@ -217,13 +217,6 @@ QVariantMap SearchModel::suggestedMap() const
   return PositionMapInfo();
 }
 
-void SearchModel::downloadSuggestedMap()
-{
-  auto const id = suggestedMap().value("countryId").toString().toStdString();
-  if (!id.empty())
-    DownloadMap(m_framework.GetStorage(), id);
-}
-
 void SearchModel::clearHistory()
 {
   m_framework.GetSearchAPI().ClearSearchHistory();
