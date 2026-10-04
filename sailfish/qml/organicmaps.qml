@@ -14,7 +14,13 @@ ApplicationWindow {
     // The map page, for the cover.
     property Item mapPage
 
-    initialPage: Component { MapPage { id: mapPageItem; Component.onCompleted: appWindow.mapPage = mapPageItem } }
+    initialPage: Component {
+        MapPage {
+            id: mapPageItem
+            mapUpdateCount: downloads.updateCount
+            Component.onCompleted: appWindow.mapPage = mapPageItem
+        }
+    }
     cover: Component {
         AppCover {
             mapPage: appWindow.mapPage

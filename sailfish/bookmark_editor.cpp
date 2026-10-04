@@ -54,6 +54,28 @@ void BookmarkEditor::loadTrack(quint64 id)
   LoadCategories(track->GetGroupId());
 }
 
+bool BookmarkEditor::trackVisible() const
+{
+  auto const * track = m_isTrack ? m_framework.GetBookmarkManager().GetTrack(m_id) : nullptr;
+  return track && track->IsVisible();
+}
+
+void BookmarkEditor::setTrackVisible(bool visible)
+{
+  if (!m_isTrack)
+    return;
+  m_framework.SetTrackVisibility(m_id, visible);
+  emit loaded();
+}
+
+int BookmarkEditor::createCategory(QString const & name)
+{
+  auto const id = m_framework.GetBookmarkManager().CreateBookmarkCategory(name.trimmed().toStdString());
+  LoadCategories(m_groupId);
+  auto const it = std::find(m_categoryIds.begin(), m_categoryIds.end(), id);
+  return it != m_categoryIds.end() ? static_cast<int>(std::distance(m_categoryIds.begin(), it)) : -1;
+}
+
 void BookmarkEditor::LoadCategories(uint64_t groupId)
 {
   m_groupId = groupId;

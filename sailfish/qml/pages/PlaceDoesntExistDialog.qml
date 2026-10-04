@@ -13,6 +13,7 @@ Dialog {
     acceptDestination: returnPage
     acceptDestinationAction: PageStackAction.Pop
     onAccepted: {
+        appSettings.editsPublicNoticeShown = true
         placeEditor.placeDoesntExist(commentField.text)
         osmAccount.updateEdits()
         osmAccount.uploadChanges()
@@ -25,6 +26,7 @@ Dialog {
             title: appInfo.localized("editor_place_doesnt_exist")
             acceptText: appInfo.localized("editor_report_problem_send_button")
         }
+        EditsPublicNotice {}
         TextArea {
             id: commentField
             width: parent.width

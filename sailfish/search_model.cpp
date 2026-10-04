@@ -214,10 +214,7 @@ bool SearchModel::noMaps() const
 
 QVariantMap SearchModel::suggestedMap() const
 {
-  auto const position = m_framework.GetCurrentPosition();
-  if (!position)
-    return {};
-  return MissingMapInfo(m_framework.GetStorage(), m_framework.GetCountryInfoGetter().GetRegionCountryId(*position));
+  return PositionMapInfo();
 }
 
 void SearchModel::downloadSuggestedMap()

@@ -39,6 +39,8 @@ class PlacePage : public QObject
   Q_PROPERTY(int roadToAvoid READ roadToAvoid NOTIFY changed)
   // The map of the place isn't downloaded, see MissingMapInfo().
   Q_PROPERTY(QVariantMap country READ country NOTIFY countryChanged)
+  // An om:// link put this place on the map and gave a link back to its app, like the Android Back button.
+  Q_PROPERTY(QString apiBackUrl READ apiBackUrl NOTIFY changed)
   // Tracks under the tap as {title, color, selected} when there are several, like the Android title chevron.
   Q_PROPERTY(QVariantList trackCandidates READ trackCandidates NOTIFY changed)
   Q_PROPERTY(QString distance READ distance NOTIFY distanceChanged)
@@ -121,6 +123,7 @@ public:
   bool isRoutePoint() const { return m_isRoutePoint; }
   int roadToAvoid() const { return m_roadToAvoid; }
   QVariantMap country() const { return m_country; }
+  QString apiBackUrl() const { return m_apiBackUrl; }
   QVariantList trackCandidates() const { return m_trackCandidates; }
   QString distance() const { return m_distance; }
   double azimuth() const { return m_azimuth; }
@@ -168,6 +171,8 @@ public:
   // Lists to move the bookmark or track to as {id, name}, and moving it there.
   Q_INVOKABLE QVariantList categories() const;
   Q_INVOKABLE void setCategory(quint64 categoryId);
+  // A new list for the bookmark or track, like "Add a New List" in the Android list chooser.
+  Q_INVOKABLE void moveToNewCategory(QString const & name);
   // A preset of colors, like the Android color picker of the place page.
   Q_INVOKABLE void setColor(int colorIndex);
   Q_INVOKABLE void selectTrackCandidate(int index);
@@ -210,6 +215,7 @@ private:
   bool m_isRoutePoint = false;
   int m_roadToAvoid = 0;
   QVariantMap m_country;
+  QString m_apiBackUrl;
   QVariantList m_trackCandidates;
   std::string m_countryId;
   int m_storageSlot = 0;

@@ -15,10 +15,17 @@ Page {
 
     // Light or dark map following the appearance setting; Auto follows the Sailfish ambience.
     // Navigating in the dark can switch to the night style, like on Android.
-    readonly property bool mapIsDark: (appSettings.mapAppearance === AppSettings.AppearanceAuto
-                                       ? Theme.colorScheme === Theme.LightOnDark
-                                       : appSettings.mapAppearance === AppSettings.AppearanceDark)
-                                      || (appSettings.autoNightInNavigation && map.routing.darkOutside)
+    readonly property bool mapIsDark: {
+        switch (appSettings.mapAppearance) {
+        case AppSettings.AppearanceDark: return true
+        case AppSettings.AppearanceScheduled: return map.routing.darkOutside
+        case AppSettings.AppearanceAuto:
+            if (Theme.colorScheme === Theme.LightOnDark)
+                return true
+            break
+        }
+        return appSettings.autoNightInNavigation && page.navigating && map.routing.darkOutside
+    }
     onMapIsDarkChanged: appSettings.applyMapAppearance(mapIsDark)
     Component.onCompleted: {
         appSettings.applyMapAppearance(mapIsDark)
@@ -56,6 +63,8 @@ Page {
     readonly property bool navigating: map.routing.navigating
     readonly property QtObject routing: map.routing
     readonly property QtObject mapItem: map
+    // Downloaded maps with updates, from the app's CountriesModel.
+    property int mapUpdateCount
 
     // The search action of the app cover: back to the map, then search.
     function openSearchFromCover() {
@@ -272,6 +281,27 @@ Page {
             source: "image://theme/icon-m-menu"
             highlighted: menuPanel.open
             onClicked: menuPanel.open = !menuPanel.open
+
+            // Map updates are waiting, like the Android menu badge.
+            Rectangle {
+                visible: page.mapUpdateCount > 0
+                anchors {
+                    right: parent.right
+                    top: parent.top
+                }
+                width: Math.max(height, badgeLabel.implicitWidth + Theme.paddingSmall)
+                height: badgeLabel.implicitHeight
+                radius: height / 2
+                color: Theme.highlightBackgroundColor
+
+                Label {
+                    id: badgeLabel
+                    anchors.centerIn: parent
+                    text: page.mapUpdateCount
+                    font.pixelSize: Theme.fontSizeTiny
+                    font.bold: true
+                }
+            }
         }
     }
 
@@ -303,7 +333,10 @@ Page {
         id: recordingNotification
         appName: "Organic Maps"
         appIcon: "organicmaps"
-        summary: appInfo.localized("track_recording")
+        // Without a position the recording stalls, which the Android notification tells too.
+        summary: map.locationLost ? appInfo.localized("current_location_unknown_error_title")
+                                  : appInfo.localized("track_recording")
+        body: map.locationLost ? appInfo.localized("dialog_routing_location_turn_wifi") : ""
         remoteActions: [Notifications.openApp(),
                         Notifications.action("stop", appInfo.localized("track_recording_stop_and_save"),
                                              "stopTrackRecording")]
@@ -316,6 +349,7 @@ Page {
             else
                 recordingNotification.close()
         }
+        onLocationLostChanged: if (map.trackRecording) recordingNotification.publish()
     }
     Connections {
         target: urlHandler
@@ -324,8 +358,10 @@ Page {
     Component.onDestruction: recordingNotification.close()
 
     function stopTrackRecording() {
-        if (map.isTrackRecordingEmpty())
+        if (map.isTrackRecordingEmpty()) {
+            Notices.show(appInfo.localized("track_recording_toast_nothing_to_save"), Notice.Short, Notice.Center)
             map.stopTrackRecording("")
+        }
         else
             pageStack.push(Qt.resolvedUrl("SaveTrackDialog.qml"), { map: map })
     }
@@ -706,7 +742,18 @@ Page {
                                            + (page.mapIsDark ? "_night" : "") + ".svg")
                     text: modelData.text
                     checked: (map.enabledLayers & (1 << modelData.layer)) !== 0
-                    onClicked: map.setLayerEnabled(modelData.layer, !checked)
+                    onClicked: {
+                        var enable = !checked
+                        map.setLayerEnabled(modelData.layer, enable)
+                        if (!enable)
+                            return
+                        // Like the Android and iOS layer hints.
+                        if (modelData.layer === MapItem.Isolines && map.isolinesNeedZoom())
+                            Notices.show(appInfo.localized("isolines_toast_zooms_1_10"), Notice.Short, Notice.Center)
+                        else if ((modelData.layer === MapItem.Hiking || modelData.layer === MapItem.Cycling)
+                                 && map.needUpdateForRoutes())
+                            Notices.show(appInfo.localized("routes_update_maps_text"), Notice.Long, Notice.Center)
+                    }
                 }
             }
         }
@@ -722,12 +769,26 @@ Page {
             text: appInfo.localized("placepage_add_place_button")
             onClicked: {
                 menuPanel.open = false
+                // An old map can't be edited: offered for update first, like on iOS.
+                var outdated = map.mapToUpdateForEditing()
+                if (outdated.countryId) {
+                    pageStack.push(Qt.resolvedUrl("MessageDialog.qml"), {
+                        title: appInfo.localized("contribute_to_osm_update_map"),
+                        message: appInfo.localized("contribute_to_osm_update_map_description", [outdated.name]),
+                        acceptText: appInfo.localized("download"),
+                        acceptAction: function() {
+                            Downloads.start(pageStack, function() { map.updateMap(outdated.countryId) })
+                        }
+                    })
+                    return
+                }
                 map.startChoosingPosition()
             }
         }
         MenuRow {
             icon: "../../icons/menu/ic_download.svg"
-            text: appInfo.localized("download_maps")
+            // With the number of map updates, like the Android menu badge.
+            text: appInfo.localized("download_maps") + (page.mapUpdateCount > 0 ? " (" + page.mapUpdateCount + ")" : "")
             onClicked: {
                 menuPanel.open = false
                 pageStack.push(Qt.resolvedUrl("MapsPage.qml"))

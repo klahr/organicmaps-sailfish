@@ -286,6 +286,16 @@ Routing::Routing(Framework & framework, QObject * parent)
     Build();
   }, [](storage::CountryId const &, downloader::Progress const &) {});
 
+  // Sunset and sunrise also matter outside navigation, for the scheduled appearance.
+  m_darkOutsideTimer.setInterval(kDarkOutsideCheckIntervalMs);
+  connect(&m_darkOutsideTimer, &QTimer::timeout, this, [this]
+  {
+    m_darkOutsideCheckMs = 0;
+    UpdateDarkOutside();
+  });
+  m_darkOutsideTimer.start();
+  UpdateDarkOutside();
+
   connect(qApp, &QGuiApplication::applicationStateChanged, this, [this](Qt::ApplicationState state)
   {
     if (state != Qt::ApplicationActive)
@@ -478,8 +488,6 @@ void Routing::EndNavigation()
   m_navigating = false;
   m_navigation.clear();
   SetNavigationStyle(false);
-  if (std::exchange(m_darkOutside, false))
-    emit darkOutsideChanged();
   close();
   emit navigationChanged();
 }
@@ -668,13 +676,19 @@ void Routing::UpdateDarkOutside()
   auto const nowMs = QDateTime::currentMSecsSinceEpoch();
   if (m_darkOutsideCheckMs != 0 && nowMs - m_darkOutsideCheckMs < kDarkOutsideCheckIntervalMs)
     return;
-  auto const position = m_framework.GetCurrentPosition();
-  if (!position)
-    return;
   m_darkOutsideCheckMs = nowMs;
-  auto const latLon = mercator::ToLatLon(*position);
-  auto const dayTime = GetDayTime(static_cast<time_t>(nowMs / 1000), latLon.m_lat, latLon.m_lon);
-  bool const dark = dayTime == DayTimeType::Night || dayTime == DayTimeType::PolarNight;
+  bool dark = false;
+  if (auto const position = m_framework.GetCurrentPosition())
+  {
+    auto const latLon = mercator::ToLatLon(*position);
+    auto const dayTime = GetDayTime(static_cast<time_t>(nowMs / 1000), latLon.m_lat, latLon.m_lon);
+    dark = dayTime == DayTimeType::Night || dayTime == DayTimeType::PolarNight;
+  }
+  else
+  {
+    auto const hour = QTime::currentTime().hour();
+    dark = hour < 7 || hour >= 18;
+  }
   if (dark != std::exchange(m_darkOutside, dark))
     emit darkOutsideChanged();
 }
@@ -1041,6 +1055,7 @@ void Routing::ClearResult()
   m_routeSaved = false;
   m_optionsError = false;
   m_summary.clear();
+  m_arrival.clear();
   m_walkingDistance.clear();
   m_transitSteps.clear();
   m_missingMaps.clear();
@@ -1108,6 +1123,7 @@ void Routing::OnRouteBuilt(int code, QStringList const & absentCountries)
       // Total time, the walking distance and the legs, as RoutingBottomMenuController.showTransitInfo().
       auto const transit = m_framework.GetRoutingManager().GetTransitRouteInfo();
       m_summary = FormatDuration(transit.m_totalTimeInSec);
+      m_arrival = FormatTime(QTime::currentTime().addSecs(transit.m_totalTimeInSec));
       if (transit.m_totalPedestrianTimeInSec > 0)
       {
         m_walkingDistance =
@@ -1127,6 +1143,8 @@ void Routing::OnRouteBuilt(int code, QStringList const & absentCountries)
     {
       m_summary = routerType() == Ruler ? Localized("placepage_distance") + ": " + distance
                                         : FormatDuration(info.m_time) + QStringLiteral(" • ") + distance;
+      if (routerType() != Ruler)
+        m_arrival = FormatTime(QTime::currentTime().addSecs(info.m_time));
       LoadElevation();
     }
     break;

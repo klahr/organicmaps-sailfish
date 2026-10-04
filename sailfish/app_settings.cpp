@@ -25,6 +25,7 @@ std::string_view constexpr kMapAppearance = "SailfishMapAppearance";
 std::string_view constexpr kZoomButtons = "SailfishZoomButtons";
 std::string_view constexpr kKeepScreenOn = "SailfishKeepScreenOn";
 std::string_view constexpr kLogging = "SailfishFileLogging";
+std::string_view constexpr kEditsPublicNoticeShown = "SailfishEditsPublicNoticeShown";
 // Same setting as on Android.
 std::string_view constexpr kAutoNightInNavigation = "AutoDarkNavigation";
 std::string_view constexpr kSearchHistory = "SailfishSearchHistory";
@@ -213,6 +214,17 @@ void AppSettings::setPerspectiveView(bool enabled)
   Framework::Load3dMode(allow3d, buildings);
   Framework::Save3dMode(enabled, buildings);
   m_framework.Allow3dMode(enabled, buildings);
+  emit changed();
+}
+
+bool AppSettings::editsPublicNoticeShown() const
+{
+  return Load(kEditsPublicNoticeShown, false);
+}
+
+void AppSettings::setEditsPublicNoticeShown(bool shown)
+{
+  settings::Set(kEditsPublicNoticeShown, shown);
   emit changed();
 }
 

@@ -36,6 +36,7 @@ Page {
                     MenuItem { text: appInfo.localized("follow_system") }
                     MenuItem { text: appInfo.localized("pref_appearance_light") }
                     MenuItem { text: appInfo.localized("pref_appearance_dark") }
+                    MenuItem { text: appInfo.localized("pref_appearance_scheduled") }
                 }
                 onCurrentIndexChanged: appSettings.mapAppearance = currentIndex
             }
@@ -55,10 +56,15 @@ Page {
                 checked: appSettings.zoomButtons
                 onCheckedChanged: appSettings.zoomButtons = checked
             }
+            // Off under maximum power saving (scheme 3), like on Android.
             TextSwitch {
+                readonly property bool powerSaving: appSettings.powerScheme === 3
                 text: appInfo.localized("pref_map_3d_buildings_title")
-                checked: appSettings.buildings3d
-                onCheckedChanged: appSettings.buildings3d = checked
+                description: powerSaving ? appInfo.localized("pref_map_3d_buildings_disabled_summary") : ""
+                enabled: !powerSaving
+                automaticCheck: false
+                checked: !powerSaving && appSettings.buildings3d
+                onClicked: appSettings.buildings3d = !appSettings.buildings3d
             }
             TextSwitch {
                 text: appInfo.localized("autodownload")

@@ -432,6 +432,13 @@ void PlaceEditor::createNote(QString const & note)
     GetFramework().CreateNote(*m_object, osm::Editor::NoteProblemType::General, text);
 }
 
+void PlaceEditor::createStandaloneNote(double lat, double lon, QString const & note)
+{
+  auto const text = note.trimmed().toStdString();
+  if (!text.empty())
+    osm::Editor::Instance().CreateStandaloneNote(ms::LatLon(lat, lon), text);
+}
+
 int PlaceEditor::resetAction() const
 {
   if (!m_valid || m_creating)

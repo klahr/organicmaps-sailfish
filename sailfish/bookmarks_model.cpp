@@ -551,4 +551,22 @@ void BookmarksModel::setAllColor(bool tracks, int colorIndex)
   m_framework.GetBookmarkManager().GetEditSession().SetBookmarksAndTracksColor(marks, trackIds,
                                                                                PresetColor(colorIndex));
 }
+void BookmarksModel::moveRowsToNewList(QVariantList const & rows, QString const & name)
+{
+  auto & manager = m_framework.GetBookmarkManager();
+  auto const id = manager.CreateBookmarkCategory(name.trimmed().toStdString());
+  moveRows(rows, id);
+}
+
+void BookmarksModel::showListOnMap()
+{
+  auto & manager = m_framework.GetBookmarkManager();
+  manager.GetEditSession().SetIsVisible(m_categoryId, true);
+  m_framework.ShowBookmarkCategory(m_categoryId);
+}
+
+void BookmarksModel::deleteList()
+{
+  m_framework.GetBookmarkManager().GetEditSession().DeleteBmCategory(m_categoryId, false /* permanently */);
+}
 }  // namespace sailfish

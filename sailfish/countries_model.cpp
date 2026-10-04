@@ -91,6 +91,15 @@ void DownloadMap(storage::Storage & storage, storage::CountryId const & countryI
     storage.DownloadNode(countryId);
 }
 
+QVariantMap PositionMapInfo()
+{
+  auto & framework = GetFramework();
+  auto const position = framework.GetCurrentPosition();
+  if (!position)
+    return {};
+  return MissingMapInfo(framework.GetStorage(), framework.GetCountryInfoGetter().GetRegionCountryId(*position));
+}
+
 CountriesModel::CountriesModel(QObject * parent) : QAbstractListModel(parent), m_storage(GetFramework().GetStorage())
 {
   m_parentId = m_storage.GetRootId();

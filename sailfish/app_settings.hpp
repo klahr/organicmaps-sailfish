@@ -43,6 +43,8 @@ class AppSettings : public QObject
   // A dark map while navigating between sunset and sunrise, see Routing::darkOutside.
   // Debug logs in a file, which "Report a bug" shares, at logUrl.
   Q_PROPERTY(bool logging READ logging WRITE setLogging NOTIFY changed)
+  // The notice that edits go public was seen with a first edit or note, like Android's one-time dialog.
+  Q_PROPERTY(bool editsPublicNoticeShown READ editsPublicNoticeShown WRITE setEditsPublicNoticeShown NOTIFY changed)
   Q_PROPERTY(QString logUrl READ logUrl CONSTANT)
   Q_PROPERTY(bool autoNightInNavigation READ autoNightInNavigation WRITE setAutoNightInNavigation NOTIFY changed)
   // power_management::Scheme: Normal (never), EconomyMaximum (always) or Auto (low battery).
@@ -62,7 +64,9 @@ public:
   {
     AppearanceAuto,
     AppearanceLight,
-    AppearanceDark
+    AppearanceDark,
+    // Light from dawn till dusk, like on Android.
+    AppearanceScheduled
   };
   Q_ENUM(MapAppearance)
 
@@ -114,6 +118,8 @@ public:
   bool autoZoom() const;
   void setAutoZoom(bool enabled);
   bool logging() const;
+  bool editsPublicNoticeShown() const;
+  void setEditsPublicNoticeShown(bool shown);
   void setLogging(bool enabled);
   QString logUrl() const;
   // Bytes in the log file, shown with the setting like on iOS.

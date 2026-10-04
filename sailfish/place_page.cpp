@@ -271,6 +271,7 @@ void PlacePage::Update()
   m_subtitle = QString::fromStdString(info.GetSubtitle());
   m_address = QString::fromStdString(info.GetSecondarySubtitle());
   m_secondaryTitle = QString::fromStdString(info.GetSecondaryTitle());
+  m_apiBackUrl = info.GetApiUrl().empty() ? QString() : QString::fromStdString(m_framework.GetParsedBackUrl());
   m_osmDescription = QString::fromStdString(info.GetOSMDescription());
   m_isRoutePoint = info.IsRoutePoint();
   // The warnings Android offers to avoid; steps and gates have no routing option.
@@ -452,6 +453,20 @@ void PlacePage::UpdateCategory()
 void PlacePage::UpdateCountry()
 {
   auto country = MissingMapInfo(m_framework.GetStorage(), m_countryId);
+  // An outdated map is offered for update too, like the iOS place page.
+  if (country.isEmpty() && !m_countryId.empty())
+  {
+    storage::NodeAttrs attrs;
+    m_framework.GetStorage().GetNodeAttrs(m_countryId, attrs);
+    if (attrs.m_status == storage::NodeStatus::OnDiskOutOfDate)
+    {
+      country = {{"countryId", QString::fromStdString(m_countryId)},
+                 {"name", QString::fromStdString(attrs.m_nodeLocalName)},
+                 {"size", FormatSize(static_cast<qint64>(attrs.m_mwmSize))},
+                 {"status", static_cast<int>(attrs.m_status)},
+                 {"outdated", true}};
+    }
+  }
   if (country != m_country)
   {
     m_country = std::move(country);
@@ -519,8 +534,20 @@ void PlacePage::selectTrackCandidate(int index)
 
 void PlacePage::downloadCountry()
 {
-  if (!m_countryId.empty())
+  if (m_countryId.empty())
+    return;
+  if (m_country.value("outdated").toBool())
+    m_framework.GetStorage().UpdateNode(m_countryId);
+  else
     DownloadMap(m_framework.GetStorage(), m_countryId);
+}
+
+void PlacePage::moveToNewCategory(QString const & name)
+{
+  auto & manager = m_framework.GetBookmarkManager();
+  auto const id = manager.CreateBookmarkCategory(name.trimmed().toStdString());
+  manager.SetLastEditedBmCategory(id);
+  setCategory(id);
 }
 
 void PlacePage::cancelCountry()

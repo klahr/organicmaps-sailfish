@@ -32,9 +32,20 @@ Page {
             id: column
             width: parent.width
 
+            // Tapping copies the app and map data versions, like on iOS, e.g. for bug reports.
             PageHeader {
                 title: "Organic Maps"
                 description: appInfo.version
+
+                MouseArea {
+                    anchors.fill: parent
+                    onClicked: {
+                        var versions = appInfo.version + " • " + Qt.formatDate(appInfo.dataVersion, "yyMMdd")
+                        Clipboard.text = versions
+                        Notices.show(appInfo.localized("copied_to_clipboard", [versions]), Notice.Short,
+                                     Notice.Center)
+                    }
+                }
             }
 
             Icon {
@@ -124,7 +135,9 @@ Page {
                     { icon: "ic_facebook_white.svg", text: "Facebook", url: "https://www.facebook.com/OrganicMaps" },
                     { icon: "ic_twitterx.svg", text: "X (Twitter)", url: "https://twitter.com/OrganicMapsApp" },
                     { icon: "ic_instagram.svg", text: "Instagram", url: appInfo.localized("instagram_url") },
-                    { icon: "ic_openstreetmap.svg", text: "OpenStreetMap", url: appInfo.localized("osm_wiki_about_url") }
+                    { icon: "ic_openstreetmap.svg", text: "OpenStreetMap", url: appInfo.localized("osm_wiki_about_url") },
+                    { icon: "ic_openstreetmap.svg", text: appInfo.localized("report_incorrect_map_bug"),
+                      url: "https://www.openstreetmap.org/fixthemap" }
                 ]
 
                 MenuRow {

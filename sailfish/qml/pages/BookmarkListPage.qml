@@ -103,6 +103,27 @@ Page {
             }
             MenuItem {
                 visible: !page.selecting
+                text: appInfo.localized("delete_list")
+                onClicked: Remorse.popupAction(page, appInfo.localized("delete_list"), function() {
+                    bookmarks.deleteList()
+                    pageStack.pop()
+                })
+            }
+            MenuItem {
+                visible: !page.selecting
+                text: appInfo.localized("zoom_to_country")
+                onClicked: {
+                    bookmarks.showListOnMap()
+                    Navigation.popToMap(pageStack)
+                }
+            }
+            MenuItem {
+                visible: !page.selecting
+                text: appInfo.localized("export_file_geojson")
+                onClicked: bookmarksIO.exportCategory(bookmarks.categoryId, BookmarksIO.GeoJson)
+            }
+            MenuItem {
+                visible: !page.selecting
                 text: appInfo.localized("export_file_gpx")
                 onClicked: bookmarksIO.exportCategory(bookmarks.categoryId, BookmarksIO.Gpx)
             }
@@ -225,8 +246,18 @@ Page {
                     }
                     MenuItem {
                         visible: model.isTrack
+                        text: appInfo.localized("export_file")
+                        onClicked: bookmarksIO.exportTrack(model.itemId, BookmarksIO.Kmz)
+                    }
+                    MenuItem {
+                        visible: model.isTrack
                         text: appInfo.localized("export_file_gpx")
                         onClicked: bookmarksIO.exportTrack(model.itemId, BookmarksIO.Gpx)
+                    }
+                    MenuItem {
+                        visible: model.isTrack
+                        text: appInfo.localized("export_file_geojson")
+                        onClicked: bookmarksIO.exportTrack(model.itemId, BookmarksIO.GeoJson)
                     }
                     MenuItem {
                         text: appInfo.localized("delete")
@@ -332,6 +363,22 @@ Page {
                     title: appInfo.localized("select_list")
                 }
                 model: bookmarks.categories.filter(function(category) { return category.id !== bookmarks.categoryId })
+
+                // Like "Add a New List" in the Android list chooser.
+                PullDownMenu {
+                    MenuItem {
+                        text: appInfo.localized("add_new_set")
+                        onClicked: {
+                            var rows = page.selected
+                            pageStack.replace(Qt.resolvedUrl("NewListDialog.qml"), {
+                                createAction: function(name) {
+                                    bookmarks.moveRowsToNewList(rows, name)
+                                    page.selecting = false
+                                }
+                            })
+                        }
+                    }
+                }
 
                 delegate: ListItem {
                     onClicked: {

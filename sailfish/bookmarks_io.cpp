@@ -139,7 +139,12 @@ BookmarkManager::SharingHandler MakeSharingHandler(QPointer<BookmarksIO> io)
 
 FileType ToFileType(int fileType)
 {
-  return fileType == BookmarksIO::Gpx ? FileType::Gpx : FileType::Kml;
+  switch (fileType)
+  {
+  case BookmarksIO::Gpx: return FileType::Gpx;
+  case BookmarksIO::GeoJson: return FileType::GeoJson;
+  default: return FileType::Kml;
+  }
 }
 }  // namespace
 

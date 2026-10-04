@@ -81,7 +81,22 @@ Dialog {
                             text: modelData
                         }
                     }
+                    // Like "Add a New List" in the Android list chooser.
+                    MenuItem {
+                        text: appInfo.localized("add_new_set")
+                        onClicked: pageStack.push(Qt.resolvedUrl("NewListDialog.qml"), {
+                            createAction: function(name) { listBox.currentIndex = editor.createCategory(name) }
+                        })
+                    }
                 }
+            }
+            // Like the visibility toggle of the Android track editor.
+            TextSwitch {
+                visible: editor.isTrack
+                text: appInfo.localized("show_track")
+                automaticCheck: false
+                checked: editor.trackVisible
+                onClicked: editor.trackVisible = !editor.trackVisible
             }
             SectionHeader {
                 text: appInfo.localized("choose_color")

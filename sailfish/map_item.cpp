@@ -204,6 +204,8 @@ void MapItem::OnLocationError(location::TLocationError errorCode)
   // Timeouts just mean no fix yet, e.g. indoors.
   bool const disabled =
       errorCode == location::EDenied || errorCode == location::EGPSIsOff || errorCode == location::ENotSupported;
+  if (!std::exchange(m_locationLost, true))
+    emit locationLostChanged();
   if (disabled && !std::exchange(m_locationErrorShown, true))
     emit notice(Localized("enable_location_services") + ". " + Localized("location_is_disabled_long_text"));
 }
@@ -211,6 +213,8 @@ void MapItem::OnLocationError(location::TLocationError errorCode)
 void MapItem::OnLocationUpdated(location::GpsInfo const & info)
 {
   m_locationErrorShown = false;
+  if (std::exchange(m_locationLost, false))
+    emit locationLostChanged();
   m_hasAltitude = info.HasAltitude();
   m_altitude = info.m_altitude;
   m_speed = info.m_speed;
@@ -356,6 +360,35 @@ void MapItem::OnCurrentCountryChanged(std::string const & countryId)
     return;
   if (storage::IsEnoughSpaceForDownload(countryId, storage))
     storage.DownloadNode(countryId);
+}
+
+QVariantMap MapItem::mapToUpdateForEditing() const
+{
+  auto const center = m_framework.GetViewportCenter();
+  if (m_framework.CanEditMapForPosition(center))
+    return {};
+  auto const countryId = m_framework.GetCountryInfoGetter().GetRegionCountryId(center);
+  storage::NodeAttrs attrs;
+  m_framework.GetStorage().GetNodeAttrs(countryId, attrs);
+  if (countryId.empty() || attrs.m_status != storage::NodeStatus::OnDiskOutOfDate)
+    return {};
+  return {{"countryId", QString::fromStdString(countryId)}, {"name", QString::fromStdString(attrs.m_nodeLocalName)}};
+}
+
+void MapItem::updateMap(QString const & countryId)
+{
+  m_framework.GetStorage().UpdateNode(countryId.toStdString());
+}
+
+bool MapItem::needUpdateForRoutes() const
+{
+  return m_framework.NeedUpdateForRoutes();
+}
+
+bool MapItem::isolinesNeedZoom() const
+{
+  auto const & manager = m_framework.GetIsolinesManager();
+  return !manager.IsVisible() && manager.GetState() == IsolinesManager::IsolinesState::Enabled;
 }
 
 void MapItem::UpdatePositionInfo()

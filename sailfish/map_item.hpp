@@ -48,6 +48,8 @@ class MapItem
   Q_PROPERTY(QString recordingMaxElevation READ recordingMaxElevation NOTIFY recordingStatsChanged)
   // The last known position for the app cover as {address, coordinates, altitude, speed}; empty without one.
   Q_PROPERTY(QVariantMap positionInfo READ positionInfo NOTIFY positionInfoChanged)
+  // Location is unavailable since the last fix, e.g. no GPS signal, like the Android recording notification.
+  Q_PROPERTY(bool locationLost READ locationLost NOTIFY locationLostChanged)
   // The map shows the cross for "Add Place to OpenStreetMap", taps don't select places.
   Q_PROPERTY(bool choosingPosition READ choosingPosition NOTIFY choosingPositionChanged)
   // The region in the middle of the map while its map isn't downloaded, like the Android on-map downloader:
@@ -119,6 +121,15 @@ public:
   void setViewportBottomInset(qreal inset);
   QString recordingSummary() const { return m_recordingSummary; }
   QVariantMap positionInfo() const { return m_positionInfo; }
+  bool locationLost() const { return m_locationLost; }
+  // The map in the middle of the map is too old to edit, as {countryId, name}; empty otherwise. Like the iOS
+  // "Update the Map to Contribute".
+  Q_INVOKABLE QVariantMap mapToUpdateForEditing() const;
+  Q_INVOKABLE void updateMap(QString const & countryId);
+  // Hiking and cycling routes need newer maps here, like on iOS.
+  Q_INVOKABLE bool needUpdateForRoutes() const;
+  // Contour lines are on but not shown at this zoom, like the Android hint.
+  Q_INVOKABLE bool isolinesNeedZoom() const;
   QVariantList recordingProfile() const { return m_recordingProfile; }
   double recordingLength() const { return m_recordingLength; }
   QString recordingMinElevation() const { return m_recordingMinElevation; }
@@ -137,6 +148,7 @@ signals:
   void trackRecordingChanged();
   void recordingStatsChanged();
   void positionInfoChanged();
+  void locationLostChanged();
   // A short message for the user, like the Android toasts: location off, compass calibration, contour lines.
   void notice(QString const & message);
   // Contour lines need newer maps here, which Android offers to download.
@@ -190,6 +202,7 @@ private:
   qreal m_viewportBottomInset = 0;
   bool m_inBackground = false;
   bool m_locationErrorShown = false;
+  bool m_locationLost = false;
   QVariantMap m_positionInfo;
   // The last fix, for the cover, and when positionInfo was worked out.
   bool m_hasAltitude = false;

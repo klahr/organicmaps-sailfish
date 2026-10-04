@@ -119,6 +119,8 @@ public:
   Q_INVOKABLE bool save();
   // A note to OpenStreetMap volunteers about the saved place, uploaded with the edits.
   Q_INVOKABLE void createNote(QString const & note);
+  // A note at a position without a place, when no category fits, like on Android.
+  Q_INVOKABLE void createStandaloneNote(double lat, double lon, QString const & note);
   // Discards the local changes of the place, or deletes a created place.
   // Discards the local edits, or removes a place added here.
   Q_INVOKABLE void reset();

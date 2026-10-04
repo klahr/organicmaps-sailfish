@@ -67,9 +67,59 @@ Page {
                                          { newPlaceType: modelData.type, lat: page.lat, lon: page.lon })
         }
 
-        ViewPlaceholder {
-            enabled: list.count === 0
-            text: appInfo.localized("search_not_found")
+        // Places the editor can't add, and a note for the community instead, like the footer of the Android
+        // category list.
+        footer: Column {
+            width: list.width
+            spacing: Theme.paddingMedium
+            topPadding: Theme.paddingLarge
+            bottomPadding: Theme.paddingLarge
+
+            Label {
+                x: Theme.horizontalPageMargin
+                width: parent.width - 2 * x
+                visible: list.count === 0
+                text: appInfo.localized("search_not_found")
+                color: Theme.highlightColor
+            }
+            Label {
+                x: Theme.horizontalPageMargin
+                width: parent.width - 2 * x
+                text: appInfo.localized("editor_category_unsuitable_text")
+                textFormat: Text.StyledText
+                wrapMode: Text.Wrap
+                font.pixelSize: Theme.fontSizeSmall
+                color: Theme.secondaryHighlightColor
+                linkColor: Theme.highlightColor
+                onLinkActivated: Qt.openUrlExternally(link)
+            }
+            Label {
+                x: Theme.horizontalPageMargin
+                width: parent.width - 2 * x
+                text: appInfo.localized("osm_note_hint")
+                wrapMode: Text.Wrap
+                font.pixelSize: Theme.fontSizeSmall
+                color: Theme.secondaryHighlightColor
+            }
+            EditsPublicNotice {}
+            TextArea {
+                id: noteArea
+                width: parent.width
+                placeholderText: appInfo.localized("editor_note_hint")
+            }
+            Button {
+                anchors.horizontalCenter: parent.horizontalCenter
+                enabled: noteArea.text.trim() !== ""
+                text: appInfo.localized("editor_report_problem_send_button")
+                onClicked: {
+                    appSettings.editsPublicNoticeShown = true
+                    editor.createStandaloneNote(page.lat, page.lon, noteArea.text)
+                    osmAccount.updateEdits()
+                    osmAccount.uploadChanges()
+                    Notices.show(appInfo.localized("osm_note_toast"), Notice.Short, Notice.Center)
+                    pageStack.pop()
+                }
+            }
         }
 
         VerticalScrollDecorator {}

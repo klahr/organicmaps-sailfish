@@ -25,6 +25,8 @@ namespace sailfish
 QVariantMap MissingMapInfo(storage::Storage const & storage, storage::CountryId const & countryId);
 // Downloads the map, or retries it after an error.
 void DownloadMap(storage::Storage & storage, storage::CountryId const & countryId);
+// MissingMapInfo() of the map at the position; empty without a position.
+QVariantMap PositionMapInfo();
 
 // Children of one node of the map download tree (the world root by default), kept in sync with
 // storage status and download progress.
@@ -44,6 +46,8 @@ class CountriesModel : public QAbstractListModel
   Q_PROPERTY(QString updateSize READ updateSize NOTIFY updatesChanged)
   // The status of the parent node, for "Download All" in a group like on Android.
   Q_PROPERTY(int parentStatus READ parentStatus NOTIFY downloadInProgressChanged)
+  // The map of the position to offer when none is downloaded, like on Android.
+  Q_PROPERTY(QVariantMap positionMap READ positionMap NOTIFY downloadingChanged)
   // The map being downloaded and its progress (0..1), for the download notification.
   Q_PROPERTY(QString downloadingName READ downloadingName NOTIFY downloadingChanged)
   Q_PROPERTY(double downloadingProgress READ downloadingProgress NOTIFY downloadingChanged)
@@ -132,6 +136,7 @@ public:
   int updateCount() const;
   QString updateSize() const;
   int parentStatus() const;
+  QVariantMap positionMap() const { return PositionMapInfo(); }
   QString downloadingName() const { return m_downloadingName; }
   double downloadingProgress() const { return m_downloadingProgress; }
 

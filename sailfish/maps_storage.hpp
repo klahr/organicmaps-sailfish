@@ -19,6 +19,10 @@ class MapsStorage : public QObject
   Q_PROPERTY(QVariantList locations READ locations NOTIFY changed)
   Q_PROPERTY(QString currentName READ currentName NOTIFY changed)
   Q_PROPERTY(bool moving READ moving NOTIFY changed)
+  // The size of the downloaded maps, like on Android.
+  Q_PROPERTY(QString downloadedSize READ downloadedSize NOTIFY changed)
+  // Maps can't move while one downloads.
+  Q_PROPERTY(bool downloading READ downloading NOTIFY changed)
 
 public:
   explicit MapsStorage(Framework & framework, QObject * parent = nullptr);
@@ -32,6 +36,8 @@ public:
   bool moving() const { return m_moving; }
 
   // Moves the maps into the folder of a location; moveFinished() follows. Fails while maps download.
+  QString downloadedSize() const;
+  bool downloading() const;
   Q_INVOKABLE void moveTo(QString const & path);
   // Refreshes the locations, e.g. after a memory card was inserted.
   Q_INVOKABLE void refresh() { emit changed(); }

@@ -290,8 +290,8 @@ MapPanel {
                         verticalCenter: parent.verticalCenter
                     }
                     text: countryRow.busy ? appInfo.localized("cancel_download") + " • " + (countryRow.country.name || "")
-                        : appInfo.localized("downloader_download_map") + " • " + (countryRow.country.name || "")
-                          + " (" + (countryRow.country.size || "") + ")"
+                        : appInfo.localized(countryRow.country.outdated ? "downloader_update_map" : "downloader_download_map")
+                          + " • " + (countryRow.country.name || "") + " (" + (countryRow.country.size || "") + ")"
                     truncationMode: TruncationMode.Fade
                     highlighted: countryRow.highlighted
                 }
@@ -537,11 +537,17 @@ MapPanel {
                 onClicked: pageStack.push(Qt.resolvedUrl("EditBookmarkPage.qml"),
                                           { itemId: placePage.userMarkId, isTrack: placePage.isTrack })
             }
-            MenuRow {
-                visible: placePage.isTrack
-                icon: "image://theme/icon-m-share"
-                text: appInfo.localized("export_file_gpx")
-                onClicked: bookmarksIO.exportTrack(placePage.userMarkId, BookmarksIO.Gpx)
+            // The export formats of the Android track share menu.
+            Repeater {
+                model: placePage.isTrack ? [{ key: "export_file", type: BookmarksIO.Kmz },
+                                            { key: "export_file_gpx", type: BookmarksIO.Gpx },
+                                            { key: "export_file_geojson", type: BookmarksIO.GeoJson }] : []
+
+                MenuRow {
+                    icon: "image://theme/icon-m-share"
+                    text: appInfo.localized(modelData.key)
+                    onClicked: bookmarksIO.exportTrack(placePage.userMarkId, modelData.type)
+                }
             }
             // Hands the geo: link to the default handler, e.g. Pure Maps.
             MenuRow {
@@ -557,6 +563,13 @@ MapPanel {
                 icon: "image://theme/icon-m-edit"
                 text: appInfo.localized("edit_place")
                 onClicked: pageStack.push(Qt.resolvedUrl("EditPlacePage.qml"))
+            }
+            // What OpenStreetMap is, next to the editing rows like on iOS.
+            MenuRow {
+                visible: placePage.canEdit || (placePage.canAddPlace && !routing.active)
+                icon: "../../icons/help/ic_openstreetmap.svg"
+                text: appInfo.localized("editor_more_about_osm")
+                onClicked: Qt.openUrlExternally("https://welcome.openstreetmap.org")
             }
             MenuRow {
                 visible: placePage.canAddPlace && !routing.active
@@ -622,8 +635,16 @@ MapPanel {
         width: parent.width
         visible: !panel.specialAction
 
-        readonly property int count: routing.active ? 4 : 3
+        readonly property int count: (routing.active ? 4 : 3) + (placePage.apiBackUrl !== "" ? 1 : 0)
 
+        // Back to the app whose om:// link showed this place, like on Android.
+        PlaceAction {
+            visible: placePage.apiBackUrl !== ""
+            width: actions.width / actions.count
+            icon: "image://theme/icon-m-back"
+            text: appInfo.localized("back")
+            onClicked: Qt.openUrlExternally(placePage.apiBackUrl)
+        }
         PlaceAction {
             width: actions.width / actions.count
             icon: "../../icons/routing/ic_route_from.webp"
@@ -712,6 +733,16 @@ MapPanel {
                     title: appInfo.localized("select_list")
                 }
                 model: placePage.categories()
+
+                // Like "Add a New List" in the Android list chooser.
+                PullDownMenu {
+                    MenuItem {
+                        text: appInfo.localized("add_new_set")
+                        onClicked: pageStack.replace(Qt.resolvedUrl("NewListDialog.qml"), {
+                            createAction: function(name) { placePage.moveToNewCategory(name) }
+                        })
+                    }
+                }
 
                 delegate: ListItem {
                     highlighted: down || modelData.name === placePage.category

@@ -4,9 +4,16 @@ import Sailfish.Silica 1.0
 // Name prompt for a new bookmark list.
 Dialog {
     property QtObject categories
+    // Called with the name instead, e.g. to move items to the new list.
+    property var createAction
 
     canAccept: nameField.text.trim() !== ""
-    onAccepted: categories.createCategory(nameField.text)
+    onAccepted: {
+        if (createAction)
+            createAction(nameField.text)
+        else
+            categories.createCategory(nameField.text)
+    }
 
     Column {
         width: parent.width

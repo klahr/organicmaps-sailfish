@@ -27,7 +27,8 @@ public:
   enum FileType
   {
     Kmz,
-    Gpx
+    Gpx,
+    GeoJson
   };
   Q_ENUM(FileType)
 

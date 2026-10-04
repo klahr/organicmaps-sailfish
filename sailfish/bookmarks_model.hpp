@@ -157,6 +157,10 @@ public:
   Q_INVOKABLE void setRowsColor(QVariantList const & rows, int colorIndex);
   // All bookmarks or all tracks of the list, like the Android list settings.
   Q_INVOKABLE void setAllColor(bool tracks, int colorIndex);
+  Q_INVOKABLE void moveRowsToNewList(QVariantList const & rows, QString const & name);
+  // The list itself, like the iOS list menu: shown on the map, or deleted to the trash.
+  Q_INVOKABLE void showListOnMap();
+  Q_INVOKABLE void deleteList();
 
 signals:
   void categoryIdChanged();

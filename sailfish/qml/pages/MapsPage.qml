@@ -303,9 +303,39 @@ Page {
         }
 
         ViewPlaceholder {
+            id: noMapsPlaceholder
             enabled: list.count === 0 && page.downloadedOnly && !page.searching
             text: appInfo.localized("downloader_no_downloaded_maps_title")
             hintText: appInfo.localized("downloader_no_downloaded_maps_message")
+        }
+        // The map of the position, or the list of all maps, like the Android "no maps" screen.
+        Column {
+            readonly property var map: countries.positionMap
+            readonly property bool busy: map.status === CountriesModel.Downloading
+                                         || map.status === CountriesModel.InQueue
+                                         || map.status === CountriesModel.Applying
+            anchors {
+                bottom: parent.bottom
+                bottomMargin: Theme.itemSizeLarge
+                horizontalCenter: parent.horizontalCenter
+            }
+            visible: noMapsPlaceholder.enabled
+            spacing: Theme.paddingLarge
+
+            Button {
+                anchors.horizontalCenter: parent.horizontalCenter
+                visible: !!parent.map.countryId
+                enabled: !parent.busy
+                text: parent.busy ? appInfo.localized("downloader_downloading") + " "
+                                    + Math.round((parent.map.progress || 0) * 100) + "%"
+                                  : appInfo.localized("downloader_download_map") + " (" + parent.map.size + ")"
+                onClicked: page.download(parent.map.countryId)
+            }
+            Button {
+                anchors.horizontalCenter: parent.horizontalCenter
+                text: appInfo.localized("search_select_map")
+                onClicked: pageStack.push(Qt.resolvedUrl("MapsPage.qml"), { downloadedOnly: false })
+            }
         }
 
         VerticalScrollDecorator {}

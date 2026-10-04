@@ -24,7 +24,7 @@ MapPanel {
         switch (routing.pickType) {
         case Routing.Start: return appInfo.localized(replace ? "change_start_location" : "choose_start_location")
         case Routing.Finish: return appInfo.localized(replace ? "change_destination" : "choose_destination")
-        default: return appInfo.localized(replace ? "placepage_replace_stop" : "placepage_add_stop")
+        default: return appInfo.localized(replace ? "change_stop_along_route" : "placepage_add_stop")
         }
     }
 
@@ -166,6 +166,13 @@ MapPanel {
                 Label {
                     text: routing.summary
                     font.bold: true
+                    anchors.verticalCenter: parent.verticalCenter
+                }
+                // The arrival if started now, like on Android.
+                Label {
+                    visible: routing.arrival !== ""
+                    text: "• " + routing.arrival
+                    color: Theme.secondaryColor
                     anchors.verticalCenter: parent.verticalCenter
                 }
                 Label {

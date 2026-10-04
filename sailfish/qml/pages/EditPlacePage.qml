@@ -78,6 +78,7 @@ Dialog {
                 editor.setField(field.fieldId, field.item.fieldValue)
             }
         }
+        appSettings.editsPublicNoticeShown = true
         if (editor.save()) {
             editor.createNote(noteField.text)
             osmAccount.updateEdits()
@@ -106,6 +107,7 @@ Dialog {
                 acceptText: appInfo.localized("save")
                 cancelText: appInfo.localized("cancel")
             }
+            EditsPublicNotice {}
             Label {
                 x: Theme.horizontalPageMargin
                 width: parent.width - 2 * x

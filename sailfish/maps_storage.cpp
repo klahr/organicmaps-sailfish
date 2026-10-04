@@ -115,6 +115,19 @@ QVariantList MapsStorage::locations() const
   return result;
 }
 
+QString MapsStorage::downloadedSize() const
+{
+  auto const & storage = m_framework.GetStorage();
+  storage::NodeAttrs attrs;
+  storage.GetNodeAttrs(storage.GetRootId(), attrs);
+  return FormatSize(static_cast<qint64>(attrs.m_localMwmSize));
+}
+
+bool MapsStorage::downloading() const
+{
+  return m_framework.GetStorage().IsDownloadInProgress();
+}
+
 QString MapsStorage::currentName() const
 {
   for (auto const & location : locations())

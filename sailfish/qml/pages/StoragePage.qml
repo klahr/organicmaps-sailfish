@@ -43,6 +43,10 @@ Page {
                 color: Theme.secondaryHighlightColor
                 bottomPadding: Theme.paddingLarge
             }
+            DetailItem {
+                label: appInfo.localized("maps_storage_downloaded")
+                value: mapsStorage.downloadedSize
+            }
         }
 
         delegate: ListItem {
@@ -50,8 +54,15 @@ Page {
             contentHeight: Theme.itemSizeMedium
             highlighted: down || modelData.current
             onClicked: {
-                if (!modelData.current)
-                    remorseAction(appInfo.localized("move_maps"), function() { mapsStorage.moveTo(modelData.path) })
+                if (modelData.current)
+                    return
+                // Like Android: not while a map downloads.
+                if (mapsStorage.downloading) {
+                    Notices.show(appInfo.localized("cant_change_this_setting") + " "
+                                 + appInfo.localized("downloading_is_active"), Notice.Long, Notice.Center)
+                    return
+                }
+                remorseAction(appInfo.localized("move_maps"), function() { mapsStorage.moveTo(modelData.path) })
             }
 
             Column {

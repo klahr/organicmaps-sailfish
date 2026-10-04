@@ -4,6 +4,7 @@
 #include <QObject>
 #include <QString>
 #include <QStringList>
+#include <QTimer>
 #include <QVariantList>
 #include <QVariantMap>
 
@@ -29,6 +30,8 @@ class Routing : public QObject
   Q_PROPERTY(bool built READ built NOTIFY stateChanged)
   // "11 min • 4.4 km", or "Distance: 2.1 km" for the ruler, like on Android.
   Q_PROPERTY(QString summary READ summary NOTIFY stateChanged)
+  // When the built route would arrive if started now, like on Android; empty for the ruler.
+  Q_PROPERTY(QString arrival READ arrival NOTIFY stateChanged)
   // Transit routes: the walking part of the summary, and the legs as {icon, number, color} chips.
   Q_PROPERTY(QString walkingDistance READ walkingDistance NOTIFY stateChanged)
   Q_PROPERTY(QVariantList transitSteps READ transitSteps NOTIFY stateChanged)
@@ -71,7 +74,8 @@ class Routing : public QObject
   // hourUnits, minuteUnits, arrival, distanceLeftValue, distanceLeftUnits, speed, speedLimit, speedCamLimitExceeded,
   // lanes as {icon, active} and progress (0..1).
   Q_PROPERTY(QVariantMap navigation READ navigation NOTIFY navigationChanged)
-  // It is between sunset and sunrise at the position while navigating, for the night style.
+  // It is between sunset and sunrise at the position, for the scheduled appearance and the night style while
+  // navigating; by the clock (7 to 18 is day) without a position, like on Android.
   Q_PROPERTY(bool darkOutside READ darkOutside NOTIFY darkOutsideChanged)
   // Voice instructions while navigating, see VoiceGuide: there is a voice for some language.
   Q_PROPERTY(bool voiceAvailable READ voiceAvailable NOTIFY voiceChanged)
@@ -133,6 +137,7 @@ public:
   bool building() const { return m_building; }
   bool built() const { return m_built; }
   QString summary() const { return m_summary; }
+  QString arrival() const { return m_arrival; }
   QString walkingDistance() const { return m_walkingDistance; }
   QVariantList transitSteps() const { return m_transitSteps; }
   QString errorTitle() const { return m_errorTitle; }
@@ -265,6 +270,7 @@ private:
   int m_pickType = -1;
   int m_pickIndex = -1;
   QString m_summary;
+  QString m_arrival;
   QString m_walkingDistance;
   QVariantList m_transitSteps;
   QString m_errorTitle;
@@ -284,6 +290,7 @@ private:
   bool m_darkOutside = false;
   // When darkOutside was last worked out; sunset needs no check on every location update.
   qint64 m_darkOutsideCheckMs = 0;
+  QTimer m_darkOutsideTimer;
   VoiceGuide * m_voice;
   // Speed camera warning.
   QMediaPlayer m_beep;

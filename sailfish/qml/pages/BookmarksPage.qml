@@ -121,6 +121,10 @@ Page {
                     onClicked: bookmarksIO.exportCategory(model.categoryId, BookmarksIO.Gpx)
                 }
                 MenuItem {
+                    text: appInfo.localized("export_file_geojson")
+                    onClicked: bookmarksIO.exportCategory(model.categoryId, BookmarksIO.GeoJson)
+                }
+                MenuItem {
                     // The core keeps at least one list.
                     visible: listView.count > 1
                     text: appInfo.localized("delete")

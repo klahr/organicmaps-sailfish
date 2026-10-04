@@ -23,14 +23,20 @@ class BookmarkEditor : public QObject
   Q_PROPERTY(QStringList colors READ colors CONSTANT)
   Q_PROPERTY(int categoryIndex READ categoryIndex NOTIFY loaded)
   Q_PROPERTY(QStringList categories READ categories NOTIFY loaded)
+  // A track is shown on the map, like the toggle of the Android track editor.
+  Q_PROPERTY(bool trackVisible READ trackVisible WRITE setTrackVisible NOTIFY loaded)
 
 public:
   explicit BookmarkEditor(QObject * parent = nullptr);
 
+  bool trackVisible() const;
+  void setTrackVisible(bool visible);
   Q_INVOKABLE void loadBookmark(quint64 id);
   Q_INVOKABLE void loadTrack(quint64 id);
   Q_INVOKABLE void save(QString const & name, QString const & description, int colorIndex, int categoryIndex);
   Q_INVOKABLE void remove();
+  // Adds a list and returns its index in categories, like "Add a New List" in the list chooser.
+  Q_INVOKABLE int createCategory(QString const & name);
 
   bool isTrack() const { return m_isTrack; }
   QString name() const { return m_name; }
