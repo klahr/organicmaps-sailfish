@@ -543,7 +543,7 @@ void MapItem::setViewportBottomInset(qreal inset)
 void MapItem::UpdateVisibleViewport()
 {
   // Ignored by the framework until the drape engine exists.
-  double const bottom = std::max(1.0, height() - m_viewportBottomInset);
+  double const bottom = std::max<double>(1.0, height() - m_viewportBottomInset);
   m_framework.SetVisibleViewport(m2::RectD(0, 0, width(), bottom));
 }
 
