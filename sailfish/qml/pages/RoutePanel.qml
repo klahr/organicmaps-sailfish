@@ -437,7 +437,7 @@ MapPanel {
         }
     }
 
-    // Bottom bar of the Android route sheet: search, bookmarks, maps, save and START.
+    // Bottom bar of the Android route sheet: search, bookmarks, save and START.
     Row {
         id: bottomBar
         x: Theme.horizontalPageMargin
@@ -456,12 +456,6 @@ MapPanel {
             radius: Theme.dp(14)
             source: Qt.resolvedUrl("../../icons/bookmarks/ic_bookmarks_and_tracks.svg")
             onClicked: panel.bookmarksClicked()
-        }
-        MapButton {
-            anchors.verticalCenter: parent.verticalCenter
-            radius: Theme.dp(14)
-            source: Qt.resolvedUrl("../../icons/menu/ic_download.svg")
-            onClicked: pageStack.push(Qt.resolvedUrl("MapsPage.qml"))
         }
         // Saves the route as a track, once per built route.
         MapButton {

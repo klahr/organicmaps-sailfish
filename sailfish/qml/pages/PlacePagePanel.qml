@@ -571,13 +571,6 @@ MapPanel {
                 text: appInfo.localized("edit_place")
                 onClicked: pageStack.push(Qt.resolvedUrl("EditPlacePage.qml"))
             }
-            // What OpenStreetMap is, next to the editing rows like on iOS.
-            MenuRow {
-                visible: placePage.canEdit || (placePage.canAddPlace && !routing.active)
-                icon: "../../icons/help/ic_openstreetmap.svg"
-                text: appInfo.localized("editor_more_about_osm")
-                onClicked: Qt.openUrlExternally("https://welcome.openstreetmap.org")
-            }
             MenuRow {
                 visible: placePage.canAddPlace && !routing.active
                 enabled: placePage.editable
