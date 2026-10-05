@@ -9,6 +9,8 @@ URL:        https://organicmaps.app
 Source0:    %{name}-%{version}.tar.bz2
 
 BuildRequires:  cmake
+# For tools/unix/version.sh, which falls back to release 0 without git.
+BuildRequires:  git
 BuildRequires:  ninja
 BuildRequires:  python3-base
 BuildRequires:  pkgconfig(Qt5Core)
