@@ -44,6 +44,8 @@ cmake --build build --target organicmaps_sailfish
 %install
 # Only the app; the bundled 3party libraries carry their own install rules.
 DESTDIR=%{buildroot} cmake -P build/sailfish/cmake_install.cmake
+# brp-strip skips shared objects, which would otherwise ship with ~300 MB of debug info.
+%{__strip} --strip-unneeded %{buildroot}%{_datadir}/%{name}/lib/liborganicmaps.so
 
 %files
 %license LICENSE DATA_LICENSE.txt
