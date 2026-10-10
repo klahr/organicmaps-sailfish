@@ -2,6 +2,7 @@
 
 #include "sailfish/file_log.hpp"
 #include "sailfish/helpers.hpp"
+#include "sailfish/stop_departures.hpp"
 
 #include "map/framework.hpp"
 
@@ -193,6 +194,16 @@ void AppSettings::setMapLanguage(QString const & code)
 {
   m_framework.SetMapLanguageCode(code.toStdString());
   emit changed();
+}
+
+QString AppSettings::departuresKey() const
+{
+  return QString::fromStdString(LoadSetting(kTrafiklabKeySetting, std::string()));
+}
+
+void AppSettings::setDeparturesKey(QString const & key)
+{
+  SaveUiSetting(kTrafiklabKeySetting, key.trimmed().toStdString());
 }
 
 QString AppSettings::mapLanguageName() const

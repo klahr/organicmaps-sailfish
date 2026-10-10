@@ -20,6 +20,7 @@
 
 #include "indexer/classificator.hpp"
 #include "indexer/feature_utils.hpp"
+#include "indexer/ftypes_matcher.hpp"
 #include "indexer/validate_and_format_contacts.hpp"
 
 #include "editor/opening_hours_ui.hpp"
@@ -119,6 +120,7 @@ PlacePage::PlacePage(Framework & framework, QObject * parent) : QObject(parent),
   m_framework.SetPlacePageListeners([this] { Update(); }, [this]
   {
     m_open = false;
+    m_departures.Clear();
     emit changed();
   }, [this] { Update(); }, [this] { emit switchFullScreen(); });
   auto & manager = m_framework.GetBookmarkManager();
@@ -380,6 +382,16 @@ void PlacePage::Update()
   static uint32_t const kTramStop = classif().GetTypeByPath({"railway", "tram_stop"});
   m_isTramStop = info.GetTypes().Has(kTramStop);
   UpdateRouteRefs();
+  if (ftypes::IsPublicTransportStopChecker::Instance()(info.GetTypes()) ||
+      ftypes::IsRailwayStationChecker::Instance()(info.GetTypes()))
+  {
+    auto const latLon = info.GetLatLon();
+    m_departures.SetStop(latLon.m_lat, latLon.m_lon, info.GetTitle());
+  }
+  else
+  {
+    m_departures.Clear();
+  }
 
   UpdateTrack();
   UpdateList();

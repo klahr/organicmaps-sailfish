@@ -28,6 +28,8 @@ class AppSettings : public QObject
   Q_PROPERTY(QString mapLanguageName READ mapLanguageName NOTIFY changed)
   // Map languages as {code, name}.
   Q_PROPERTY(QVariantList mapLanguages READ mapLanguages CONSTANT)
+  // Live departures at stops are shown with a key; empty turns them off.
+  Q_PROPERTY(QString departuresKey READ departuresKey WRITE setDeparturesKey NOTIFY changed)
   Q_PROPERTY(QString donateUrl READ donateUrl CONSTANT)
   // The Promo the help button shows instead of the logo.
   Q_PROPERTY(int helpPromo READ helpPromo NOTIFY changed)
@@ -125,6 +127,8 @@ public:
   void setMapLanguage(QString const & code);
   QString mapLanguageName() const;
   QVariantList mapLanguages() const;
+  QString departuresKey() const;
+  void setDeparturesKey(QString const & key);
   QString donateUrl() const;
   int helpPromo() const;
   bool buildings3d() const;

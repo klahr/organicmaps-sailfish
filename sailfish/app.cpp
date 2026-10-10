@@ -108,6 +108,7 @@ __attribute__((visibility("default"))) int OrganicMapsMain(int argc, char * argv
   qmlRegisterType<sailfish::PlaceCategories>("app.organicmaps", 1, 0, "PlaceCategories");
   qmlRegisterType<sailfish::OpeningHoursEditor>("app.organicmaps", 1, 0, "OpeningHoursEditor");
   qmlRegisterUncreatableType<sailfish::PlacePage>("app.organicmaps", 1, 0, "PlacePage", "Owned by MapItem");
+  qmlRegisterUncreatableType<sailfish::StopDepartures>("app.organicmaps", 1, 0, "StopDepartures", "Owned by PlacePage");
   qmlRegisterUncreatableType<sailfish::Routing>("app.organicmaps", 1, 0, "Routing", "Owned by MapItem");
   qmlRegisterUncreatableType<sailfish::AppSettings>("app.organicmaps", 1, 0, "AppSettings", "Use appSettings");
   qmlRegisterUncreatableType<sailfish::BookmarksIO>("app.organicmaps", 1, 0, "BookmarksIO", "Use bookmarksIO");

@@ -1,5 +1,6 @@
 add_subdirectory(base)
 add_subdirectory(coding)
+add_subdirectory(departures)
 add_subdirectory(descriptions)
 add_subdirectory(drape)
 add_subdirectory(drape_frontend)

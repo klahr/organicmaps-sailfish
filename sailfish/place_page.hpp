@@ -1,5 +1,7 @@
 #pragma once
 
+#include "sailfish/stop_departures.hpp"
+
 #include <QObject>
 #include <QString>
 #include <QStringList>
@@ -79,6 +81,7 @@ class PlacePage : public QObject
   Q_PROPERTY(QString routeRefs READ routeRefs NOTIFY changed)
   Q_PROPERTY(QVariantList routes READ routes NOTIFY changed)
   Q_PROPERTY(bool isTramStop READ isTramStop NOTIFY changed)
+  Q_PROPERTY(sailfish::StopDepartures * departures READ departures CONSTANT)
   // {icon, text, url} rows; url is opened externally when set.
   // {icon, text, url} rows; the icon is a theme image URL or a file in the icons folder.
   Q_PROPERTY(QVariantList details READ details NOTIFY changed)
@@ -137,6 +140,7 @@ public:
   QString routeRefs() const { return m_routeRefs; }
   QVariantList routes() const { return m_routes; }
   bool isTramStop() const { return m_isTramStop; }
+  StopDepartures * departures() { return &m_departures; }
   QVariantList trackStats() const { return m_trackStats; }
   QVariantMap elevation() const { return m_elevation; }
   double elevationActivePoint() const;
@@ -223,6 +227,7 @@ private:
   QVariantList m_routes;
   std::vector<uint32_t> m_routeIds;
   bool m_isTramStop = false;
+  StopDepartures m_departures;
   QVariantList m_trackStats;
   QVariantMap m_elevation;
 };

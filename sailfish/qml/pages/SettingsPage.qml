@@ -182,6 +182,11 @@ Page {
                 value: appSettings.bgTilesEnabled ? appInfo.localized("on") : appInfo.localized("off")
                 onClicked: pageStack.push(Qt.resolvedUrl("SatelliteSettingsPage.qml"))
             }
+            ValueButton {
+                label: appInfo.localized("pref_departures_title")
+                value: appInfo.localized(appSettings.departuresKey !== "" ? "on" : "off")
+                onClicked: pageStack.push(Qt.resolvedUrl("DeparturesSettingsPage.qml"))
+            }
 
             SectionHeader {
                 text: appInfo.localized("prefs_group_route")

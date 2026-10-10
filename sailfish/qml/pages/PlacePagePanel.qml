@@ -375,6 +375,132 @@ MapPanel {
                 }
             }
 
+            Column {
+                id: departuresColumn
+
+                readonly property QtObject departures: placePage.departures
+
+                width: parent.width
+                visible: departures.available
+
+                // Keeps the minutes current while shown.
+                Timer {
+                    interval: 30000
+                    repeat: true
+                    running: departuresColumn.visible && panel.open && Qt.application.active
+                    onTriggered: departuresColumn.departures.refresh()
+                }
+
+                SectionHeader {
+                    text: appInfo.localized("departures")
+
+                    BusyIndicator {
+                        anchors {
+                            left: parent.left
+                            leftMargin: Theme.horizontalPageMargin
+                            verticalCenter: parent.verticalCenter
+                        }
+                        size: BusyIndicatorSize.ExtraSmall
+                        running: departuresColumn.departures.loading
+                    }
+                }
+                Label {
+                    x: Theme.horizontalPageMargin
+                    width: parent.width - 2 * x
+                    visible: text !== ""
+                    text: {
+                        var d = departuresColumn.departures
+                        switch (d.status) {
+                        case StopDepartures.StopNotFound: return appInfo.localized("departures_stop_not_found")
+                        case StopDepartures.Unauthorized: return appInfo.localized("departures_unauthorized")
+                        case StopDepartures.NetworkError:
+                        case StopDepartures.ServerError: return appInfo.localized("departures_error")
+                        }
+                        return !d.loading && d.departures.length === 0 ? appInfo.localized("departures_none") : ""
+                    }
+                    wrapMode: Text.Wrap
+                    font.pixelSize: Theme.fontSizeSmall
+                    color: Theme.secondaryHighlightColor
+                }
+                Repeater {
+                    model: departuresColumn.departures.departures
+
+                    Item {
+                        width: departuresColumn.width
+                        height: Theme.itemSizeExtraSmall
+
+                        Icon {
+                            id: modeIcon
+                            x: Theme.horizontalPageMargin
+                            anchors.verticalCenter: parent.verticalCenter
+                            width: Theme.iconSizeSmall
+                            height: width
+                            sourceSize: Qt.size(width, height)
+                            source: modelData.icon ? "../../icons/routing/" + modelData.icon : ""
+                        }
+                        Label {
+                            id: lineLabel
+                            anchors {
+                                left: modeIcon.right
+                                leftMargin: Theme.paddingSmall
+                                verticalCenter: parent.verticalCenter
+                            }
+                            // Aligns the destinations of one- and three-digit lines.
+                            width: Math.max(implicitWidth, Theme.itemSizeExtraSmall)
+                            text: modelData.line
+                            font.bold: true
+                        }
+                        Label {
+                            anchors {
+                                left: lineLabel.right
+                                leftMargin: Theme.paddingMedium
+                                right: platformLabel.left
+                                rightMargin: Theme.paddingSmall
+                                verticalCenter: parent.verticalCenter
+                            }
+                            text: modelData.destination
+                            truncationMode: TruncationMode.Fade
+                            font.strikeout: modelData.canceled
+                            color: modelData.canceled ? Theme.secondaryColor : Theme.primaryColor
+                        }
+                        Label {
+                            id: platformLabel
+                            anchors {
+                                right: timeLabel.left
+                                rightMargin: Theme.paddingMedium
+                                verticalCenter: parent.verticalCenter
+                            }
+                            text: modelData.platform
+                            font.pixelSize: Theme.fontSizeExtraSmall
+                            color: Theme.secondaryColor
+                        }
+                        Label {
+                            id: timeLabel
+                            anchors {
+                                right: parent.right
+                                rightMargin: Theme.horizontalPageMargin
+                                verticalCenter: parent.verticalCenter
+                            }
+                            text: modelData.canceled ? appInfo.localized("departures_canceled")
+                                : modelData.minutes === 0 ? appInfo.localized("departures_now")
+                                : modelData.minutes >= 60 ? modelData.time
+                                : appInfo.localized("departures_minutes", [String(modelData.minutes)])
+                            // Late ones stand out.
+                            color: modelData.canceled || modelData.delay > 0 ? Theme.errorColor : Theme.highlightColor
+                        }
+                    }
+                }
+                Label {
+                    x: Theme.horizontalPageMargin
+                    width: parent.width - 2 * x
+                    bottomPadding: Theme.paddingMedium
+                    horizontalAlignment: Text.AlignRight
+                    text: appInfo.localized("departures_data", [departuresColumn.departures.attribution])
+                    font.pixelSize: Theme.fontSizeExtraSmall
+                    color: Theme.secondaryColor
+                }
+            }
+
             BackgroundItem {
                 width: parent.width
                 height: hoursColumn.height + 2 * Theme.paddingMedium

@@ -64,6 +64,8 @@ set(SRC
   routing.hpp
   search_model.cpp
   search_model.hpp
+  stop_departures.cpp
+  stop_departures.hpp
   url_handler.cpp
   url_handler.hpp
   voice_guide.cpp
@@ -87,6 +89,7 @@ target_include_directories(${PROJECT_NAME}_lib PRIVATE ${SAILFISHAPP_INCLUDE_DIR
 target_link_libraries(${PROJECT_NAME}_lib
   PRIVATE
     Boost::headers
+    departures
     map
     location_service
     Qt5::DBus

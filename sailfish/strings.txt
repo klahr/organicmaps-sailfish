@@ -591,3 +591,135 @@ uk = Складний
 vi = Khó
 zh-Hans = 困难
 zh-Hant = 困難
+
+[departures]
+comment = Sailfish OS: header of the live departures at a public transport stop on the place page
+tags = sailfish
+en = Departures
+de = Abfahrten
+es = Salidas
+fr = Départs
+ru = Отправления
+sv = Avgångar
+uk = Відправлення
+
+[departures_now]
+comment = Sailfish OS: a departure that leaves now
+tags = sailfish
+en = Now
+de = Jetzt
+es = Ahora
+fr = Maintenant
+ru = Сейчас
+sv = Nu
+uk = Зараз
+
+[departures_minutes]
+comment = Sailfish OS: minutes until a departure leaves
+tags = sailfish
+en = %@ min
+de = %@ Min.
+es = %@ min
+fr = %@ min
+ru = %@ мин
+sv = %@ min
+uk = %@ хв
+
+[departures_canceled]
+comment = Sailfish OS: a departure that was cancelled
+tags = sailfish
+en = Cancelled
+de = Fällt aus
+es = Cancelada
+fr = Annulé
+ru = Отменён
+sv = Inställd
+uk = Скасовано
+
+[departures_none]
+comment = Sailfish OS: the stop has no departures in the near future
+tags = sailfish
+en = No departures soon
+de = Keine Abfahrten in Kürze
+es = No hay salidas próximas
+fr = Aucun départ prochainement
+ru = Ближайших отправлений нет
+sv = Inga avgångar inom kort
+uk = Найближчих відправлень немає
+
+[departures_stop_not_found]
+comment = Sailfish OS: the stop on the map wasn't found in the live departures data
+tags = sailfish
+en = No live data for this stop
+de = Keine Live-Daten für diese Haltestelle
+es = No hay datos en tiempo real para esta parada
+fr = Pas de données en temps réel pour cet arrêt
+ru = Нет данных в реальном времени для этой остановки
+sv = Ingen realtidsdata för den här hållplatsen
+uk = Немає даних у реальному часі для цієї зупинки
+
+[departures_error]
+comment = Sailfish OS: the live departures couldn't be loaded
+tags = sailfish
+en = Couldn't load the departures
+de = Abfahrten konnten nicht geladen werden
+es = No se pudieron cargar las salidas
+fr = Impossible de charger les départs
+ru = Не удалось загрузить отправления
+sv = Kunde inte hämta avgångar
+uk = Не вдалося завантажити відправлення
+
+[departures_unauthorized]
+comment = Sailfish OS: the departures provider rejected the API key entered in the settings
+tags = sailfish
+en = The API key wasn't accepted
+de = Der API-Schlüssel wurde nicht akzeptiert
+es = La clave de API no fue aceptada
+fr = La clé d’API n’a pas été acceptée
+ru = Ключ API не принят
+sv = API-nyckeln godkändes inte
+uk = Ключ API не прийнято
+
+[departures_data]
+comment = Sailfish OS: credit for the source of the live departures, which its license requires
+tags = sailfish
+en = Data: %@
+de = Daten: %@
+es = Datos: %@
+fr = Données : %@
+ru = Данные: %@
+sv = Data: %@
+uk = Дані: %@
+
+[pref_departures_title]
+comment = Sailfish OS: settings item for live departures at public transport stops
+tags = sailfish
+en = Live departures
+de = Live-Abfahrten
+es = Salidas en tiempo real
+fr = Départs en temps réel
+ru = Отправления в реальном времени
+sv = Avgångar i realtid
+uk = Відправлення в реальному часі
+
+[pref_departures_summary]
+comment = Sailfish OS: explains the live departures setting and what it sends online
+tags = sailfish
+en = Shows the next departures at stops in Sweden, with delays. Each stop you open is sent to Trafiklab. Get a free API key for the Trafiklab Realtime APIs at trafiklab.se.
+de = Zeigt die nächsten Abfahrten an Haltestellen in Schweden mit Verspätungen. Jede geöffnete Haltestelle wird an Trafiklab gesendet. Einen kostenlosen API-Schlüssel für die Trafiklab Realtime APIs gibt es auf trafiklab.se.
+es = Muestra las próximas salidas en paradas de Suecia, con retrasos. Cada parada que abras se envía a Trafiklab. Obtén una clave de API gratuita para las Trafiklab Realtime APIs en trafiklab.se.
+fr = Affiche les prochains départs aux arrêts en Suède, avec les retards. Chaque arrêt ouvert est envoyé à Trafiklab. Obtenez une clé d’API gratuite pour les Trafiklab Realtime APIs sur trafiklab.se.
+ru = Показывает ближайшие отправления на остановках в Швеции с учётом задержек. Каждая открытая остановка отправляется в Trafiklab. Бесплатный ключ API для Trafiklab Realtime APIs можно получить на trafiklab.se.
+sv = Visar nästa avgångar vid hållplatser i Sverige, med förseningar. Varje hållplats du öppnar skickas till Trafiklab. Skaffa en gratis API-nyckel för Trafiklab Realtime APIs på trafiklab.se.
+uk = Показує найближчі відправлення на зупинках у Швеції із затримками. Кожна відкрита зупинка надсилається до Trafiklab. Безкоштовний ключ API для Trafiklab Realtime APIs можна отримати на trafiklab.se.
+
+[pref_departures_key]
+comment = Sailfish OS: text field for the API key of the live departures provider
+tags = sailfish
+en = Trafiklab API key
+de = Trafiklab-API-Schlüssel
+es = Clave de API de Trafiklab
+fr = Clé d’API Trafiklab
+ru = Ключ API Trafiklab
+sv = API-nyckel för Trafiklab
+uk = Ключ API Trafiklab
