@@ -576,10 +576,16 @@ void Routing::stopNavigation()
 
 void Routing::EndNavigation()
 {
+  // First, so that the route panel doesn't show the closing route.
+  close();
+  LeaveNavigation();
+}
+
+void Routing::LeaveNavigation()
+{
   m_navigating = false;
   m_navigation.clear();
   SetNavigationStyle(false);
-  close();
   emit navigationChanged();
 }
 
@@ -1200,6 +1206,13 @@ void Routing::OnPointsChanged()
 void Routing::Build()
 {
   auto & manager = m_framework.GetRoutingManager();
+  // The core closes the followed route to rebuild it, which also leaves the 3D follow view, so the new route is
+  // planned and started again, as on Android.
+  if (m_navigating)
+  {
+    m_voice->Stop();
+    LeaveNavigation();
+  }
   ClearResult();
   if (manager.GetRoutePointsCount() < 2)
   {

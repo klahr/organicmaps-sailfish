@@ -255,6 +255,8 @@ private:
   void SetNavigationStyle(bool enabled);
   void UpdateDarkOutside();
   void EndNavigation();
+  // Keeps the route.
+  void LeaveNavigation();
   void SetupVoice();
   std::string AppVoiceLanguage() const;
   std::string WantedVoiceLanguage() const;
